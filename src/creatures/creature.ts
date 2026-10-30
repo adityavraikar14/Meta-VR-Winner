@@ -23,7 +23,21 @@ export type CreatureState =
   | 'falling'
   | 'onPalm'
   | 'flying'
-  | 'perched';
+  | 'perched'
+  | 'task';
+
+/** A short body pose held during a scripted task. */
+export type TaskPose = 'look' | 'reach' | 'eat' | 'sniff' | 'dig' | 'bonk' | 'shrug' | 'cheer';
+
+/**
+ * One step of a scripted task, in world space. Puzzles hand a creature a
+ * list of these: walk to the log, leap over it, eat the carrot, cheer.
+ */
+export type TaskStep =
+  | { do: 'walk'; to: Vector3 }
+  | { do: 'leap'; to: Vector3; height: number; time: number }
+  | { do: 'pose'; pose: TaskPose; time: number; look?: Vector3 }
+  | { do: 'call'; run: () => void };
 
 /** Where creatures live and what they can see around them. */
 export interface Ground {
@@ -34,6 +48,8 @@ export interface Ground {
   viewer: Vector3;
   /** Every creature, so pets can find each other. */
   creatures: Creature[];
+  /** Puzzle props that idle pets walk around instead of standing in. */
+  blockers: Array<{ center: Vector3; radius: number }>;
 }
 
 const EMERGE_TIME = 0.8;
@@ -104,6 +120,10 @@ export class Creature {
   private leapHeight = 0.15;
   private afterLeap: CreatureState = 'idle';
   private emergeRotation = new Quaternion();
+  private task: TaskStep[] = [];
+  private taskTime = 0;
+  private taskStarted = false;
+  private taskDone: (() => void) | null = null;
 
   // Behaviour state.
   private behaviorTime = 0;
@@ -176,7 +196,43 @@ export class Creature {
 
   /** Leap from the paper to a resting spot on the stage. */
   landAt(spot: Vector3): void {
-    this.leap(spot, 0.9, 0.22);
+    this.leap(spot, 0.9, 0.22, this.task.length > 0 ? 'task' : 'idle');
+  }
+
+  /**
+   * Carry out a scripted task, starting as soon as the creature is free
+   * (straight away, or after its current leap). Interaction pauses meanwhile.
+   */
+  perform(steps: TaskStep[], done?: () => void): void {
+    this.task = steps.slice();
+    this.taskStarted = false;
+    this.taskDone = done ?? null;
+    if (this.state === 'leaping') this.afterLeap = 'task';
+    else if (this.state !== 'emerging') this.setState('task');
+  }
+
+  /** Join in a celebration: a happy dance with a little cheer. */
+  cheer(): void {
+    if (this.state !== 'idle' || this.hideFor > 0) return;
+    this.wake();
+    this.noticed();
+    this.happiness = 1;
+    this.squash = 0.7;
+    this.startBehavior('dance', 2.5 + Math.random());
+    this.fx.heart(this.tmp.copy(this.position).addScaledVector(UP, this.rig.height * this.scale));
+    if (Math.random() < 0.5) this.voice();
+  }
+
+  /** Current task step for debugging, e.g. "walk (5 left)". */
+  get taskLabel(): string {
+    const step = this.task[0];
+    if (!step) return '';
+    return `${step.do === 'pose' ? step.pose : step.do} t=${this.taskTime.toFixed(1)} (${this.task.length} left)`;
+  }
+
+  /** True while busy with a scripted task. */
+  get busy(): boolean {
+    return this.task.length > 0 || this.state === 'task';
   }
 
   private setState(state: CreatureState): void {
@@ -275,6 +331,9 @@ export class Creature {
       case 'idle':
         this.live(dt, ground, hands);
         break;
+      case 'task':
+        this.runTask(dt, ground);
+        break;
       case 'held': {
         const hand = hands[this.hand];
         if (!hand || !hand.tracked || !hand.pinching) {
@@ -325,7 +384,9 @@ export class Creature {
       }
     }
 
-    if (this.state !== 'leaping' && this.state !== 'falling') this.react(dt, hands);
+    if (this.state !== 'leaping' && this.state !== 'falling' && this.state !== 'task') {
+      this.react(dt, hands);
+    }
     this.animate(dt, time);
   }
 
@@ -383,6 +444,9 @@ export class Creature {
       if (this.state !== 'idle') return;
     }
     const t = this.behaviorTime;
+    // Friends watch whoever is busy solving a puzzle.
+    const star = ground.creatures.find((c) => c !== this && c.state === 'task');
+    if (star) this.lookTarget.copy(star.position);
 
     switch (this.behavior) {
       case 'wander':
@@ -526,6 +590,26 @@ export class Creature {
     }
     this.clampToStage(this.goal, ground, reach);
     this.hasGoal = true;
+    // Pick again if the spot is inside a puzzle prop (a few tries, then stay put).
+    if (this.blocked(this.goal, ground)) {
+      if (near > 0 || ++this.spotTries > 6) {
+        this.goal.copy(this.position);
+        this.spotTries = 0;
+      } else {
+        this.pickSpot(ground, reach);
+      }
+    } else {
+      this.spotTries = 0;
+    }
+  }
+
+  private spotTries = 0;
+
+  private blocked(point: Vector3, ground: Ground): boolean {
+    const r = this.rig.radius * this.scale;
+    return ground.blockers.some(
+      (b) => Math.hypot(point.x - b.center.x, point.z - b.center.z) < b.radius + r,
+    );
   }
 
   private clampToStage(point: Vector3, ground: Ground, reach: number): void {
@@ -559,19 +643,19 @@ export class Creature {
         this.hasGoal = false;
         return;
       }
-      this.hopFrom.copy(this.position).setY(ground.center.y);
+      this.hopFrom.copy(this.position);
       this.hopTo.copy(goal);
       if (remaining > step) {
         this.hopTo.sub(this.hopFrom).setY(0).setLength(step).add(this.hopFrom);
       }
-      this.hopTo.y = ground.center.y;
+      this.hopTo.y = goal.y;
       this.hopTime = hopTime;
       this.hopT = 0;
       if (!crawler) this.squash = 0.8;
     }
     this.hopT = Math.min(1, this.hopT + dt / this.hopTime);
     this.position.lerpVectors(this.hopFrom, this.hopTo, this.hopT);
-    this.position.y = ground.center.y + Math.sin(this.hopT * Math.PI) * step * lift;
+    this.position.y += Math.sin(this.hopT * Math.PI) * step * lift;
     this.yawTowards(this.hopTo);
     if (this.hopT >= 1) {
       this.hopT = -1;
@@ -580,14 +664,145 @@ export class Creature {
   }
 
 
+  // -------------------------------------------------------------------- Tasks
+
+  /** Advance the scripted task one frame; return to free life when done. */
+  private runTask(dt: number, ground: Ground): void {
+    const step = this.task[0];
+    if (!step) {
+      this.setState('idle');
+      this.startBehavior('dance', 2.5);
+      const done = this.taskDone;
+      this.taskDone = null;
+      done?.();
+      return;
+    }
+    if (!this.taskStarted) {
+      this.taskStarted = true;
+      this.taskTime = 0;
+      this.beatIn = 0;
+      if (step.do === 'pose' && step.pose === 'bonk') {
+        this.squash = 0.55;
+        this.squashVelocity = 0;
+        this.fx.burst(this.center, 10, 0.25);
+        playBoing();
+      }
+      if (step.do === 'pose' && step.pose === 'cheer') this.voice();
+    }
+    this.taskTime += dt;
+    this.lookTarget.copy(ground.viewer);
+
+    switch (step.do) {
+      case 'call':
+        this.nextStep();
+        step.run();
+        return;
+      case 'leap':
+        this.nextStep();
+        this.leap(step.to, step.time, step.height, 'task');
+        return;
+      case 'walk': {
+        if (this.rig.locomotion === 'flyer' && this.hopT < 0) {
+          // Flyers flutter across instead of hopping.
+          const d = this.position.distanceTo(step.to);
+          this.nextStep();
+          this.leap(step.to, Math.max(0.35, d / 0.22), 0.05 + d * 0.3, 'task');
+          return;
+        }
+        this.hopTowards(step.to, 0.04, 0.3, ground, dt);
+        const left = Math.hypot(step.to.x - this.position.x, step.to.z - this.position.z);
+        if (this.hopT < 0 && left < 0.012) this.nextStep();
+        return;
+      }
+      case 'pose':
+        if (step.look) this.lookTarget.copy(step.look);
+        this.holdPose(step.pose, this.taskTime, dt);
+        this.faceTowards(this.lookTarget, dt, 4);
+        if (this.taskTime >= step.time) this.nextStep();
+        return;
+    }
+  }
+
+  private nextStep(): void {
+    this.task.shift();
+    this.taskStarted = false;
+  }
+
+  /** Body language for task poses, set every frame while held. */
+  private holdPose(pose: TaskPose, t: number, dt: number): void {
+    switch (pose) {
+      case 'look':
+        this.headPitchTarget = 0.1;
+        this.lookOffset = Math.sin(t * 2.5) * 0.25;
+        break;
+      case 'reach':
+        // Stretch tall, nose up.
+        this.headPitchTarget = -0.7;
+        this.squash += (1.22 - this.squash) * Math.min(1, dt * 8);
+        break;
+      case 'eat':
+        this.headPitchTarget = 0.5 + Math.sin(t * 22) * 0.08;
+        this.beatIn -= dt;
+        if (this.beatIn <= 0) {
+          this.beatIn = 0.35;
+          this.squash = 0.92;
+          this.fx.burst(this.tmp.copy(this.position).addScaledVector(UP, 0.02), 2, 0.08);
+        }
+        break;
+      case 'sniff':
+        this.headPitchTarget = 0.5 + Math.sin(t * 16) * 0.07;
+        this.lookOffset = Math.sin(t * 3) * 0.3;
+        break;
+      case 'dig':
+        this.headPitchTarget = 0.6;
+        this.beatIn -= dt;
+        if (this.beatIn <= 0) {
+          this.beatIn = 0.22;
+          this.squash = 0.8;
+          this.fx.burst(this.position, 3, 0.2);
+        }
+        break;
+      case 'bonk':
+        // Dizzy wobble after bumping into something.
+        this.sway = Math.sin(t * 14) * 0.18 * Math.max(0, 1 - t);
+        this.headPitchTarget = 0.2;
+        break;
+      case 'shrug':
+        this.lookOffset = Math.sin(t * 3.2) * 0.8;
+        this.headPitchTarget = 0.25;
+        break;
+      case 'cheer':
+        this.happiness = 1;
+        this.headPitchTarget = -0.3;
+        this.beatIn -= dt;
+        if (this.beatIn <= 0) {
+          this.beatIn = 0.45;
+          this.squash = 0.72;
+          this.fx.heart(this.tmp.copy(this.position).addScaledVector(UP, this.rig.height * this.scale));
+        }
+        break;
+    }
+  }
+
   /** Nudge away from any pet that is too close. */
   private keepPersonalSpace(ground: Ground): void {
     for (const other of ground.creatures) {
-      if (other === this || other.state !== 'idle') continue;
+      if (other === this || (other.state !== 'idle' && other.state !== 'task')) continue;
+      // Make way, with extra room, for a friend on a mission.
+      const space = PERSONAL_SPACE * (other.state === 'task' ? 1.6 : 0.9);
       this.tmp.subVectors(this.position, other.position).setY(0);
       const d = this.tmp.length();
-      if (d > 1e-4 && d < PERSONAL_SPACE * 0.9) {
-        this.position.addScaledVector(this.tmp, ((PERSONAL_SPACE * 0.9 - d) / d) * 0.3);
+      if (d > 1e-4 && d < space) {
+        this.position.addScaledVector(this.tmp, ((space - d) / d) * 0.3);
+      }
+    }
+    // Step out of puzzle props.
+    const r = this.rig.radius * this.scale * 0.7;
+    for (const b of ground.blockers) {
+      this.tmp.subVectors(this.position, b.center).setY(0);
+      const d = this.tmp.length();
+      if (d > 1e-4 && d < b.radius + r) {
+        this.position.addScaledVector(this.tmp, ((b.radius + r - d) / d) * 0.3);
       }
     }
     this.clampToStage(this.position, ground, 0.85);

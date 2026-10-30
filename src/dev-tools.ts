@@ -8,6 +8,7 @@
  *   X      toggle the left emulated hand on or off
  *   C      capture the current shadow as a level target (hex)
  *   N      next level
+ *   R      reset story progress to the first level
  *   I      print game state and score
  *   A      spawn every creature at once
  */
@@ -19,6 +20,7 @@ export interface DevApi {
   capture(): string;
   maskVersion(): number;
   next(): void;
+  reset(): void;
   spawnAll(): void;
   info(): unknown;
 }
@@ -134,6 +136,9 @@ export function installDevTools(api: DevApi): void {
       }
       case 'n':
         api.next();
+        break;
+      case 'r':
+        api.reset();
         break;
       case 'a':
         api.spawnAll();

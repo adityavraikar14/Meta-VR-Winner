@@ -16,7 +16,9 @@ import {
 } from '@iwsdk/core';
 import { playTransform, setPurr } from '../audio.js';
 import { devInfo } from '../dev-tools.js';
+import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
+import { Diorama } from '../world/diorama.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
@@ -29,7 +31,7 @@ import { createRabbit } from './rabbit-model.js';
 import { createSnail } from './snail-model.js';
 import { disposeRig, type CreatureRig } from './rig.js';
 
-const STAGE_RADIUS = 0.21;
+const STAGE_RADIUS = 0.25;
 const STAGE_HEIGHT = 0.016;
 /**
  * Stage position in paper space: about half a metre ahead and a third of a
@@ -54,6 +56,8 @@ const MODELS: Record<string, () => CreatureRig> = {
 interface Living {
   creature: Creature;
   blob: Mesh;
+  /** Made to try the puzzle on stage. */
+  attempt: boolean;
 }
 
 /**
@@ -72,16 +76,20 @@ export class CreatureSystem extends createSystem({}) {
     radius: STAGE_RADIUS,
     viewer: new Vector3(),
     creatures: [],
+    blockers: [],
   };
   private spawnPoint = new Vector3();
   private paperRotation = new Quaternion();
   private landing = new Vector3();
+  private diorama!: Diorama;
+  private puzzleVersion = -1;
 
   init(): void {
     const paper = stage.paper;
     if (!paper) throw new Error('ShadowStageSystem must be registered first');
 
-    this.stageRoot = buildStage();
+    const built = buildStage();
+    this.stageRoot = built.root;
     this.stageRoot.position.copy(STAGE_OFFSET);
     paper.add(this.stageRoot);
 
@@ -96,12 +104,14 @@ export class CreatureSystem extends createSystem({}) {
     this.fx = new Effects();
     this.world.createTransformEntity(this.fx.root);
     this.handInput = new HandInput();
+    this.diorama = new Diorama(this.stageRoot, built.floor, STAGE_HEIGHT, this.fx);
 
     const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
     devInfo.creatures = () =>
       this.creatures.map(({ creature }) => ({
         state: creature.state,
         doing: creature.behavior,
+        task: creature.taskLabel,
         energy: Number(creature.brain.energy.toFixed(2)),
         at: round(creature.position),
         happy: Number(creature.happiness.toFixed(2)),
@@ -139,9 +149,16 @@ export class CreatureSystem extends createSystem({}) {
       this.camera.getWorldPosition(this.ground.viewer);
     }
 
+    if (play.puzzleVersion !== this.puzzleVersion) {
+      this.puzzleVersion = play.puzzleVersion;
+      this.diorama.load();
+    }
+    this.diorama.update(dt);
+    this.ground.blockers = this.diorama.blockers;
+
     while (stage.spawns.length > 0) {
       const request = stage.spawns.shift()!;
-      this.spawn(request.kind, request.x, request.y);
+      this.spawn(request.kind, request.x, request.y, request.attempt ?? false);
     }
 
     let purr = 0;
@@ -150,7 +167,12 @@ export class CreatureSystem extends createSystem({}) {
       const wasEmerging = !creature.emerged;
       creature.update(dt, time, this.ground, this.handInput.hands);
       if (wasEmerging && creature.emerged) {
-        creature.landAt(this.pickLanding(creature));
+        if (living.attempt && this.diorama.open) {
+          this.diorama.send(creature, () => this.creatures.forEach((c) => c.creature.cheer()));
+          creature.landAt(this.diorama.startSpot(this.landing));
+        } else {
+          creature.landAt(this.pickLanding(creature));
+        }
       }
       if (creature.petting || creature.state === 'onPalm') {
         purr = Math.max(purr, creature.happiness);
@@ -170,15 +192,12 @@ export class CreatureSystem extends createSystem({}) {
     this.fx.update(dt);
   }
 
-  private spawn(kind: string, x: number, y: number): void {
+  private spawn(kind: string, x: number, y: number, attempt: boolean): void {
     const make = MODELS[kind] ?? createRabbit;
-    if (this.creatures.length >= MAX_CREATURES) {
-      // Make room: the oldest creature waves goodbye.
-      const oldest = this.creatures.shift()!;
-      oldest.creature.rig.root.removeFromParent();
-      oldest.blob.removeFromParent();
-      disposeRig(oldest.creature.rig);
-    }
+    // One of each friend: a new shadow of the same kind replaces the old one.
+    const twin = this.creatures.findIndex((living) => living.creature.rig.kind === kind);
+    if (twin >= 0) this.remove(twin);
+    else if (this.creatures.length >= MAX_CREATURES) this.remove(0);
     const paper = stage.paper!;
     const rig = make();
     const creature = new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
@@ -194,9 +213,19 @@ export class CreatureSystem extends createSystem({}) {
     this.spawnPoint.set(x, y - rig.height * 0.4, 0.01).applyMatrix4(paper.matrixWorld);
     paper.getWorldQuaternion(this.paperRotation);
     creature.emergeFrom(this.spawnPoint, this.paperRotation);
-    this.creatures.push({ creature, blob });
+    this.creatures.push({ creature, blob, attempt });
     this.ground.creatures = this.creatures.map((living) => living.creature);
     playTransform();
+  }
+
+  /** A creature vanishes in a puff of sparkles. */
+  private remove(index: number): void {
+    const [gone] = this.creatures.splice(index, 1);
+    this.fx.burst(gone.creature.position, 16, 0.3);
+    gone.creature.rig.root.removeFromParent();
+    gone.blob.removeFromParent();
+    disposeRig(gone.creature.rig);
+    this.ground.creatures = this.creatures.map((living) => living.creature);
   }
 
   /** A free spot on the stage, away from the creatures already there. */
@@ -222,7 +251,7 @@ export class CreatureSystem extends createSystem({}) {
 }
 
 /** A round wooden stage with a warm glowing rim. Origin at its base. */
-function buildStage(): Group {
+function buildStage(): { root: Group; floor: MeshStandardMaterial } {
   const root = new Group();
   root.name = 'CreatureStage';
   const wood = new MeshStandardMaterial({ color: 0x8b5a33, roughness: 0.65, metalness: 0 });
@@ -247,7 +276,7 @@ function buildStage(): Group {
   rim.rotation.x = -Math.PI / 2;
   rim.position.y = STAGE_HEIGHT;
   root.add(rim);
-  return root;
+  return { root, floor: top };
 }
 
 function blobTexture(): CanvasTexture {

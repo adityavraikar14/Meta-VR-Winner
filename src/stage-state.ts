@@ -28,7 +28,8 @@ export const stage = {
   tracked: [false, false],
   /**
    * Creatures waiting to step out of the paper, queued by the game and
-   * consumed by the creature system. x/y are paper-local meters.
+   * consumed by the creature system. x/y are paper-local meters. `attempt`
+   * sends the creature to try the puzzle on stage.
    */
-  spawns: [] as Array<{ kind: string; x: number; y: number }>,
+  spawns: [] as Array<{ kind: string; x: number; y: number; attempt?: boolean }>,
 };

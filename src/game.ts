@@ -23,6 +23,7 @@ import {
 } from './hand-pose.js';
 import {
   HINT_DELAY,
+  type Level,
   LEVELS,
   MATCH_HOLD,
   MATCH_THRESHOLD,
@@ -38,6 +39,7 @@ import {
   MaskChannel,
   normalizeMask,
 } from './matcher.js';
+import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
   MASK_HEIGHT,
   MASK_WIDTH,
@@ -45,8 +47,9 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
+import { friendName, type Puzzle, PUZZLES, WORLDS } from './world/puzzles.js';
 
-type Phase = 'matching' | 'awakening' | 'resting';
+type Phase = 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
 type Problem =
   | Finger
   | 'direction'
@@ -61,8 +64,21 @@ const OUTLINE_SIZE = 0.4;
 const SHADOW_OPACITY = 0.88;
 const AWAKEN_SHIVER = 0.45;
 const AWAKEN_DURATION = 1.8;
-/** Time to watch the creature step out and land before the next shape. */
-const REST_DURATION = 3.5;
+/** Seconds the story card stays up before play starts. */
+const STORY_TIME = 4.5;
+/** Seconds the stars card stays up after a level. */
+const CLEAR_TIME = 5;
+/** Seconds to read why the wrong friend could not help. */
+const OOPS_TIME = 3.2;
+/** Seconds the first shadow must stay on the paper in the warm-up. */
+const WARMUP_HOLD = 1.2;
+/** Solve within this many seconds of choosing for the speed star. */
+const FAST_TIME = 20;
+const CARD_SIZE = 0.11;
+const CARD_GAP = 0.125;
+/** Cards line the top of the paper; the bottom is hidden behind the stage. */
+const CARD_Y = PAPER_HEIGHT / 2 - 0.075;
+const RING_STEPS = 40;
 
 const DIM_OUTLINE = new Color(0x9a7442);
 const HOT_OUTLINE = new Color(0xffc34d);
@@ -70,22 +86,45 @@ const HOT_OUTLINE = new Color(0xffc34d);
 const DEV = import.meta.env.DEV;
 const HAND_CHANNELS = [MaskChannel.Left, MaskChannel.Right] as const;
 
+interface Card {
+  mesh: Mesh;
+  material: MeshBasicMaterial;
+  canvas: HTMLCanvasElement;
+  texture: CanvasTexture;
+}
+
+function levelFor(kind: string): Level {
+  return LEVELS.find((level) => level.id === kind) ?? LEVELS[0];
+}
+
 /**
- * Runs the level loop: show a target silhouette, judge the player's hand
- * shape, and when it matches, release the shadow as a living creature.
+ * Runs the story: each puzzle shows a story card, asks for a friend, judges
+ * the player's hand shapes against the friends allowed, releases the
+ * matched shadow as a creature that tries the puzzle, and awards stars.
  */
 export class ShadowGameSystem extends createSystem({}) {
-  private phase: Phase = 'matching';
+  private phase: Phase = 'story';
   private phaseTime = 0;
-  private levelIndex = 0;
-  private outlineCells: Uint8Array = new Uint8Array(GRID_CELLS);
+  private puzzleIndex = 0;
+  private puzzle: Puzzle | null = null;
+  /** Shapes the player may make right now. */
+  private candidates: Level[] = [];
+  private raw: number[] = [];
+  private smooth: number[] = [];
+  private candidateShadow: boolean[] = [];
+  private candidateBounds: MaskBounds[] = [];
+  private candidateProblem: Problem[] = [];
+  private best = -1;
+  private chosen: Level = LEVELS[0];
 
-  /** The best hand's shadow this frame, for capture and creature placement. */
+  private hintShown = false;
+  private wrongTries = 0;
+  private matchTime = 0;
+
+  /** The best hand's shadow this frame, for capture. */
   private shadow = new Uint8Array(GRID_CELLS);
-  private bounds = createBounds();
-  private hasShadow = false;
   private candidate = new Uint8Array(GRID_CELLS);
-  private candidateBounds = createBounds();
+  private scratchBounds = createBounds();
   private handShadow = [false, false];
   private handBounds = [createBounds(), createBounds()];
   private seenMaskVersion = -1;
@@ -96,9 +135,12 @@ export class ShadowGameSystem extends createSystem({}) {
   private pairBounds = createBounds();
   private shapeScore: ShapeScore = { score: 0, worst: null };
   private handScores = [0, 0];
+  // Results of the last judgeSingle / judgePair call.
   private rawScore = 0;
-  private score = 0;
   private problem: Problem = null;
+  private hasShadow = false;
+  private bounds = createBounds();
+
   private holdTime = 0;
   private struggleTime = 0;
   private needsRelease = false;
@@ -107,6 +149,16 @@ export class ShadowGameSystem extends createSystem({}) {
   private outlineMaterial!: MeshBasicMaterial;
   private outlineCanvas!: HTMLCanvasElement;
   private outlineTexture!: CanvasTexture;
+  private cards: Card[] = [];
+  private ring!: Mesh;
+  private ringCanvas!: HTMLCanvasElement;
+  private ringTexture!: CanvasTexture;
+  private ringDrawn = -1;
+  private banner!: Mesh;
+  private bannerMaterial!: MeshBasicMaterial;
+  private bannerCanvas!: HTMLCanvasElement;
+  private bannerTexture!: CanvasTexture;
+  private bannerShown = false;
   private creature!: Mesh;
   private creatureMaterial!: MeshBasicMaterial;
   private creatureCanvas!: HTMLCanvasElement;
@@ -118,6 +170,7 @@ export class ShadowGameSystem extends createSystem({}) {
   private creatureX = 0;
   private creatureY = 0;
   private creatureSize = OUTLINE_SIZE;
+  private welcomed = false;
 
   init(): void {
     const paper = stage.paper;
@@ -138,6 +191,48 @@ export class ShadowGameSystem extends createSystem({}) {
     this.outline.position.set(0, 0.02, 0.002);
     this.outline.renderOrder = 1;
     paper.add(this.outline);
+
+    for (let i = 0; i < LEVELS.length; i++) {
+      const canvas = makeCanvas(128, 160);
+      const texture = makeTexture(canvas);
+      const material = new MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        color: DIM_OUTLINE.clone(),
+      });
+      const mesh = new Mesh(new PlaneGeometry(CARD_SIZE, CARD_SIZE * 1.25), material);
+      mesh.name = 'FriendCard';
+      mesh.renderOrder = 1;
+      mesh.visible = false;
+      paper.add(mesh);
+      this.cards.push({ mesh, material, canvas, texture });
+    }
+
+    this.ringCanvas = makeCanvas(256, 256);
+    this.ringTexture = makeTexture(this.ringCanvas);
+    this.ring = new Mesh(
+      new PlaneGeometry(1, 1),
+      new MeshBasicMaterial({ map: this.ringTexture, transparent: true, depthWrite: false }),
+    );
+    this.ring.name = 'HoldRing';
+    this.ring.renderOrder = 2;
+    this.ring.visible = false;
+    paper.add(this.ring);
+
+    this.bannerCanvas = makeCanvas(1024, 512);
+    this.bannerTexture = makeTexture(this.bannerCanvas);
+    this.bannerMaterial = new MeshBasicMaterial({
+      map: this.bannerTexture,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0,
+    });
+    this.banner = new Mesh(new PlaneGeometry(0.8, 0.4), this.bannerMaterial);
+    this.banner.name = 'StoryCard';
+    this.banner.position.set(0, 0.03, 0.006);
+    this.banner.renderOrder = 4;
+    paper.add(this.banner);
 
     this.creatureCanvas = makeCanvas(256, 256);
     this.creatureTexture = makeTexture(this.creatureCanvas);
@@ -164,12 +259,22 @@ export class ShadowGameSystem extends createSystem({}) {
     captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.075, 0.002);
     paper.add(captionMesh);
 
-    this.startLevel(0);
+    loadProgress();
+    this.startPuzzle(play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex);
 
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
       maskVersion: () => stage.maskVersion,
-      next: () => this.startLevel((this.levelIndex + 1) % LEVELS.length),
+      next: () => {
+        if (this.puzzle?.teach && !play.unlocked.includes(this.puzzle.teach)) {
+          play.unlocked.push(this.puzzle.teach);
+        }
+        this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
+      },
+      reset: () => {
+        resetProgress();
+        this.startPuzzle(0);
+      },
       spawnAll: () =>
         LEVELS.forEach((level, i) =>
           stage.spawns.push({ kind: level.id, x: -0.36 + i * 0.12, y: -0.12 }),
@@ -186,16 +291,16 @@ export class ShadowGameSystem extends createSystem({}) {
         const [l, r] = stage.joints;
         return {
           phase: this.phase,
-          level: LEVELS[this.levelIndex].id,
+          puzzle: this.puzzle?.id ?? 'free',
+          candidates: this.candidates.map((c, i) => `${c.id}:${(this.smooth[i] ?? 0).toFixed(2)}`),
+          unlocked: play.unlocked,
+          stars: play.stars,
           hands: stage.handCount,
           maskVersion: stage.maskVersion,
-          score: Number(this.score.toFixed(3)),
-          raw: Number(this.rawScore.toFixed(3)),
-          problem: this.problem,
+          problem: this.best >= 0 ? this.candidateProblem[this.best] : null,
           left: describe(0),
           right: describe(1),
           thumbGap: Number(Math.hypot(l[12] - r[12], l[13] - r[13], l[14] - r[14]).toFixed(3)),
-          bounds: this.bounds,
         };
       },
     });
@@ -206,39 +311,130 @@ export class ShadowGameSystem extends createSystem({}) {
     const dt = Math.min(delta, 0.1);
     this.phaseTime += dt;
     this.readShadows();
-    this.judgeShape(dt);
 
     switch (this.phase) {
+      case 'story':
+        if (!this.welcomed) this.welcomeBack();
+        if (this.phaseTime >= STORY_TIME) this.beginMatching();
+        break;
       case 'matching':
-        this.updateMatching(dt);
+        if (this.puzzle?.warmup) this.updateWarmup(dt);
+        else this.updateMatching(dt);
         break;
       case 'awakening':
         this.updateAwakening();
         break;
-      case 'resting':
-        if (this.phaseTime >= REST_DURATION) {
-          this.startLevel((this.levelIndex + 1) % LEVELS.length);
+      case 'solving':
+        this.updateSolving();
+        break;
+      case 'oops':
+        if (this.phaseTime >= OOPS_TIME) this.beginMatching();
+        break;
+      case 'cleared':
+        if (this.phaseTime >= CLEAR_TIME) {
+          this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
         }
         break;
     }
+
+    const target = this.bannerShown ? 1 : 0;
+    this.bannerMaterial.opacity += (target - this.bannerMaterial.opacity) * Math.min(1, dt * 5);
+    this.banner.visible = this.bannerMaterial.opacity > 0.01;
   }
 
-  private startLevel(index: number): void {
-    this.levelIndex = index;
-    this.outlineCells = decodeCells(LEVELS[index].outline);
-    drawSilhouette(this.outlineCanvas, this.outlineCells, 10, 0.75);
-    this.outlineTexture.needsUpdate = true;
-    drawSilhouette(this.creatureCanvas, this.outlineCells, 3, 1);
-    this.creatureTexture.needsUpdate = true;
+  // ------------------------------------------------------------ Story flow
 
-    this.outline.visible = true;
+  private startPuzzle(index: number): void {
+    this.puzzleIndex = index;
+    this.puzzle = PUZZLES[index] ?? null;
+    play.puzzleIndex = this.puzzle ? index : -1;
+    play.puzzleVersion++;
+    play.outcome = null;
+    saveProgress();
+
+    const puzzle = this.puzzle;
+    if (!puzzle) {
+      this.candidates = [...LEVELS];
+    } else if (puzzle.warmup) {
+      this.candidates = [];
+    } else if (puzzle.teach) {
+      this.candidates = [levelFor(puzzle.teach)];
+    } else {
+      // Every friend taught so far in the story.
+      this.candidates = PUZZLES.slice(0, index).flatMap((p) => (p.teach ? [levelFor(p.teach)] : []));
+    }
+    this.raw = this.candidates.map(() => 0);
+    this.smooth = this.candidates.map(() => 0);
+    this.candidateShadow = this.candidates.map(() => false);
+    this.candidateBounds = this.candidates.map(() => createBounds());
+    this.candidateProblem = this.candidates.map(() => null);
+    this.best = -1;
+    this.hintShown = false;
+    this.wrongTries = 0;
+    this.matchTime = 0;
+
+    this.outline.visible = false;
+    this.cards.forEach((card) => (card.mesh.visible = false));
+    this.ring.visible = false;
     this.creature.visible = false;
-    this.score = 0;
+    if (stage.shadowMaterial) stage.shadowMaterial.opacity = SHADOW_OPACITY;
+
+    if (puzzle) {
+      const firstOfWorld = PUZZLES.findIndex((p) => p.world === puzzle.world) === index;
+      const kicker = `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
+      this.drawBanner(firstOfWorld ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
+      this.setCaption(puzzle.ask);
+    } else {
+      this.drawBanner('Free play', 'The End… for now', 'All your friends are here. Make any shadow to call them!');
+      this.setCaption('Make any friend’s shadow');
+    }
+    this.bannerShown = true;
+    this.setPhase('story');
+    playPrompt();
+  }
+
+  /** Returning players find the friends they already made waiting for them. */
+  private welcomeBack(): void {
+    this.welcomed = true;
+    if (this.puzzleIndex === 0) return;
+    play.unlocked.forEach((kind, i) =>
+      stage.spawns.push({ kind, x: -0.3 + i * 0.1, y: -0.15 }),
+    );
+  }
+
+  private beginMatching(): void {
+    this.bannerShown = false;
     this.holdTime = 0;
     this.struggleTime = 0;
-    this.setPhase('matching');
+    this.smooth.fill(0);
+    this.best = -1;
     if (stage.shadowMaterial) stage.shadowMaterial.opacity = SHADOW_OPACITY;
-    playPrompt();
+
+    const teach = this.puzzle?.teach;
+    if (teach) {
+      drawSilhouette(this.outlineCanvas, decodeCells(levelFor(teach).outline), 10, 0.75);
+      this.outlineTexture.needsUpdate = true;
+      this.outline.visible = true;
+    } else {
+      this.outline.visible = false;
+      // Choosing: a card for every friend the player can make.
+      const n = this.candidates.length;
+      this.cards.forEach((card, i) => {
+        card.mesh.visible = i < n;
+        if (i >= n) return;
+        drawSilhouette(card.canvas, decodeCells(this.candidates[i].outline), 4, 0.9);
+        // The friend's name under its shape, so new players know who is who.
+        const ctx = card.canvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 26px Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.candidates[i].name, 64, 144, 124);
+        card.texture.needsUpdate = true;
+        card.mesh.position.set((i - (n - 1) / 2) * CARD_GAP, CARD_Y, 0.002);
+      });
+    }
+    this.setPhase('matching');
   }
 
   private setPhase(phase: Phase): void {
@@ -246,18 +442,157 @@ export class ShadowGameSystem extends createSystem({}) {
     this.phaseTime = 0;
   }
 
+  /** The very first moment: any shadow held on the paper. */
+  private updateWarmup(dt: number): void {
+    let shadowOnPaper = false;
+    for (const hand of HAND_CHANNELS) {
+      if (stage.tracked[hand] && this.handShadow[hand] && !touchesEdge(this.handBounds[hand])) {
+        shadowOnPaper = true;
+      }
+    }
+    this.holdTime = shadowOnPaper ? this.holdTime + dt : Math.max(0, this.holdTime - dt * 2);
+    this.showRing(this.holdTime / WARMUP_HOLD, 0, 0.02, 0.45);
+    this.setCaption(
+      shadowOnPaper
+        ? 'That’s your shadow! Hold it there…'
+        : stage.handCount > 0 && this.handShadow.some((s) => s)
+          ? 'Bring your shadow fully onto the paper'
+          : 'Raise your hand into the lantern light',
+    );
+    if (this.holdTime >= WARMUP_HOLD) {
+      playAwaken();
+      this.clearPuzzle();
+    }
+  }
+
+  private updateMatching(dt: number): void {
+    this.matchTime += dt;
+    this.judgeCandidates(dt);
+    const best = this.best;
+    const level = best >= 0 ? this.candidates[best] : null;
+    const score = best >= 0 ? this.smooth[best] : 0;
+    const teaching = !!this.puzzle?.teach;
+
+    if (teaching) {
+      const warmth = this.warmth(score);
+      this.outlineMaterial.color.copy(DIM_OUTLINE).lerp(HOT_OUTLINE, warmth);
+      this.outlineMaterial.opacity = 0.35 + 0.55 * warmth;
+      const pulse = 1 + Math.sin(this.phaseTime * 6) * 0.02 * warmth;
+      this.outline.scale.setScalar(OUTLINE_SIZE * pulse);
+    }
+    this.cards.forEach((card, i) => {
+      if (!card.mesh.visible) return;
+      const warmth = this.warmth(this.smooth[i]);
+      card.material.color.copy(DIM_OUTLINE).lerp(HOT_OUTLINE, warmth);
+      card.material.opacity = 0.55 + 0.45 * warmth;
+      card.mesh.scale.setScalar(1 + warmth * 0.25);
+    });
+
+    // After a creature is freed, the hand must relax before the next shape
+    // counts, so holding a pose does not spawn creature after creature.
+    const strongest = Math.max(0, ...this.raw);
+    if (this.needsRelease && (stage.handCount === 0 || strongest < 0.3)) {
+      this.needsRelease = false;
+    }
+
+    const problem = best >= 0 ? this.candidateProblem[best] : null;
+    this.struggleTime = stage.handCount > 0 && score < MATCH_THRESHOLD
+      ? this.struggleTime + dt
+      : 0;
+    const anyPair = this.candidates.some((c) => c.pair);
+    const allPair = this.candidates.every((c) => c.pair);
+    let text = teaching ? `Make a ${level?.name ?? ''}` : this.puzzle?.ask ?? 'Make any friend’s shadow';
+    if (!teaching && this.puzzle && this.phaseTime > 4) text = 'Pick a friend: make their shadow';
+    if (this.needsRelease) {
+      text = 'Relax your hand for the next shape';
+    } else if (stage.handCount === 0 || problem === 'noShadow') {
+      if (this.phaseTime > 3) {
+        text = allPair ? 'Raise both hands into the lantern light' : 'Raise your hand into the lantern light';
+      }
+    } else if (problem === 'twoHands' && allPair) {
+      text = 'This one needs both hands';
+    } else if (problem === 'offPaper') {
+      text = 'Bring your shadow fully onto the paper';
+    } else if (level && this.struggleTime > HINT_DELAY && (teaching || score > 0.35)) {
+      // Teach the shape: the plain tip first, then alternate it with a
+      // hint about whichever finger is furthest off.
+      const tip = level.tip[0].toUpperCase() + level.tip.slice(1);
+      const showHint = problem && this.struggleTime > HINT_DELAY * 2 &&
+        Math.floor(this.struggleTime / 3) % 2 === 1;
+      if (showHint) this.hintShown = true;
+      const rule = (level.pair ?? level.shape)!;
+      const prefix = teaching ? '' : `${level.name}: `;
+      text = showHint ? hintFor(problem!, rule.fingers, level.pair?.spread) : prefix + tip;
+    } else if (anyPair && problem === 'twoHands' && !teaching) {
+      text = 'Pick a friend: make their shadow';
+    }
+    if (DEV) text += `  ·  ${Math.round(score * 100)}%`;
+    this.setCaption(text);
+
+    const matched = level !== null && score >= MATCH_THRESHOLD &&
+      this.candidateShadow[best] && !this.needsRelease;
+    this.holdTime = matched ? this.holdTime + dt : 0;
+    if (teaching) this.showRing(this.holdTime / MATCH_HOLD, 0, 0.02, OUTLINE_SIZE * 1.3);
+    else if (best >= 0) {
+      const card = this.cards[best].mesh;
+      this.showRing(this.holdTime / MATCH_HOLD, card.position.x, card.position.y, CARD_SIZE * 1.6);
+    }
+    if (level && this.holdTime >= MATCH_HOLD) this.awaken(level, best);
+  }
+
+  private warmth(score: number): number {
+    return Math.min(1, Math.max(0, (score - 0.2) / (MATCH_THRESHOLD - 0.2)));
+  }
+
+  private updateSolving(): void {
+    const outcome = play.outcome;
+    if (!outcome) return;
+    play.outcome = null;
+    if (outcome.solved) {
+      this.clearPuzzle();
+      return;
+    }
+    this.wrongTries++;
+    this.setCaption(outcome.line ?? 'Hmm, that did not work. Try another friend!');
+    this.setPhase('oops');
+  }
+
+  /** Level done: unlock its friend, award stars and show the card. */
+  private clearPuzzle(): void {
+    const puzzle = this.puzzle;
+    this.ring.visible = false;
+    if (!puzzle) return;
+    if (puzzle.teach && !play.unlocked.includes(puzzle.teach)) play.unlocked.push(puzzle.teach);
+    const stars = puzzle.warmup
+      ? 3
+      : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
+    play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
+    // Resume from the next level if the player leaves now.
+    play.puzzleIndex = this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
+    saveProgress();
+    play.puzzleIndex = this.puzzleIndex;
+
+    const row = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected`);
+    this.bannerShown = true;
+    this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');
+    this.setPhase('cleared');
+  }
+
+  // --------------------------------------------------------------- Judging
+
   /** Updates each hand's shadow bounds when a new mask arrives. */
   private readShadows(): void {
     if (stage.maskVersion === this.seenMaskVersion) return;
     this.seenMaskVersion = stage.maskVersion;
-    if (LEVELS[this.levelIndex].pair) {
+    if (this.candidates.some((c) => c.pair)) {
       // Two-hand shapes are one shadow: read both channels together.
       this.pairShadow = normalizeMask(
         stage.mask,
         MASK_WIDTH,
         MASK_HEIGHT,
         MaskChannel.Both,
-        this.shadow,
+        this.candidate,
         this.pairBounds,
       );
     }
@@ -268,11 +603,10 @@ export class ShadowGameSystem extends createSystem({}) {
         MASK_HEIGHT,
         channel,
         this.candidate,
-        this.candidateBounds,
+        this.scratchBounds,
       );
-      copyBounds(this.candidateBounds, this.handBounds[channel]);
-      const single = !LEVELS[this.levelIndex].pair;
-      if (single && this.handShadow[channel] && channel === this.bestHand()) {
+      copyBounds(this.scratchBounds, this.handBounds[channel]);
+      if (this.handShadow[channel] && channel === this.bestHand()) {
         this.shadow.set(this.candidate);
       }
     }
@@ -282,12 +616,23 @@ export class ShadowGameSystem extends createSystem({}) {
     return this.handScores[0] >= this.handScores[1] ? 0 : 1;
   }
 
-  /** Scores the hands against the level's shape and smooths the result. */
-  private judgeShape(dt: number): void {
-    const level = LEVELS[this.levelIndex];
-    if (level.pair) this.judgePair(level.pair);
-    else if (level.shape) this.judgeSingle(level.shape);
-    this.score += (this.rawScore - this.score) * Math.min(1, dt * 10);
+  /** Scores every allowed friend's shape and picks the closest one. */
+  private judgeCandidates(dt: number): void {
+    const k = Math.min(1, dt * 10);
+    let best = -1;
+    this.candidates.forEach((level, i) => {
+      if (level.pair) this.judgePair(level.pair);
+      else if (level.shape) this.judgeSingle(level.shape);
+      this.raw[i] = this.rawScore;
+      this.smooth[i] += (this.rawScore - this.smooth[i]) * k;
+      this.candidateShadow[i] = this.hasShadow;
+      this.candidateProblem[i] = this.problem;
+      copyBounds(this.bounds, this.candidateBounds[i]);
+      // Ties go to the earlier friend, so one-hand problems are reported first.
+      if (best < 0 || this.smooth[i] > this.smooth[best]) best = i;
+    });
+    if (best !== this.best) this.holdTime = 0;
+    this.best = best;
   }
 
   /** Two-hand shapes: both hands tracked, one shadow fully on the paper. */
@@ -344,67 +689,29 @@ export class ShadowGameSystem extends createSystem({}) {
     this.rawScore = best >= 0 ? this.handScores[best] : 0;
   }
 
-  private updateMatching(dt: number): void {
-    const level = LEVELS[this.levelIndex];
-    const warmth = Math.min(1, Math.max(0, (this.score - 0.2) / (MATCH_THRESHOLD - 0.2)));
-    this.outlineMaterial.color.copy(DIM_OUTLINE).lerp(HOT_OUTLINE, warmth);
-    this.outlineMaterial.opacity = 0.35 + 0.55 * warmth;
-    const pulse = 1 + Math.sin(this.phaseTime * 6) * 0.02 * warmth;
-    this.outline.scale.setScalar(OUTLINE_SIZE * pulse);
-
-    // After a creature is freed, the hand must relax before the next shape
-    // counts, so holding a pose does not spawn creature after creature.
-    if (this.needsRelease && (stage.handCount === 0 || this.rawScore < 0.3)) {
-      this.needsRelease = false;
-    }
-
-    this.struggleTime = stage.handCount > 0 && this.score < MATCH_THRESHOLD
-      ? this.struggleTime + dt
-      : 0;
-    let text = `Make a ${level.name}`;
-    if (this.needsRelease) {
-      text = 'Relax your hand for the next shape';
-    } else if (stage.handCount === 0 || this.problem === 'noShadow') {
-      text = level.pair
-        ? 'Raise both hands into the lantern light'
-        : 'Raise your hand into the lantern light';
-    } else if (this.problem === 'twoHands') {
-      text = 'This one needs both hands';
-    } else if (this.problem === 'offPaper') {
-      text = 'Bring your shadow fully onto the paper';
-    } else if (this.struggleTime > HINT_DELAY) {
-      // Teach the shape: the plain tip first, then alternate it with a
-      // hint about whichever finger is furthest off.
-      const tip = level.tip[0].toUpperCase() + level.tip.slice(1);
-      const showHint = this.problem && this.struggleTime > HINT_DELAY * 2 &&
-        Math.floor(this.struggleTime / 3) % 2 === 1;
-      const rule = (level.pair ?? level.shape)!;
-      text = showHint ? hintFor(this.problem!, rule.fingers, level.pair?.spread) : tip;
-    }
-    if (DEV) text += `  ·  ${Math.round(this.score * 100)}%`;
-    this.setCaption(text);
-
-    const matched = this.score >= MATCH_THRESHOLD && this.hasShadow && !this.needsRelease;
-    this.holdTime = matched ? this.holdTime + dt : 0;
-    if (this.holdTime >= MATCH_HOLD) this.awaken();
-  }
+  // ------------------------------------------------------------- Awakening
 
   /** The matched shadow peels off the hand and becomes a creature. */
-  private awaken(): void {
-    const b = this.bounds;
+  private awaken(level: Level, index: number): void {
+    this.chosen = level;
+    const b = this.candidateBounds[index];
     const bw = ((b.maxX - b.minX + 1) / MASK_WIDTH) * PAPER_WIDTH;
     const bh = ((b.maxY - b.minY + 1) / MASK_HEIGHT) * PAPER_HEIGHT;
     this.creatureSize = Math.max(bw, bh);
     this.creatureX = (((b.minX + b.maxX + 1) / 2) / MASK_WIDTH - 0.5) * PAPER_WIDTH;
     this.creatureY = (((b.minY + b.maxY + 1) / 2) / MASK_HEIGHT - 0.5) * PAPER_HEIGHT;
+    drawSilhouette(this.creatureCanvas, decodeCells(level.outline), 3, 1);
+    this.creatureTexture.needsUpdate = true;
     this.creature.position.x = this.creatureX;
     this.creature.position.y = this.creatureY;
     this.creature.scale.setScalar(this.creatureSize);
     this.creatureMaterial.opacity = 1;
     this.creature.visible = true;
     this.outline.visible = false;
+    this.cards.forEach((card) => (card.mesh.visible = false));
+    this.ring.visible = false;
     this.needsRelease = true;
-    this.setCaption(`The ${LEVELS[this.levelIndex].name} is free!`);
+    this.setCaption(`The ${level.name} is free!`);
     this.setPhase('awakening');
     playAwaken();
   }
@@ -427,7 +734,7 @@ export class ShadowGameSystem extends createSystem({}) {
       let y = this.creatureY;
       let sx = 1;
       let sy = 1;
-      switch (LEVELS[this.levelIndex].motion) {
+      switch (this.chosen.motion) {
         case 'hop': {
           const hop = Math.abs(Math.sin(m * Math.PI * 3.5));
           y += hop * 0.12;
@@ -450,14 +757,85 @@ export class ShadowGameSystem extends createSystem({}) {
     if (t >= AWAKEN_DURATION) {
       // The flat shadow hands over to its 3D self, which emerges from this spot.
       this.creature.visible = false;
+      const attempt = this.puzzle !== null;
       stage.spawns.push({
-        kind: LEVELS[this.levelIndex].id,
+        kind: this.chosen.id,
         x: this.creature.position.x,
         y: this.creature.position.y,
+        attempt,
       });
       if (shadowMaterial) shadowMaterial.opacity = SHADOW_OPACITY;
-      this.setPhase('resting');
+      if (attempt) {
+        this.setCaption(`Go, ${friendName(this.chosen.id)}!`);
+        this.setPhase('solving');
+      } else {
+        this.beginMatching();
+      }
     }
+  }
+
+  // ------------------------------------------------------------- Drawing
+
+  /** Gold progress ring around the shape being held. */
+  private showRing(progress: number, x: number, y: number, size: number): void {
+    const p = Math.min(1, Math.max(0, progress));
+    this.ring.visible = p > 0;
+    if (!this.ring.visible) return;
+    this.ring.position.set(x, y, 0.004);
+    this.ring.scale.setScalar(size);
+    const step = Math.round(p * RING_STEPS);
+    if (step === this.ringDrawn) return;
+    this.ringDrawn = step;
+    const ctx = this.ringCanvas.getContext('2d')!;
+    const c = this.ringCanvas.width / 2;
+    ctx.clearRect(0, 0, c * 2, c * 2);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 12;
+    ctx.strokeStyle = 'rgba(255, 220, 150, 0.25)';
+    ctx.beginPath();
+    ctx.arc(c, c, c - 14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffc34d';
+    ctx.shadowColor = 'rgba(255, 190, 80, 0.9)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(c, c, c - 14, -Math.PI / 2, -Math.PI / 2 + (step / RING_STEPS) * Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    this.ringTexture.needsUpdate = true;
+  }
+
+  /** A storybook card on the paper: small heading, big title, a line of text. */
+  private drawBanner(kicker: string, title: string, body: string, footer = ''): void {
+    const canvas = this.bannerCanvas;
+    const ctx = canvas.getContext('2d')!;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(255, 246, 226, 0.95)';
+    roundRect(ctx, 8, 8, w - 16, h - 16, 36);
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#8a5a33';
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#9a6a3a';
+    ctx.font = 'italic 600 36px Georgia, "Times New Roman", serif';
+    ctx.fillText(kicker, w / 2, 70, w - 80);
+    const stars = /^[★☆]+$/.test(title);
+    ctx.fillStyle = stars ? '#f0a820' : '#3a2412';
+    ctx.font = stars ? '700 110px Georgia, serif' : '700 72px Georgia, "Times New Roman", serif';
+    ctx.fillText(title, w / 2, 160, w - 80);
+    ctx.fillStyle = '#4a3020';
+    ctx.font = '500 38px Georgia, "Times New Roman", serif';
+    wrapText(ctx, body, w / 2, 270, w - 220, 50);
+    if (footer) {
+      ctx.fillStyle = '#9a6a3a';
+      ctx.font = '600 34px Georgia, serif';
+      ctx.fillText(footer, w / 2, h - 60, w - 80);
+    }
+    this.bannerTexture.needsUpdate = true;
   }
 
   private setCaption(text: string): void {
@@ -499,6 +877,30 @@ function hintFor(
   return problem === 'thumb' ? `${verb} your thumb` : `${verb} your ${problem} finger`;
 }
 
+/** Centred text broken into lines that fit `maxWidth`. */
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+): void {
+  const words = text.split(' ');
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      ctx.fillText(line, x, y);
+      line = word;
+      y += lineHeight;
+    } else {
+      line = next;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
+}
+
 function makeCanvas(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -512,7 +914,7 @@ function makeTexture(canvas: HTMLCanvasElement): CanvasTexture {
   return texture;
 }
 
-/** Draws a cell map as a soft-edged white silhouette filling the canvas. */
+/** Draws a cell map as a soft-edged white silhouette filling the canvas width (a square at the top). */
 function drawSilhouette(
   canvas: HTMLCanvasElement,
   cells: Uint8Array,
@@ -538,12 +940,11 @@ function drawSilhouette(
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
   ctx.imageSmoothingEnabled = true;
-  ctx.filter = `blur(${blur}px)`;
+  ctx.filter = `blur(${blur * (canvas.width / 256)}px)`;
   ctx.globalAlpha = alpha;
-  ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(small, 0, 0, canvas.width, canvas.width);
   ctx.restore();
 }
-
 
 function roundRect(
   ctx: CanvasRenderingContext2D,

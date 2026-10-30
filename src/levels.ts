@@ -134,6 +134,6 @@ export const LEVELS: Level[] = [
 /** Shape score (0..1) needed to bring a creature to life. */
 export const MATCH_THRESHOLD = 0.7;
 /** Seconds the shape must be held above the threshold. */
-export const MATCH_HOLD = 0.5;
+export const MATCH_HOLD = 0.7;
 /** Seconds of struggling before the caption offers a finger hint. */
 export const HINT_DELAY = 2.5;

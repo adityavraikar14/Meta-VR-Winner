@@ -216,8 +216,9 @@ export function softShade(root: Group): void {
   const shaded = new Set<object>();
   root.traverse((o) => {
     const mesh = o as Mesh;
-    const material = mesh.material as Material | undefined;
-    if (!mesh.isMesh || !material?.userData.softShade || shaded.has(mesh.geometry)) return;
+    if (!mesh.isMesh) return;
+    const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as Material[];
+    if (!materials.some((m) => m.userData.softShade) || shaded.has(mesh.geometry)) return;
     shaded.add(mesh.geometry);
     const position = mesh.geometry.getAttribute('position');
     const normal = mesh.geometry.getAttribute('normal');
@@ -233,6 +234,6 @@ export function softShade(root: Group): void {
       colors[i * 3 + 2] = light * 0.94;
     }
     mesh.geometry.setAttribute('color', new BufferAttribute(colors, 3));
-    (material as MeshPhysicalMaterial).vertexColors = true;
+    for (const m of materials) if (m.userData.softShade) (m as MeshPhysicalMaterial).vertexColors = true;
   });
 }
