@@ -2,7 +2,7 @@ import { Color, Quaternion, Vector3 } from '@iwsdk/core';
 import { playBoing, playGiggle } from '../audio.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
-import type { CreatureRig } from './rabbit-model.js';
+import type { CreatureRig } from './rig.js';
 
 export type CreatureState =
   | 'emerging'
@@ -11,7 +11,9 @@ export type CreatureState =
   | 'hopping'
   | 'held'
   | 'falling'
-  | 'onPalm';
+  | 'onPalm'
+  | 'flying'
+  | 'perched';
 
 /** Where creatures live: a round stage in front of the player. */
 export interface Ground {
@@ -26,6 +28,9 @@ const EMERGE_TIME = 0.8;
 const HOP_TIME = 0.32;
 const GRAVITY = 9.8;
 const PALM_WAIT = 0.45;
+/** How long a pointed finger must be held up before a bird comes to perch. */
+const PERCH_WAIT = 0.6;
+const FLIGHT_TIME = 4.5;
 const BLACK = new Color(0x140b05);
 const UP = new Vector3(0, 1, 0);
 
@@ -54,7 +59,10 @@ export class Creature {
   private heartIn = 0;
   private wasTouching = [false, false];
   private palmTime = [0, 0];
+  private pointTime = [0, 0];
   private hand = -1;
+  private flightAngle = 0;
+  private flightRadius = 0.3;
   private leapFrom = new Vector3();
   private leapTo = new Vector3();
   private leapDuration = 0.8;
@@ -185,6 +193,20 @@ export class Creature {
         this.faceTowards(ground.viewer, dt, 3);
         break;
       }
+      case 'flying':
+        this.updateFlying(dt, ground);
+        break;
+      case 'perched': {
+        const hand = hands[this.hand];
+        if (!hand || !hand.tracked || !hand.pointing) {
+          this.returnToStage(ground);
+          break;
+        }
+        this.position.copy(hand.indexTip).addScaledVector(UP, 0.006);
+        this.happiness = Math.min(1, this.happiness + dt * 0.3);
+        this.faceTowards(ground.viewer, dt, 3);
+        break;
+      }
     }
 
     if (this.state !== 'leaping' && this.state !== 'falling') this.react(dt, hands);
@@ -198,7 +220,15 @@ export class Creature {
     if (this.idleIn > 0 || this.petting) return;
     this.idleIn = 1.5 + Math.random() * 3;
     const roll = Math.random();
-    if (roll < 0.45) {
+    if (this.rig.locomotion === 'flyer' && roll < 0.3) {
+      // Take off for a lap around the player.
+      this.flightAngle = Math.atan2(
+        this.position.z - ground.center.z,
+        this.position.x - ground.center.x,
+      );
+      this.flightRadius = 0.22 + Math.random() * 0.12;
+      this.setState('flying');
+    } else if (roll < 0.45) {
       // Wander: a few small hops to a nearby spot on the stage.
       const angle = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * ground.radius * 0.65;
@@ -232,6 +262,35 @@ export class Creature {
       this.stateTime = 0;
       if (this.hopsLeft <= 0) this.setState('idle');
     }
+  }
+
+  /** Circle above the stage, rising and dipping, then glide back down. */
+  private updateFlying(dt: number, ground: Ground): void {
+    const climb = Math.min(1, this.stateTime / 0.6);
+    this.flightAngle += dt * 1.6;
+    const r = this.flightRadius * climb;
+    this.tmp.set(
+      ground.center.x + Math.cos(this.flightAngle) * r,
+      ground.center.y + (0.18 + Math.sin(this.stateTime * 2.2) * 0.04) * climb,
+      ground.center.z + Math.sin(this.flightAngle) * r,
+    );
+    this.position.lerp(this.tmp, Math.min(1, dt * 6));
+    // Face along the direction of flight.
+    this.tmp.set(-Math.sin(this.flightAngle), 0, Math.cos(this.flightAngle)).add(this.position);
+    this.faceTowards(this.tmp, dt, 8);
+    if (this.stateTime > FLIGHT_TIME) this.returnToStage(ground);
+  }
+
+  /** Fly or hop back to a random resting spot on the stage. */
+  private returnToStage(ground: Ground): void {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * ground.radius * 0.55;
+    this.tmp.set(
+      ground.center.x + Math.cos(angle) * r,
+      ground.center.y,
+      ground.center.z + Math.sin(angle) * r,
+    );
+    this.leap(this.tmp, 0.8, 0.12);
   }
 
   private updateFalling(dt: number, ground: Ground): void {
@@ -277,6 +336,7 @@ export class Creature {
       if (!hand.tracked) {
         this.wasTouching[i] = false;
         this.palmTime[i] = 0;
+        this.pointTime[i] = 0;
         continue;
       }
 
@@ -311,6 +371,20 @@ export class Creature {
         }
       }
 
+      // Perch: birds come and sit on a finger held up and pointing.
+      const free = this.state === 'idle' || this.state === 'hopping' || this.state === 'flying';
+      if (this.rig.locomotion === 'flyer' && free) {
+        this.pointTime[i] = hand.pointing ? this.pointTime[i] + dt : 0;
+        if (this.pointTime[i] > PERCH_WAIT) {
+          this.pointTime[i] = 0;
+          this.hand = i;
+          this.tmp.copy(hand.indexTip).addScaledVector(UP, 0.006);
+          this.leap(this.tmp, 0.7, 0.08, 'perched');
+          playGiggle();
+          return;
+        }
+      }
+
       // Palm: an open, upturned palm held close makes it hop on.
       if (this.state === 'idle' || this.state === 'hopping') {
         const near =
@@ -338,7 +412,7 @@ export class Creature {
         this.heartIn = 0.3;
         this.fx.heart(this.tmp.copy(this.top).addScaledVector(UP, 0.03));
       }
-    } else if (this.state !== 'onPalm') {
+    } else if (this.state !== 'onPalm' && this.state !== 'perched') {
       this.happiness = Math.max(0, this.happiness - dt * 0.25);
     }
   }
@@ -388,12 +462,27 @@ export class Creature {
     // Ears: flatten while petted, stream back in the air, twitch now and then.
     this.twitch = Math.max(0, this.twitch - dt * 3);
     const airborne =
-      this.state === 'leaping' || this.state === 'falling' || this.state === 'held';
+      this.state === 'leaping' ||
+      this.state === 'falling' ||
+      this.state === 'held' ||
+      this.state === 'flying';
     const earBack = (this.petting ? -1.0 : airborne ? -0.5 : 0) + Math.sin(time * 1.7) * 0.05;
     const flutter = this.state === 'held' ? Math.sin(time * 18) * 0.15 : 0;
     const twitch = Math.sin(this.twitch * 20) * 0.3 * this.twitch;
-    rig.earLeft.rotation.x = earBack + flutter + (this.twitchSide < 0 ? twitch : 0);
-    rig.earRight.rotation.x = earBack - flutter + (this.twitchSide > 0 ? twitch : 0);
+    rig.ears.forEach((ear, i) => {
+      const side = i === 0 ? -1 : 1;
+      ear.rotation.x = earBack + flutter * side + (this.twitchSide === side ? twitch : 0);
+    });
+
+    // Wings: fast flaps in the air, a happy flutter, otherwise folded.
+    const flap = airborne
+      ? 0.35 + Math.sin(time * (this.state === 'held' ? 38 : 30)) * 0.85
+      : happy
+        ? 0.15 + Math.sin(time * 20) * 0.15
+        : this.twitch * 0.4;
+    rig.wings.forEach((wing, i) => {
+      wing.rotation.z = (i === 0 ? -1 : 1) * flap;
+    });
 
     // Head follows the viewer within a comfortable range.
     const toViewer = Math.atan2(

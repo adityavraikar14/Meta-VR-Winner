@@ -20,7 +20,9 @@ import { stage } from '../stage-state.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
-import { createRabbit, disposeRig, type CreatureRig } from './rabbit-model.js';
+import { createBird } from './bird-model.js';
+import { createRabbit } from './rabbit-model.js';
+import { disposeRig, type CreatureRig } from './rig.js';
 
 const STAGE_RADIUS = 0.17;
 const STAGE_HEIGHT = 0.016;
@@ -30,6 +32,7 @@ const MAX_CREATURES = 6;
 
 const MODELS: Record<string, () => CreatureRig> = {
   rabbit: createRabbit,
+  bird: createBird,
 };
 
 interface Living {

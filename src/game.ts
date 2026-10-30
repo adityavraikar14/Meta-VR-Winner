@@ -14,8 +14,11 @@ import {
   createExtension,
   fingersUp,
   readExtension,
+  scorePair,
   scoreShape,
   type Finger,
+  type PairRule,
+  type ShapeRule,
   type ShapeScore,
 } from './hand-pose.js';
 import {
@@ -44,7 +47,14 @@ import {
 } from './stage-state.js';
 
 type Phase = 'matching' | 'awakening' | 'resting';
-type Problem = Finger | 'direction' | 'offPaper' | 'noShadow' | null;
+type Problem =
+  | Finger
+  | 'direction'
+  | 'thumbs'
+  | 'twoHands'
+  | 'offPaper'
+  | 'noShadow'
+  | null;
 
 const OUTLINE_SIZE = 0.4;
 const SHADOW_OPACITY = 0.88;
@@ -80,6 +90,9 @@ export class ShadowGameSystem extends createSystem({}) {
   private seenMaskVersion = -1;
 
   private extension = createExtension();
+  private extensionRight = createExtension();
+  private pairShadow = false;
+  private pairBounds = createBounds();
   private shapeScore: ShapeScore = { score: 0, worst: null };
   private handScores = [0, 0];
   private rawScore = 0;
@@ -157,22 +170,26 @@ export class ShadowGameSystem extends createSystem({}) {
       maskVersion: () => stage.maskVersion,
       next: () => this.startLevel((this.levelIndex + 1) % LEVELS.length),
       info: () => {
-        const right = readExtension(stage.joints[1], createExtension());
+        const describe = (i: number) => {
+          if (!stage.tracked[i]) return null;
+          const ext = readExtension(stage.joints[i], createExtension());
+          return {
+            ext: Object.fromEntries(Object.entries(ext).map(([k, v]) => [k, Number(v.toFixed(2))])),
+            up: Number(fingersUp(stage.joints[i], ext).toFixed(2)),
+          };
+        };
+        const [l, r] = stage.joints;
         return {
           phase: this.phase,
           level: LEVELS[this.levelIndex].id,
           hands: stage.handCount,
           maskVersion: stage.maskVersion,
           score: Number(this.score.toFixed(3)),
+          raw: Number(this.rawScore.toFixed(3)),
           problem: this.problem,
-          right: stage.tracked[1]
-            ? {
-                ext: Object.fromEntries(
-                  Object.entries(right).map(([k, v]) => [k, Number(v.toFixed(2))]),
-                ),
-                up: Number(fingersUp(stage.joints[1], right).toFixed(2)),
-              }
-            : null,
+          left: describe(0),
+          right: describe(1),
+          thumbGap: Number(Math.hypot(l[12] - r[12], l[13] - r[13], l[14] - r[14]).toFixed(3)),
           bounds: this.bounds,
         };
       },
@@ -228,6 +245,17 @@ export class ShadowGameSystem extends createSystem({}) {
   private readShadows(): void {
     if (stage.maskVersion === this.seenMaskVersion) return;
     this.seenMaskVersion = stage.maskVersion;
+    if (LEVELS[this.levelIndex].pair) {
+      // Two-hand shapes are one shadow: read both channels together.
+      this.pairShadow = normalizeMask(
+        stage.mask,
+        MASK_WIDTH,
+        MASK_HEIGHT,
+        MaskChannel.Both,
+        this.shadow,
+        this.pairBounds,
+      );
+    }
     for (const channel of HAND_CHANNELS) {
       this.handShadow[channel] = normalizeMask(
         stage.mask,
@@ -238,7 +266,8 @@ export class ShadowGameSystem extends createSystem({}) {
         this.candidateBounds,
       );
       copyBounds(this.candidateBounds, this.handBounds[channel]);
-      if (this.handShadow[channel] && channel === this.bestHand()) {
+      const single = !LEVELS[this.levelIndex].pair;
+      if (single && this.handShadow[channel] && channel === this.bestHand()) {
         this.shadow.set(this.candidate);
       }
     }
@@ -248,9 +277,45 @@ export class ShadowGameSystem extends createSystem({}) {
     return this.handScores[0] >= this.handScores[1] ? 0 : 1;
   }
 
-  /** Scores both hands against the level's shape; the better one counts. */
+  /** Scores the hands against the level's shape and smooths the result. */
   private judgeShape(dt: number): void {
-    const rule = LEVELS[this.levelIndex].shape;
+    const level = LEVELS[this.levelIndex];
+    if (level.pair) this.judgePair(level.pair);
+    else if (level.shape) this.judgeSingle(level.shape);
+    this.score += (this.rawScore - this.score) * Math.min(1, dt * 10);
+  }
+
+  /** Two-hand shapes: both hands tracked, one shadow fully on the paper. */
+  private judgePair(rule: PairRule): void {
+    this.hasShadow = false;
+    this.rawScore = 0;
+    if (stage.handCount === 0) {
+      this.problem = null;
+      return;
+    }
+    if (!stage.tracked[0] || !stage.tracked[1]) {
+      this.problem = 'twoHands';
+      return;
+    }
+    if (!this.pairShadow || !this.handShadow[0] || !this.handShadow[1]) {
+      this.problem = 'noShadow';
+      return;
+    }
+    if (touchesEdge(this.pairBounds)) {
+      this.problem = 'offPaper';
+      return;
+    }
+    readExtension(stage.joints[0], this.extension);
+    readExtension(stage.joints[1], this.extensionRight);
+    scorePair(rule, stage.joints[0], stage.joints[1], this.extension, this.extensionRight, this.shapeScore);
+    this.hasShadow = true;
+    copyBounds(this.pairBounds, this.bounds);
+    this.rawScore = this.shapeScore.score;
+    this.problem = this.shapeScore.worst;
+  }
+
+  /** One-hand shapes: either hand may make it; the better one counts. */
+  private judgeSingle(rule: ShapeRule): void {
     let best = -1;
     this.problem = stage.handCount === 0 ? null : 'noShadow';
     for (let hand = 0; hand < 2; hand++) {
@@ -272,7 +337,6 @@ export class ShadowGameSystem extends createSystem({}) {
     this.hasShadow = best >= 0;
     if (best >= 0) copyBounds(this.handBounds[best], this.bounds);
     this.rawScore = best >= 0 ? this.handScores[best] : 0;
-    this.score += (this.rawScore - this.score) * Math.min(1, dt * 10);
   }
 
   private updateMatching(dt: number): void {
@@ -296,11 +360,16 @@ export class ShadowGameSystem extends createSystem({}) {
     if (this.needsRelease) {
       text = 'Relax your hand for the next shape';
     } else if (stage.handCount === 0 || this.problem === 'noShadow') {
-      text = 'Raise your hand into the lantern light';
+      text = level.pair
+        ? 'Raise both hands into the lantern light'
+        : 'Raise your hand into the lantern light';
+    } else if (this.problem === 'twoHands') {
+      text = 'This one needs both hands';
     } else if (this.problem === 'offPaper') {
       text = 'Bring your shadow fully onto the paper';
     } else if (this.struggleTime > HINT_DELAY && this.problem) {
-      text = hintFor(this.problem, level.shape.fingers);
+      const fingers = (level.pair ?? level.shape)!.fingers;
+      text = hintFor(this.problem, fingers);
     }
     if (DEV) text += `  ·  ${Math.round(this.score * 100)}%`;
     this.setCaption(text);
@@ -406,6 +475,8 @@ function touchesEdge(b: MaskBounds): boolean {
 
 function hintFor(problem: Exclude<Problem, null>, wants: Record<Finger, string>): string {
   if (problem === 'direction') return 'Point your fingers up';
+  if (problem === 'thumbs') return 'Hook your thumbs together';
+  if (problem === 'twoHands') return 'This one needs both hands';
   if (problem === 'offPaper' || problem === 'noShadow') return 'Raise your hand into the lantern light';
   const verb = wants[problem] === 'out' ? 'Stretch' : 'Fold';
   return problem === 'thumb' ? `${verb} your thumb` : `${verb} your ${problem} finger`;

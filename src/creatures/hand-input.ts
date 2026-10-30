@@ -1,4 +1,5 @@
 import { Vector3 } from '@iwsdk/core';
+import { createExtension, readExtension } from '../hand-pose.js';
 import { stage } from '../stage-state.js';
 
 /** WebXR joint indices used for interaction. */
@@ -31,6 +32,8 @@ export interface HandState {
   tips: Vector3[];
   tipSpeeds: number[];
   indexTip: Vector3;
+  /** Index straight, other fingers folded: a perch for birds. */
+  pointing: boolean;
 }
 
 function createHand(): HandState {
@@ -47,6 +50,7 @@ function createHand(): HandState {
     tips: TOUCH_TIPS.map(() => new Vector3()),
     tipSpeeds: TOUCH_TIPS.map(() => 0),
     indexTip: new Vector3(),
+    pointing: false,
   };
 }
 
@@ -58,6 +62,7 @@ export class HandInput {
   private a = new Vector3();
   private b = new Vector3();
   private c = new Vector3();
+  private extension = createExtension();
 
   update(dt: number): void {
     for (let i = 0; i < 2; i++) {
@@ -70,6 +75,7 @@ export class HandInput {
       if (!hand.tracked) {
         if (hand.pinching) hand.pinchEnded = true;
         hand.pinching = false;
+        hand.pointing = false;
         continue;
       }
 
@@ -102,6 +108,9 @@ export class HandInput {
       if (i === 0) hand.palmNormal.negate();
       this.joint(joints, MIDDLE_KNUCKLE, this.b);
       hand.palm.addVectors(this.a, this.b).multiplyScalar(0.5);
+
+      const ext = readExtension(joints, this.extension);
+      hand.pointing = ext.index > 0.8 && ext.middle < 0.35 && ext.ring < 0.35 && ext.pinky < 0.35;
 
       for (let t = 0; t < TOUCH_TIPS.length; t++) {
         const tip = hand.tips[t];

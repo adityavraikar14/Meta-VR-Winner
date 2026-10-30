@@ -4,6 +4,7 @@
  *
  *   P / O  cycle right / left emulated hand pose
  *   1-9, 0 set right hand pose: default peace fist point ok call rock three open flat
+ *          (hold Shift for the left hand)
  *   X      toggle the left emulated hand on or off
  *   C      capture the current shadow as a level target (hex)
  *   N      next level
@@ -95,9 +96,11 @@ export function installDevTools(api: DevApi): void {
       const ids = await addLibraryPoses(hands.right);
       console.log(`SHADOWPLAY poses available=${ids.join(',')}`);
     }
-    if (hands && event.key >= '0' && event.key <= '9') {
-      setPose(hands.right, DIGIT_POSES[Number(event.key)]);
-      console.log(`SHADOWPLAY pose right=${hands.right.poseId}`);
+    const digit = /^Digit(\d)$/.exec(event.code);
+    if (hands && digit) {
+      const hand = event.shiftKey ? hands.left : hands.right;
+      setPose(hand, DIGIT_POSES[Number(digit[1])]);
+      console.log(`SHADOWPLAY pose ${event.shiftKey ? 'left' : 'right'}=${hand.poseId}`);
       return;
     }
     switch (event.key.toLowerCase()) {

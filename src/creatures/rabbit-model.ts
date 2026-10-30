@@ -1,64 +1,19 @@
 import {
   CircleGeometry,
-  Color,
   Group,
   LatheGeometry,
-  Material,
   Mesh,
   MeshBasicMaterial,
-  MeshPhysicalMaterial,
   SphereGeometry,
   TorusGeometry,
-  Vector2,
 } from '@iwsdk/core';
-
-/**
- * Named parts of a creature that its animation drives. Every creature model
- * returns this shape so behaviour code can stay creature-agnostic.
- */
-export interface CreatureRig {
-  root: Group;
-  /** Squash and stretch pivot at the feet. */
-  body: Group;
-  head: Group;
-  earLeft: Group;
-  earRight: Group;
-  /** Open eyes; scaled on Y to blink. */
-  eyes: Group;
-  /** Closed "^ ^" eyes shown when happy. */
-  happyEyes: Group;
-  cheeks: MeshBasicMaterial;
-  tail: Group;
-  feet: Group[];
-  /** Every coloured material with its true colour, for the shadow-to-colour fade. */
-  tints: Array<{ material: MeshPhysicalMaterial | MeshBasicMaterial; color: Color }>;
-  /** Approximate body radius and height, for touch tests. */
-  radius: number;
-  height: number;
-}
+import { eyeMaterial, lathe, plush, tintTracker, type CreatureRig } from './rig.js';
 
 const FUR = 0xefd6bd;
 const FUR_SHADE = 0xdcb894;
 const INNER_EAR = 0xffb1c2;
 const NOSE = 0xff8aa1;
 const CHEEK = 0xff97b2;
-const EYE = 0x1d1418;
-
-/** Soft velvet look for plush fur: rough base with a bright sheen at grazing angles. */
-function plush(color: number): MeshPhysicalMaterial {
-  return new MeshPhysicalMaterial({
-    color,
-    roughness: 0.9,
-    sheen: 0.35,
-    sheenRoughness: 0.6,
-    sheenColor: new Color(0xfff1e0),
-  });
-}
-
-/** A smooth surface of revolution through the given (radius, height) points. */
-function lathe(points: Array<[number, number]>, segments = 28): LatheGeometry {
-  return new LatheGeometry(points.map(([r, y]) => new Vector2(r, y)), segments);
-}
 
 /** Pear-shaped body: wide hips, narrower shoulders. Origin at the base. */
 function bodyGeometry(): LatheGeometry {
@@ -81,17 +36,12 @@ function earGeometry(scale = 1): LatheGeometry {
 
 export function createRabbit(): CreatureRig {
   const tints: CreatureRig['tints'] = [];
-  const track = <M extends MeshPhysicalMaterial | MeshBasicMaterial>(m: M): M => {
-    tints.push({ material: m, color: m.color.clone() });
-    return m;
-  };
+  const track = tintTracker(tints);
   const fur = track(plush(FUR));
   const furShade = track(plush(FUR_SHADE));
   const innerEar = track(plush(INNER_EAR));
   const nose = track(plush(NOSE));
-  const eye = track(
-    new MeshPhysicalMaterial({ color: EYE, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 }),
-  );
+  const eye = track(eyeMaterial());
   const shine = new MeshBasicMaterial({ color: 0xffffff });
   const cheeks = track(
     new MeshBasicMaterial({ color: CHEEK, transparent: true, opacity: 0.45, depthWrite: false }),
@@ -205,16 +155,14 @@ export function createRabbit(): CreatureRig {
     ears.push(ear);
   }
 
-  root.traverse((o) => {
-    if ((o as Mesh).isMesh) (o as Mesh).castShadow = false;
-  });
-
   return {
+    kind: 'rabbit',
+    locomotion: 'hopper',
     root,
     body,
     head,
-    earLeft: ears[0],
-    earRight: ears[1],
+    ears,
+    wings: [],
     eyes,
     happyEyes,
     cheeks,
@@ -224,16 +172,4 @@ export function createRabbit(): CreatureRig {
     radius: 0.04,
     height: 0.13,
   };
-}
-
-/** Releases GPU resources of a rig that is no longer used. */
-export function disposeRig(rig: CreatureRig): void {
-  const materials = new Set<Material>();
-  rig.root.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    mesh.geometry.dispose();
-    materials.add(mesh.material as Material);
-  });
-  materials.forEach((m) => m.dispose());
 }

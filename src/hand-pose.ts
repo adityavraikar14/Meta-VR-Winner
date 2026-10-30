@@ -83,11 +83,52 @@ export function fingersUp(joints: Float32Array, ext: Extension): number {
   return length > 0 ? y / length : 0;
 }
 
+/** A two-hand shape: both hands hold the same finger states. */
+export interface PairRule {
+  fingers: Record<Finger, Want>;
+  /** Thumb tips hooked together, as in the classic shadow bird. */
+  thumbsTouch?: boolean;
+}
+
 export interface ShapeScore {
   /** 0..1, the weakest requirement. */
   score: number;
-  /** The finger furthest from what the rule wants, for hints. */
-  worst: Finger | 'direction' | null;
+  /** The requirement furthest from met, for hints. */
+  worst: Finger | 'direction' | 'thumbs' | null;
+}
+
+const THUMB_TIP_JOINT = 4;
+
+/** Scores both hands against a pair rule; the weaker hand decides. */
+export function scorePair(
+  rule: PairRule,
+  left: Float32Array,
+  right: Float32Array,
+  leftExt: Extension,
+  rightExt: Extension,
+  out: ShapeScore,
+): ShapeScore {
+  const single: ShapeRule = { fingers: rule.fingers };
+  scoreShape(single, left, leftExt, out);
+  let score = out.score;
+  let worst = out.worst;
+  scoreShape(single, right, rightExt, out);
+  if (out.score < score) {
+    score = out.score;
+    worst = out.worst;
+  }
+  if (rule.thumbsTouch) {
+    const t = THUMB_TIP_JOINT * 3;
+    const gap = Math.hypot(left[t] - right[t], left[t + 1] - right[t + 1], left[t + 2] - right[t + 2]);
+    const s = 1 - ramp(gap, 0.045, 0.1);
+    if (s < score) {
+      score = s;
+      worst = 'thumbs';
+    }
+  }
+  out.score = score;
+  out.worst = worst;
+  return out;
 }
 
 export function scoreShape(
