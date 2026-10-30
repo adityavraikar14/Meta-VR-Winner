@@ -31,8 +31,12 @@ import { disposeRig, type CreatureRig } from './rig.js';
 
 const STAGE_RADIUS = 0.21;
 const STAGE_HEIGHT = 0.016;
-/** Stage position in paper space: closer to the player and lower, within reach. */
-const STAGE_OFFSET = new Vector3(0, -0.34, 0.58);
+/**
+ * Stage position in paper space: about half a metre ahead and a third of a
+ * metre below the eyes, so it sits in the lower part of the view without
+ * looking down, and within easy reach of a seated player.
+ */
+const STAGE_OFFSET = new Vector3(0, -0.22, 0.5);
 const MAX_CREATURES = 7;
 /** Display scale per kind, so big creatures do not crowd the stage. */
 const SCALES: Record<string, number> = { dragon: 0.95, deer: 1.05, dog: 1.15 };
