@@ -51,6 +51,7 @@ type Problem =
   | Finger
   | 'direction'
   | 'thumbs'
+  | 'spread'
   | 'twoHands'
   | 'offPaper'
   | 'noShadow'
@@ -169,6 +170,10 @@ export class ShadowGameSystem extends createSystem({}) {
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
       maskVersion: () => stage.maskVersion,
       next: () => this.startLevel((this.levelIndex + 1) % LEVELS.length),
+      spawnAll: () =>
+        LEVELS.forEach((level, i) =>
+          stage.spawns.push({ kind: level.id, x: -0.36 + i * 0.12, y: -0.12 }),
+        ),
       info: () => {
         const describe = (i: number) => {
           if (!stage.tracked[i]) return null;
@@ -367,9 +372,14 @@ export class ShadowGameSystem extends createSystem({}) {
       text = 'This one needs both hands';
     } else if (this.problem === 'offPaper') {
       text = 'Bring your shadow fully onto the paper';
-    } else if (this.struggleTime > HINT_DELAY && this.problem) {
-      const fingers = (level.pair ?? level.shape)!.fingers;
-      text = hintFor(this.problem, fingers);
+    } else if (this.struggleTime > HINT_DELAY) {
+      // Teach the shape: the plain tip first, then alternate it with a
+      // hint about whichever finger is furthest off.
+      const tip = level.tip[0].toUpperCase() + level.tip.slice(1);
+      const showHint = this.problem && this.struggleTime > HINT_DELAY * 2 &&
+        Math.floor(this.struggleTime / 3) % 2 === 1;
+      const rule = (level.pair ?? level.shape)!;
+      text = showHint ? hintFor(this.problem!, rule.fingers, level.pair?.spread) : tip;
     }
     if (DEV) text += `  ·  ${Math.round(this.score * 100)}%`;
     this.setCaption(text);
@@ -473,7 +483,14 @@ function touchesEdge(b: MaskBounds): boolean {
   return b.minX <= 0 || b.minY <= 0 || b.maxX >= MASK_WIDTH - 1 || b.maxY >= MASK_HEIGHT - 1;
 }
 
-function hintFor(problem: Exclude<Problem, null>, wants: Record<Finger, string>): string {
+function hintFor(
+  problem: Exclude<Problem, null>,
+  wants: Record<Finger, string>,
+  spread?: 'wide' | 'together',
+): string {
+  if (problem === 'spread') {
+    return spread === 'wide' ? 'Spread your fingers like feathers' : 'Keep your fingers together';
+  }
   if (problem === 'direction') return 'Point your fingers up';
   if (problem === 'thumbs') return 'Hook your thumbs together';
   if (problem === 'twoHands') return 'This one needs both hands';

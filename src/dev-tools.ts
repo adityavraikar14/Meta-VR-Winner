@@ -9,6 +9,7 @@
  *   C      capture the current shadow as a level target (hex)
  *   N      next level
  *   I      print game state and score
+ *   A      spawn every creature at once
  */
 
 /** Extra debug readouts other systems add to the `I` info dump. */
@@ -18,6 +19,7 @@ export interface DevApi {
   capture(): string;
   maskVersion(): number;
   next(): void;
+  spawnAll(): void;
   info(): unknown;
 }
 
@@ -132,6 +134,9 @@ export function installDevTools(api: DevApi): void {
       }
       case 'n':
         api.next();
+        break;
+      case 'a':
+        api.spawnAll();
         break;
       case 'i': {
         const pose = hands?.right.poseId ?? '?';

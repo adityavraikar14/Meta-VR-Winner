@@ -171,3 +171,85 @@ export function playYawn(): void {
   osc.start(now);
   osc.stop(now + 0.75);
 }
+
+/** A sweep from one pitch to another with a quick attack and decay. */
+function sweep(
+  ctx: AudioContext,
+  type: OscillatorType,
+  from: number,
+  to: number,
+  start: number,
+  duration: number,
+  volume: number,
+): void {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(from, start);
+  osc.frequency.exponentialRampToValueAtTime(to, start + duration);
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(volume, start + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+}
+
+/** A puppy's double "arf". */
+export function playBark(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = 520 + Math.random() * 120;
+  sweep(ctx, 'sawtooth', base, base * 0.6, now, 0.09, 0.05);
+  sweep(ctx, 'sawtooth', base * 1.1, base * 0.65, now + 0.16, 0.09, 0.045);
+}
+
+/** A baby dragon's tiny roar: a rising, wobbly growl. */
+export function playRawr(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sawtooth', 160, 420, now, 0.35, 0.05);
+  sweep(ctx, 'square', 240, 520, now + 0.03, 0.3, 0.02);
+}
+
+/** Glassy tinkle for the butterfly. */
+export function playTinkle(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  [1760, 2349, 2637].forEach((f, i) => tone(ctx, f, now + i * 0.05, 0.4, 0.035));
+}
+
+/** A tiny squeak for the snail. */
+export function playSqueak(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  sweep(ctx, 'sine', 1300, 1900, ctx.currentTime, 0.12, 0.05);
+}
+
+/** A soft fawn bleat. */
+export function playBleat(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const vibrato = ctx.createOscillator();
+  const depth = ctx.createGain();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(620, now);
+  osc.frequency.exponentialRampToValueAtTime(520, now + 0.35);
+  vibrato.frequency.value = 18;
+  depth.gain.value = 25;
+  vibrato.connect(depth).connect(osc.frequency);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.05, now + 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(now);
+  vibrato.start(now);
+  osc.stop(now + 0.42);
+  vibrato.stop(now + 0.42);
+}

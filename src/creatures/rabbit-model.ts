@@ -1,13 +1,14 @@
+import { Group, LatheGeometry, Mesh, SphereGeometry, Vector3 } from '@iwsdk/core';
 import {
-  CircleGeometry,
-  Group,
-  LatheGeometry,
-  Mesh,
-  MeshBasicMaterial,
-  SphereGeometry,
-  TorusGeometry,
-} from '@iwsdk/core';
-import { eyeMaterial, lathe, plush, tintTracker, type CreatureRig } from './rig.js';
+  addWhiskers,
+  buildFace,
+  glossy,
+  lathe,
+  plush,
+  softShade,
+  tintTracker,
+  type CreatureRig,
+} from './rig.js';
 
 const FUR = 0xefd6bd;
 const FUR_SHADE = 0xdcb894;
@@ -40,12 +41,7 @@ export function createRabbit(): CreatureRig {
   const fur = track(plush(FUR));
   const furShade = track(plush(FUR_SHADE));
   const innerEar = track(plush(INNER_EAR));
-  const nose = track(plush(NOSE));
-  const eye = track(eyeMaterial());
-  const shine = new MeshBasicMaterial({ color: 0xffffff });
-  const cheeks = track(
-    new MeshBasicMaterial({ color: CHEEK, transparent: true, opacity: 0.45, depthWrite: false }),
-  );
+  const nose = track(glossy(NOSE, 0.3));
 
   const root = new Group();
   root.name = 'Rabbit';
@@ -110,33 +106,16 @@ export function createRabbit(): CreatureRig {
   noseMesh.position.set(0, -0.004, 0.0335);
   head.add(noseMesh);
 
-  const eyes = new Group();
-  eyes.name = 'Eyes';
-  eyes.position.set(0, 0.004, 0);
-  head.add(eyes);
-  const happyEyes = new Group();
-  happyEyes.name = 'HappyEyes';
-  happyEyes.visible = false;
-  head.add(happyEyes);
-  const arc = new TorusGeometry(0.0055, 0.0012, 6, 16, Math.PI);
-  for (const side of [-1, 1]) {
-    const ball = new Mesh(new SphereGeometry(0.0068, 18, 12), eye);
-    ball.scale.set(1, 1.12, 0.6);
-    ball.position.set(side * 0.0135, 0, 0.029);
-    eyes.add(ball);
-    const glint = new Mesh(new SphereGeometry(0.0021, 8, 6), shine);
-    glint.position.set(side * 0.0135 + 0.0022, 0.0028, 0.0335);
-    eyes.add(glint);
-
-    const closed = new Mesh(arc, eye);
-    closed.position.set(side * 0.0135, 0.002, 0.031);
-    happyEyes.add(closed);
-
-    const cheek = new Mesh(new CircleGeometry(0.0062, 18), cheeks);
-    cheek.position.set(side * 0.021, -0.009, 0.0265);
-    cheek.rotation.y = side * 0.55;
-    head.add(cheek);
-  }
+  const { eyes, happyEyes, cheeks } = buildFace(head, track, {
+    spacing: 0.0135,
+    y: 0.004,
+    z: 0.029,
+    size: 0.0072,
+    iris: 0x7a4a2a,
+    cheekColor: CHEEK,
+    cheek: { x: 0.021, y: -0.009, z: 0.0265, turn: 0.55, size: 0.0062 },
+  });
+  addWhiskers(head, new Vector3(0, -0.008, 0.031), 0.02);
 
   const ears: Group[] = [];
   for (const side of [-1, 1]) {
@@ -154,6 +133,7 @@ export function createRabbit(): CreatureRig {
     head.add(ear);
     ears.push(ear);
   }
+  softShade(root);
 
   return {
     kind: 'rabbit',

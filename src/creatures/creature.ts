@@ -1,5 +1,15 @@
 import { Color, Quaternion, Vector3 } from '@iwsdk/core';
-import { playBoing, playChirp, playGiggle, playYawn } from '../audio.js';
+import {
+  playBark,
+  playBleat,
+  playBoing,
+  playChirp,
+  playGiggle,
+  playRawr,
+  playSqueak,
+  playTinkle,
+  playYawn,
+} from '../audio.js';
 import { PetBrain, type Behavior } from './brain.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
@@ -35,6 +45,26 @@ const PERCH_WAIT = 0.6;
 const PERSONAL_SPACE = 0.065;
 const BLACK = new Color(0x140b05);
 const UP = new Vector3(0, 1, 0);
+
+/** Each kind's voice. */
+const VOICES: Record<string, () => void> = {
+  rabbit: playGiggle,
+  bird: playChirp,
+  snail: playSqueak,
+  deer: playBleat,
+  dog: playBark,
+  butterfly: playTinkle,
+  dragon: playRawr,
+};
+
+/** Temperament nudges per kind, applied on top of the random personality. */
+const TEMPERAMENT: Record<string, Partial<Record<'energetic' | 'affectionate' | 'playful' | 'curious', number>>> = {
+  dog: { affectionate: 1.5, playful: 1.3 },
+  snail: { energetic: 0.55, curious: 1.3 },
+  deer: { energetic: 1.2, affectionate: 0.8 },
+  butterfly: { energetic: 1.3, playful: 1.2 },
+  dragon: { playful: 1.4, energetic: 1.2 },
+};
 
 /**
  * One living creature: a state machine for being carried, perched or thrown,
@@ -112,7 +142,16 @@ export class Creature {
     readonly scale = 1.25,
   ) {
     rig.root.scale.setScalar(scale);
+    const nudges = TEMPERAMENT[rig.kind] ?? {};
+    for (const [trait, factor] of Object.entries(nudges)) {
+      this.brain.personality[trait as keyof typeof nudges] *= factor;
+    }
   }
+
+  private hideFor = 0;
+  private sneezeIn = 4 + Math.random() * 6;
+  private trailIn = 0;
+  private mouthPoint = new Vector3();
 
   /** Start as a flat shadow on the paper that inflates into colour. */
   emergeFrom(at: Vector3, facing: Quaternion): void {
@@ -200,6 +239,14 @@ export class Creature {
     }
 
     this.sinceAttention += dt;
+    this.hideFor = Math.max(0, this.hideFor - dt);
+    if (this.rig.extras?.mouth && this.state === 'idle' && !this.sleeping) {
+      this.sneezeIn -= dt * (this.happiness > 0.3 ? 3 : 1);
+      if (this.sneezeIn <= 0) {
+        this.sneezeIn = 6 + Math.random() * 10;
+        this.sneeze();
+      }
+    }
     this.excitedFor = Math.max(0, this.excitedFor - dt);
     if (this.sleeping) this.brain.energy = Math.min(1, this.brain.energy + dt * 0.06);
     else this.brain.tick(dt, this.state !== 'idle' || this.hopT >= 0);
@@ -325,6 +372,11 @@ export class Creature {
 
   /** Life on the stage: run the current behaviour, then choose another. */
   private live(dt: number, ground: Ground, hands: HandState[]): void {
+    if (this.hideFor > 0 && this.hopT < 0) {
+      // Tucked into its shell: wait it out without moving.
+      this.position.y = ground.center.y;
+      return;
+    }
     this.behaviorTime += dt;
     if (this.behaviorTime >= this.behaviorDuration && this.hopT < 0 && !this.petting) {
       this.pickBehavior(ground, hands);
@@ -489,6 +541,18 @@ export class Creature {
 
   /** Hops of at most `step` meters towards a goal; clears the goal on arrival. */
   private hopTowards(goal: Vector3, step: number, hopTime: number, ground: Ground, dt: number): void {
+    const crawler = this.rig.locomotion === 'crawler';
+    if (crawler) {
+      // Snails glide: shorter, slower, flat hops that leave a sparkle trail.
+      step *= 0.6;
+      hopTime *= 2.6;
+      this.trailIn -= dt;
+      if (this.trailIn <= 0) {
+        this.trailIn = 0.35;
+        this.fx.burst(this.position, 1, 0.01);
+      }
+    }
+    const lift = crawler ? 0 : this.rig.kind === 'deer' ? 1.8 : 0.9;
     if (this.hopT < 0) {
       const remaining = Math.hypot(goal.x - this.position.x, goal.z - this.position.z);
       if (remaining < 0.01) {
@@ -503,15 +567,15 @@ export class Creature {
       this.hopTo.y = ground.center.y;
       this.hopTime = hopTime;
       this.hopT = 0;
-      this.squash = 0.8;
+      if (!crawler) this.squash = 0.8;
     }
     this.hopT = Math.min(1, this.hopT + dt / this.hopTime);
     this.position.lerpVectors(this.hopFrom, this.hopTo, this.hopT);
-    this.position.y = ground.center.y + Math.sin(this.hopT * Math.PI) * step * 0.9;
+    this.position.y = ground.center.y + Math.sin(this.hopT * Math.PI) * step * lift;
     this.yawTowards(this.hopTo);
     if (this.hopT >= 1) {
       this.hopT = -1;
-      this.squash = 0.85;
+      if (!crawler) this.squash = 0.85;
     }
   }
 
@@ -550,8 +614,17 @@ export class Creature {
 
   /** A little sound in the creature's own voice. */
   private voice(): void {
-    if (this.rig.locomotion === 'flyer') playChirp();
-    else playGiggle();
+    (VOICES[this.rig.kind] ?? playGiggle)();
+  }
+
+  /** Baby dragons sneeze little bursts of sparkly fire. */
+  private sneeze(): void {
+    const mouth = this.rig.extras?.mouth;
+    if (!mouth) return;
+    mouth.getWorldPosition(this.mouthPoint);
+    this.squash = 1.2;
+    this.fx.burst(this.mouthPoint, 16, 0.35);
+    playRawr();
   }
 
   private sing(dt = 0.1): void {
@@ -661,8 +734,16 @@ export class Creature {
         this.squashVelocity = 0;
         this.blinking = 0.25;
         this.noticed();
-        playGiggle();
         this.fx.burst(hand.indexTip, 5, 0.18);
+        if (this.rig.extras?.shell) {
+          // Shy snail: tuck into the shell for a moment.
+          this.hideFor = 2.5;
+          playSqueak();
+        } else if (this.rig.extras?.mouth && Math.random() < 0.6) {
+          this.sneeze();
+        } else {
+          this.voice();
+        }
       }
       this.wasTouching[i] = touching;
 
@@ -799,6 +880,14 @@ export class Creature {
     rig.wings.forEach((wing, i) => {
       const side = i === 0 ? -1 : 1;
       let flap = 0;
+      if (rig.kind === 'butterfly') {
+        // Butterflies never quite stop: slow open-close at rest, fast in flight.
+        flap = flying || this.hopT >= 0
+          ? 0.7 + Math.sin(time * 34) * 0.7
+          : this.sleeping ? 1.2 : 0.55 + Math.sin(time * 5) * 0.5;
+        wing.rotation.z = side * flap;
+        return;
+      }
       if (flying) flap = 0.35 + Math.sin(time * (this.state === 'held' ? 38 : 30)) * 0.85;
       else if (this.hopT >= 0) flap = Math.sin(this.hopT * Math.PI) * 0.6;
       else if (this.preen && i === 1) flap = 0.5 + Math.sin(time * 9) * 0.15;
@@ -825,10 +914,26 @@ export class Creature {
 
     // Dangling, kicking feet when carried.
     const kick = this.state === 'held' ? Math.sin(time * 14) * 0.5 : 0;
-    rig.feet[0].rotation.x = kick;
-    rig.feet[1].rotation.x = -kick;
+    rig.feet.forEach((foot, i) => {
+      foot.rotation.x = i % 2 === 0 ? kick : -kick;
+    });
 
-    rig.tail.rotation.y = happy || this.behavior === 'beg' ? Math.sin(time * 16) * 0.5 : 0;
+    const wagging = happy || this.behavior === 'beg';
+    if (rig.kind === 'dog') {
+      // Dogs wag all the time; faster when happy.
+      rig.tail.rotation.y = Math.sin(time * (wagging ? 20 : 8)) * (wagging ? 0.6 : 0.25);
+    } else {
+      rig.tail.rotation.y = wagging ? Math.sin(time * 16) * 0.5 : 0;
+    }
+
+    // A startled snail pulls its head into the shell.
+    const tucked = this.hideFor > 0 ? 1 : 0;
+    if (rig.extras?.shell) {
+      const k = Math.min(1, dt * 8);
+      const target = 1 - tucked * 0.7;
+      rig.head.scale.setScalar(rig.head.scale.x + (target - rig.head.scale.x) * k);
+      rig.extras.shell.rotation.z = tucked * Math.sin(time * 30) * 0.06;
+    }
     rig.cheeks.opacity = 0.3 + this.happiness * 0.6;
   }
 }

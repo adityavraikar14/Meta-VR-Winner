@@ -1,12 +1,13 @@
+import { Group, Mesh, SphereGeometry } from '@iwsdk/core';
 import {
-  CircleGeometry,
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  SphereGeometry,
-  TorusGeometry,
-} from '@iwsdk/core';
-import { eyeMaterial, lathe, plush, tintTracker, type CreatureRig } from './rig.js';
+  buildFace,
+  glossy,
+  lathe,
+  plush,
+  softShade,
+  tintTracker,
+  type CreatureRig,
+} from './rig.js';
 
 const FEATHER = 0x86c5ea;
 const WING = 0x5b9fd4;
@@ -21,12 +22,7 @@ export function createBird(): CreatureRig {
   const feather = track(plush(FEATHER));
   const wingFeather = track(plush(WING));
   const belly = track(plush(BELLY));
-  const beak = track(plush(BEAK));
-  const eye = track(eyeMaterial());
-  const shine = new MeshBasicMaterial({ color: 0xffffff });
-  const cheeks = track(
-    new MeshBasicMaterial({ color: CHEEK, transparent: true, opacity: 0.45, depthWrite: false }),
-  );
+  const beak = track(glossy(BEAK, 0.4));
 
   const root = new Group();
   root.name = 'Bird';
@@ -129,33 +125,16 @@ export function createBird(): CreatureRig {
   beakMesh.position.set(0, -0.004, 0.023);
   head.add(beakMesh);
 
-  const eyes = new Group();
-  eyes.name = 'Eyes';
-  eyes.position.set(0, 0.004, 0);
-  head.add(eyes);
-  const happyEyes = new Group();
-  happyEyes.name = 'HappyEyes';
-  happyEyes.visible = false;
-  head.add(happyEyes);
-  const arc = new TorusGeometry(0.0048, 0.0011, 6, 16, Math.PI);
-  for (const side of [-1, 1]) {
-    const ball = new Mesh(new SphereGeometry(0.0058, 16, 12), eye);
-    ball.scale.set(1, 1.12, 0.6);
-    ball.position.set(side * 0.0125, 0, 0.022);
-    eyes.add(ball);
-    const glint = new Mesh(new SphereGeometry(0.0018, 8, 6), shine);
-    glint.position.set(side * 0.0125 + 0.002, 0.0024, 0.0262);
-    eyes.add(glint);
-
-    const closed = new Mesh(arc, eye);
-    closed.position.set(side * 0.0125, 0.002, 0.024);
-    happyEyes.add(closed);
-
-    const cheek = new Mesh(new CircleGeometry(0.0055, 18), cheeks);
-    cheek.position.set(side * 0.018, -0.008, 0.0185);
-    cheek.rotation.y = side * 0.6;
-    head.add(cheek);
-  }
+  const { eyes, happyEyes, cheeks } = buildFace(head, track, {
+    spacing: 0.0125,
+    y: 0.004,
+    z: 0.0215,
+    size: 0.0064,
+    iris: 0x2f3f6b,
+    cheekColor: CHEEK,
+    cheek: { x: 0.018, y: -0.008, z: 0.0185, turn: 0.6, size: 0.0055 },
+  });
+  softShade(root);
 
   return {
     kind: 'bird',

@@ -21,18 +21,30 @@ import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
 import { createBird } from './bird-model.js';
+import { createButterfly } from './butterfly-model.js';
+import { createDeer } from './deer-model.js';
+import { createDog } from './dog-model.js';
+import { createDragon } from './dragon-model.js';
 import { createRabbit } from './rabbit-model.js';
+import { createSnail } from './snail-model.js';
 import { disposeRig, type CreatureRig } from './rig.js';
 
-const STAGE_RADIUS = 0.17;
+const STAGE_RADIUS = 0.21;
 const STAGE_HEIGHT = 0.016;
 /** Stage position in paper space: closer to the player and lower, within reach. */
 const STAGE_OFFSET = new Vector3(0, -0.34, 0.58);
-const MAX_CREATURES = 6;
+const MAX_CREATURES = 7;
+/** Display scale per kind, so big creatures do not crowd the stage. */
+const SCALES: Record<string, number> = { dragon: 0.95, deer: 1.05, dog: 1.15 };
 
 const MODELS: Record<string, () => CreatureRig> = {
   rabbit: createRabbit,
   bird: createBird,
+  snail: createSnail,
+  deer: createDeer,
+  dog: createDog,
+  butterfly: createButterfly,
+  dragon: createDragon,
 };
 
 interface Living {
@@ -165,7 +177,7 @@ export class CreatureSystem extends createSystem({}) {
     }
     const paper = stage.paper!;
     const rig = make();
-    const creature = new Creature(rig, this.fx);
+    const creature = new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
     this.world.createTransformEntity(rig.root);
     const blob = new Mesh(this.blobGeometry, this.blobMaterial);
     blob.name = 'CreatureContactShadow';

@@ -88,13 +88,15 @@ export interface PairRule {
   fingers: Record<Finger, Want>;
   /** Thumb tips hooked together, as in the classic shadow bird. */
   thumbsTouch?: boolean;
+  /** Fingers fanned out like feathers, or held together like wing panels. */
+  spread?: 'wide' | 'together';
 }
 
 export interface ShapeScore {
   /** 0..1, the weakest requirement. */
   score: number;
   /** The requirement furthest from met, for hints. */
-  worst: Finger | 'direction' | 'thumbs' | null;
+  worst: Finger | 'direction' | 'thumbs' | 'spread' | null;
 }
 
 const THUMB_TIP_JOINT = 4;
@@ -116,6 +118,16 @@ export function scorePair(
   if (out.score < score) {
     score = out.score;
     worst = out.worst;
+  }
+  if (rule.spread) {
+    for (const joints of [left, right]) {
+      const angle = fingerSpread(joints);
+      const s = rule.spread === 'wide' ? ramp(angle, 16, 30) : 1 - ramp(angle, 14, 26);
+      if (s < score) {
+        score = s;
+        worst = 'spread';
+      }
+    }
   }
   if (rule.thumbsTouch) {
     const t = THUMB_TIP_JOINT * 3;
@@ -158,4 +170,19 @@ export function scoreShape(
   out.score = score;
   out.worst = worst;
   return out;
+}
+
+/** Angle in degrees between the index and pinky fingers: how fanned out the hand is. */
+export function fingerSpread(joints: Float32Array): number {
+  const i = KNUCKLES.index;
+  const p = KNUCKLES.pinky;
+  const ax = joints[(i + 3) * 3] - joints[i * 3];
+  const ay = joints[(i + 3) * 3 + 1] - joints[i * 3 + 1];
+  const az = joints[(i + 3) * 3 + 2] - joints[i * 3 + 2];
+  const bx = joints[(p + 3) * 3] - joints[p * 3];
+  const by = joints[(p + 3) * 3 + 1] - joints[p * 3 + 1];
+  const bz = joints[(p + 3) * 3 + 2] - joints[p * 3 + 2];
+  const dot = ax * bx + ay * by + az * bz;
+  const len = Math.hypot(ax, ay, az) * Math.hypot(bx, by, bz);
+  return len > 0 ? (Math.acos(Math.max(-1, Math.min(1, dot / len))) * 180) / Math.PI : 0;
 }
