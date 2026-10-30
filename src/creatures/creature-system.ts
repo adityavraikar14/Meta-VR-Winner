@@ -55,6 +55,7 @@ export class CreatureSystem extends createSystem({}) {
     center: new Vector3(),
     radius: STAGE_RADIUS,
     viewer: new Vector3(),
+    creatures: [],
   };
   private spawnPoint = new Vector3();
   private paperRotation = new Quaternion();
@@ -84,6 +85,8 @@ export class CreatureSystem extends createSystem({}) {
     devInfo.creatures = () =>
       this.creatures.map(({ creature }) => ({
         state: creature.state,
+        doing: creature.behavior,
+        energy: Number(creature.brain.energy.toFixed(2)),
         at: round(creature.position),
         happy: Number(creature.happiness.toFixed(2)),
         petting: creature.petting,
@@ -176,6 +179,7 @@ export class CreatureSystem extends createSystem({}) {
     paper.getWorldQuaternion(this.paperRotation);
     creature.emergeFrom(this.spawnPoint, this.paperRotation);
     this.creatures.push({ creature, blob });
+    this.ground.creatures = this.creatures.map((living) => living.creature);
     playTransform();
   }
 

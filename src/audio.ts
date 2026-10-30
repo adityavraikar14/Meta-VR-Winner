@@ -131,3 +131,43 @@ export function setPurr(level: number): void {
   }
   purrGain.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * 0.5, ctx.currentTime, 0.1);
 }
+
+/** A short two-note bird chirp, varied a little each time. */
+export function playChirp(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = 2200 + Math.random() * 900;
+  for (let i = 0; i < 2; i++) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const start = now + i * 0.11;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(base * (i ? 1.2 : 1), start);
+    osc.frequency.exponentialRampToValueAtTime(base * (i ? 1.5 : 1.35), start + 0.07);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.05, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.09);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.1);
+  }
+}
+
+/** A soft sleepy sigh: a slow falling tone. */
+export function playYawn(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(520, now);
+  osc.frequency.exponentialRampToValueAtTime(260, now + 0.6);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.05, now + 0.15);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.75);
+}

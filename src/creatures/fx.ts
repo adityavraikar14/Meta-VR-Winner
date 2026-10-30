@@ -9,7 +9,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 
-type Kind = 'sparkle' | 'heart';
+type Kind = 'sparkle' | 'heart' | 'zzz' | 'note';
 
 interface Particle {
   sprite: Sprite;
@@ -40,6 +40,24 @@ function sparkleTexture(): CanvasTexture {
   ctx.lineTo(32, 62); ctx.lineTo(29, 35); ctx.lineTo(2, 32); ctx.lineTo(29, 29);
   ctx.closePath();
   ctx.fill();
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/** A glyph (Z or musical note) drawn with a soft outline. */
+function glyphTexture(glyph: string, color: string): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.font = '700 48px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.strokeText(glyph, 32, 34);
+  ctx.fillStyle = color;
+  ctx.fillText(glyph, 32, 34);
   const t = new CanvasTexture(c);
   t.colorSpace = SRGBColorSpace;
   return t;
@@ -92,7 +110,12 @@ export class Effects {
         kind: 'sparkle',
       });
     }
-    this.textures = { sparkle, heart };
+    this.textures = {
+      sparkle,
+      heart,
+      zzz: glyphTexture('Z', '#6b7fd7'),
+      note: glyphTexture('♪', '#e0679a'),
+    };
   }
 
   private textures: Record<Kind, CanvasTexture>;
@@ -132,6 +155,18 @@ export class Effects {
     p.velocity.set((Math.random() - 0.5) * 0.04, 0.09, (Math.random() - 0.5) * 0.04);
   }
 
+  /** A sleepy Z drifting up and to the side. */
+  zzz(at: Vector3): void {
+    const p = this.spawn('zzz', at, 1.8, 0.014);
+    p.velocity.set(0.02, 0.05, 0);
+  }
+
+  /** A musical note floating up from a singing bird. */
+  note(at: Vector3): void {
+    const p = this.spawn('note', at, 1.4, 0.016);
+    p.velocity.set((Math.random() - 0.5) * 0.06, 0.08, (Math.random() - 0.5) * 0.06);
+  }
+
   update(dt: number): void {
     for (const p of this.particles) {
       if (!p.sprite.visible) continue;
@@ -150,7 +185,8 @@ export class Effects {
       p.sprite.position.addScaledVector(p.velocity, dt);
       // Pop in, then fade out.
       const grow = Math.min(1, k * 8);
-      p.sprite.scale.setScalar(p.size * grow * (p.kind === 'heart' ? 1 + k * 0.4 : 1 - k * 0.5));
+      const grows = p.kind !== 'sparkle';
+      p.sprite.scale.setScalar(p.size * grow * (grows ? 1 + k * 0.4 : 1 - k * 0.5));
       p.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
     }
   }
