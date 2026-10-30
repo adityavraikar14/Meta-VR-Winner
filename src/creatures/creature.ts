@@ -211,6 +211,14 @@ export class Creature {
     else if (this.state !== 'emerging') this.setState('task');
   }
 
+  /** Drop any scripted task (the puzzle it was for has gone) and go back to free life. */
+  cancelTask(): void {
+    this.task = [];
+    this.taskDone = null;
+    if (this.state === 'task') this.setState('idle');
+    if (this.afterLeap === 'task') this.afterLeap = 'idle';
+  }
+
   /** Join in a celebration: a happy dance with a little cheer. */
   cheer(): void {
     if (this.state !== 'idle' || this.hideFor > 0) return;

@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  type Object3D,
   Quaternion,
   SRGBColorSpace,
   TorusGeometry,
@@ -16,6 +17,7 @@ import {
 } from '@iwsdk/core';
 import { playTransform, setPurr } from '../audio.js';
 import { devInfo } from '../dev-tools.js';
+import { flattenGroups, mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { Diorama } from '../world/diorama.js';
@@ -89,6 +91,7 @@ export class CreatureSystem extends createSystem({}) {
     if (!paper) throw new Error('ShadowStageSystem must be registered first');
 
     const built = buildStage();
+    mergeStatic(built.root);
     this.stageRoot = built.root;
     this.stageRoot.position.copy(STAGE_OFFSET);
     paper.add(this.stageRoot);
@@ -151,6 +154,10 @@ export class CreatureSystem extends createSystem({}) {
 
     if (play.puzzleVersion !== this.puzzleVersion) {
       this.puzzleVersion = play.puzzleVersion;
+      for (const living of this.creatures) {
+        living.attempt = false;
+        living.creature.cancelTask();
+      }
       this.diorama.load();
     }
     this.diorama.update(dt);
@@ -200,6 +207,8 @@ export class CreatureSystem extends createSystem({}) {
     else if (this.creatures.length >= MAX_CREATURES) this.remove(0);
     const paper = stage.paper!;
     const rig = make();
+    flattenGroups(rig.root, animatedParts(rig));
+    mergeStatic(rig.root);
     const creature = new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
     this.world.createTransformEntity(rig.root);
     const blob = new Mesh(this.blobGeometry, this.blobMaterial);
@@ -251,6 +260,15 @@ export class CreatureSystem extends createSystem({}) {
 }
 
 /** A round wooden stage with a warm glowing rim. Origin at its base. */
+/** Every part of a rig that animation moves, scales or hides. */
+function animatedParts(rig: CreatureRig): Set<Object3D> {
+  return new Set<Object3D>([
+    rig.root, rig.body, rig.head, rig.eyes, rig.happyEyes, rig.tail,
+    ...rig.ears, ...rig.wings, ...rig.feet,
+    ...Object.values(rig.extras ?? {}),
+  ]);
+}
+
 function buildStage(): { root: Group; floor: MeshStandardMaterial } {
   const root = new Group();
   root.name = 'CreatureStage';

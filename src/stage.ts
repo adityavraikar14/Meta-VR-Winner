@@ -29,6 +29,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
+import { devInfo } from './dev-tools.js';
 
 /** WebXR hand joint order: wrist, thumb (4), then index/middle/ring/pinky (5 each). */
 const JOINT_COUNT = 25;
@@ -36,7 +37,7 @@ const WRIST = 0;
 const MIDDLE_METACARPAL = 10;
 
 /** Pairs of joints joined by a shadow-casting cylinder. */
-const FINGER_BONES: ReadonlyArray<readonly [number, number]> = [
+export const FINGER_BONES: ReadonlyArray<readonly [number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4],
   [0, 5], [5, 6], [6, 7], [7, 8], [8, 9],
   [0, 10], [10, 11], [11, 12], [12, 13], [13, 14],
@@ -44,7 +45,7 @@ const FINGER_BONES: ReadonlyArray<readonly [number, number]> = [
   [0, 20], [20, 21], [21, 22], [22, 23], [23, 24],
 ];
 /** Thick bones that fill in the palm between the knuckles and the wrist. */
-const PALM_BONES: ReadonlyArray<readonly [number, number]> = [
+export const PALM_BONES: ReadonlyArray<readonly [number, number]> = [
   [6, 11], [11, 16], [16, 21],
   [0, 6], [0, 11], [0, 16], [0, 21],
 ];
@@ -145,6 +146,32 @@ export class ShadowStageSystem extends createSystem({}) {
     this.paper.add(this.maskCamera);
     this.layoutLantern();
 
+    devInfo.render = () => {
+      const info = this.renderer.info;
+      return {
+        calls: info.render.calls,
+        triangles: info.render.triangles,
+        geometries: info.memory.geometries,
+        textures: info.memory.textures,
+        programs: info.programs?.length ?? 0,
+      };
+    };
+    devInfo.meshes = () => {
+      const groups: Record<string, number[]> = {};
+      this.scene.traverseVisible((o) => {
+        const mesh = o as Mesh;
+        if (!mesh.isMesh) return;
+        let top: Object3D = o;
+        while (top.parent && top.parent.parent && top.parent.parent !== this.scene && top.parent.name !== 'PaperScreen') top = top.parent;
+        const key = top.name || top.type;
+        const g = (groups[key] ??= [0, 0, 0]);
+        g[0]++;
+        if (mesh.castShadow) g[1]++;
+        g[2] += mesh.geometry.index ? mesh.geometry.index.count / 3 : (mesh.geometry.attributes.position?.count ?? 0) / 3;
+      });
+      return groups;
+    };
+
     this.cleanupFuncs.push(
       this.visibilityState.subscribe((state) => {
         if (state === VisibilityState.Visible) this.needsLayout = true;
@@ -154,6 +181,10 @@ export class ShadowStageSystem extends createSystem({}) {
 
   update(): void {
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
+    if (stage.command === 'recenter') {
+      stage.command = null;
+      this.needsLayout = true;
+    }
     if (this.needsLayout) this.layoutPaper();
     this.updateHands();
     this.frameCount++;

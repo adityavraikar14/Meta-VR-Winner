@@ -253,3 +253,19 @@ export function playBleat(): void {
   osc.stop(now + 0.42);
   vibrato.stop(now + 0.42);
 }
+
+/** Soft wooden tick when a menu button is pressed. */
+export function playClick(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  tone(ctx, 880, ctx.currentTime, 0.08, 0.06);
+  tone(ctx, 1320, ctx.currentTime + 0.03, 0.1, 0.04);
+}
+
+/** Two quiet notes as the hand menu opens. */
+export function playMenuOpen(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  tone(ctx, 587, ctx.currentTime, 0.25, 0.03);
+  tone(ctx, 784, ctx.currentTime + 0.06, 0.3, 0.03);
+}

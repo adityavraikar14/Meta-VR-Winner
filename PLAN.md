@@ -31,10 +31,10 @@ Stars per level (max 3): cleared · no hints and no wrong friend · fast.
   - Forest: 5 levels end to end
   - Pond and Mountain have simple placeholder levels (find the star) until Phase 3/4
 - [ ] **2. First five minutes + comfort** (Nov 3 – 4)
-  - ghost-hand guide for each shape
-  - palm-up hand menu: recenter, restart level, skip
-  - performance pass for Quest (72 fps), lost-tracking handling
-  - deploy to Vercel for headset testing
+  - [x] ghost-hand guide for each shape (gold finger shows what to fix, mirrors for left-handers)
+  - [x] hand menu: look at your palm, poke Recenter / Restart / Skip (palm-up stays for pets)
+  - [x] draw calls cut ~35% by merging static meshes; real fps check needs a Quest
+  - [ ] deploy to Vercel for headset testing
 - [ ] **3. Moonlit Pond + Draw Mode** (Nov 5 – 10)
 - [ ] **4. Dragon's Mountain, ending, collection book, accessibility** (Nov 11 – 14)
   - one-hand alternatives for two-hand shapes, strictness setting, left-handed

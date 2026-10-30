@@ -10,6 +10,7 @@ import {
 } from '@iwsdk/core';
 import { playAwaken, playPrompt } from './audio.js';
 import { installDevTools } from './dev-tools.js';
+import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
   createExtension,
   fingersUp,
@@ -167,6 +168,9 @@ export class ShadowGameSystem extends createSystem({}) {
   private captionTexture!: CanvasTexture;
   private caption = '';
 
+  private ghost!: GhostHand;
+  private leftHanded = false;
+
   private creatureX = 0;
   private creatureY = 0;
   private creatureSize = OUTLINE_SIZE;
@@ -259,18 +263,15 @@ export class ShadowGameSystem extends createSystem({}) {
     captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.075, 0.002);
     paper.add(captionMesh);
 
+    this.ghost = new GhostHand(paper);
+
     loadProgress();
     this.startPuzzle(play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex);
 
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
       maskVersion: () => stage.maskVersion,
-      next: () => {
-        if (this.puzzle?.teach && !play.unlocked.includes(this.puzzle.teach)) {
-          play.unlocked.push(this.puzzle.teach);
-        }
-        this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
-      },
+      next: () => this.skip(),
       reset: () => {
         resetProgress();
         this.startPuzzle(0);
@@ -311,6 +312,7 @@ export class ShadowGameSystem extends createSystem({}) {
     const dt = Math.min(delta, 0.1);
     this.phaseTime += dt;
     this.readShadows();
+    this.handleCommand();
 
     switch (this.phase) {
       case 'story':
@@ -318,7 +320,10 @@ export class ShadowGameSystem extends createSystem({}) {
         if (this.phaseTime >= STORY_TIME) this.beginMatching();
         break;
       case 'matching':
-        if (this.puzzle?.warmup) this.updateWarmup(dt);
+        if (stage.menuOpen) {
+          this.holdTime = 0;
+          this.setCaption('Paused · poke a button, or lower your hand');
+        } else if (this.puzzle?.warmup) this.updateWarmup(dt);
         else this.updateMatching(dt);
         break;
       case 'awakening':
@@ -336,6 +341,12 @@ export class ShadowGameSystem extends createSystem({}) {
         }
         break;
     }
+
+    // Whichever hand the player raises alone decides which way the ghost faces.
+    if (stage.tracked[0] !== stage.tracked[1]) this.leftHanded = stage.tracked[0];
+    this.ghost.setLeftHanded(this.leftHanded);
+    const fade = this.phase === 'matching' && this.best >= 0 ? this.warmth(this.smooth[this.best]) : 0;
+    this.ghost.update(dt, fade);
 
     const target = this.bannerShown ? 1 : 0;
     this.bannerMaterial.opacity += (target - this.bannerMaterial.opacity) * Math.min(1, dt * 5);
@@ -377,6 +388,7 @@ export class ShadowGameSystem extends createSystem({}) {
     this.cards.forEach((card) => (card.mesh.visible = false));
     this.ring.visible = false;
     this.creature.visible = false;
+    this.ghost.show(null);
     if (stage.shadowMaterial) stage.shadowMaterial.opacity = SHADOW_OPACITY;
 
     if (puzzle) {
@@ -391,6 +403,23 @@ export class ShadowGameSystem extends createSystem({}) {
     this.bannerShown = true;
     this.setPhase('story');
     playPrompt();
+  }
+
+  /** Restart and Skip from the hand menu. */
+  private handleCommand(): void {
+    const command = stage.command;
+    if (command !== 'restart' && command !== 'skip') return;
+    stage.command = null;
+    if (command === 'restart') this.startPuzzle(this.puzzleIndex);
+    else if (this.puzzle) this.skip();
+  }
+
+  /** Moves on without stars; the level's friend still joins so later levels stay possible. */
+  private skip(): void {
+    if (this.puzzle?.teach && !play.unlocked.includes(this.puzzle.teach)) {
+      play.unlocked.push(this.puzzle.teach);
+    }
+    this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
   }
 
   /** Returning players find the friends they already made waiting for them. */
@@ -415,7 +444,9 @@ export class ShadowGameSystem extends createSystem({}) {
       drawSilhouette(this.outlineCanvas, decodeCells(levelFor(teach).outline), 10, 0.75);
       this.outlineTexture.needsUpdate = true;
       this.outline.visible = true;
+      this.ghost.show(levelFor(teach));
     } else {
+      this.ghost.show(null);
       this.outline.visible = false;
       // Choosing: a card for every friend the player can make.
       const n = this.candidates.length;
@@ -501,7 +532,7 @@ export class ShadowGameSystem extends createSystem({}) {
       : 0;
     const anyPair = this.candidates.some((c) => c.pair);
     const allPair = this.candidates.every((c) => c.pair);
-    let text = teaching ? `Make a ${level?.name ?? ''}` : this.puzzle?.ask ?? 'Make any friend’s shadow';
+    let text = teaching ? `Make a ${level?.name ?? ''}: copy the glowing hand` : this.puzzle?.ask ?? 'Make any friend’s shadow';
     if (!teaching && this.puzzle && this.phaseTime > 4) text = 'Pick a friend: make their shadow';
     if (this.needsRelease) {
       text = 'Relax your hand for the next shape';
@@ -527,6 +558,15 @@ export class ShadowGameSystem extends createSystem({}) {
       text = 'Pick a friend: make their shadow';
     }
     if (DEV) text += `  ·  ${Math.round(score * 100)}%`;
+
+    // The ghost hand: always on while teaching; when choosing, it steps in
+    // for the friend the player is trying once they have struggled a while.
+    if (!teaching) {
+      const trying = level && this.struggleTime > HINT_DELAY && score > 0.25 && !this.needsRelease;
+      if (trying) this.ghost.show(level);
+      else if (score >= MATCH_THRESHOLD || stage.handCount === 0) this.ghost.show(null);
+    }
+    this.ghost.setFocus(this.struggleTime > HINT_DELAY * 2 ? ghostFocus(problem) : null);
     this.setCaption(text);
 
     const matched = level !== null && score >= MATCH_THRESHOLD &&
@@ -710,6 +750,7 @@ export class ShadowGameSystem extends createSystem({}) {
     this.outline.visible = false;
     this.cards.forEach((card) => (card.mesh.visible = false));
     this.ring.visible = false;
+    this.ghost.show(null);
     this.needsRelease = true;
     this.setCaption(`The ${level.name} is free!`);
     this.setPhase('awakening');
@@ -859,6 +900,12 @@ export class ShadowGameSystem extends createSystem({}) {
 /** A shadow cut off by the paper edge cannot be judged fairly. */
 function touchesEdge(b: MaskBounds): boolean {
   return b.minX <= 0 || b.minY <= 0 || b.maxX >= MASK_WIDTH - 1 || b.maxY >= MASK_HEIGHT - 1;
+}
+
+function ghostFocus(problem: Problem): GhostFocus {
+  if (problem === null || problem === 'direction' || problem === 'twoHands' ||
+    problem === 'offPaper' || problem === 'noShadow') return null;
+  return problem;
 }
 
 function hintFor(

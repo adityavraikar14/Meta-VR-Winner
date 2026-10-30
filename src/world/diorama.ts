@@ -2,6 +2,7 @@ import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object
 import { playAwaken } from '../audio.js';
 import type { Creature } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
+import { mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { type Kit, PUZZLES, type PuzzleScene, WORLDS } from './puzzles.js';
 
@@ -58,6 +59,7 @@ export class Diorama {
       this.worldIndex = world;
       clear(this.decor);
       WORLDS[world].decorate(this.decor);
+      mergeStatic(this.decor);
       this.floorMaterial.color.setHex(WORLDS[world].floor);
     }
     clear(this.props);
@@ -67,6 +69,7 @@ export class Diorama {
     this.blockers = [];
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
+    mergeStatic(this.props);
   }
 
   /** True while a puzzle is waiting for a friend to try it. */

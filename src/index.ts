@@ -9,6 +9,7 @@ import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { CreatureSystem } from './creatures/creature-system.js';
 import { ShadowGameSystem } from './game.js';
+import { HandMenuSystem } from './hand-menu.js';
 import { PanelSystem } from './panel.js';
 import { ShadowStageSystem } from './stage.js';
 
@@ -20,5 +21,6 @@ World.create(
   world.registerSystem(ShadowStageSystem);
   world.registerSystem(ShadowGameSystem);
   world.registerSystem(CreatureSystem);
+  world.registerSystem(HandMenuSystem);
   world.registerSystem(PanelSystem);
 });
