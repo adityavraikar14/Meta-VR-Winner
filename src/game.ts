@@ -291,7 +291,7 @@ export class ShadowGameSystem extends createSystem({
       new MeshBasicMaterial({ map: this.captionTexture, transparent: true }),
     );
     captionMesh.name = 'Caption';
-    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.075, 0.002);
+    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.115, 0.04);
     paper.add(captionMesh);
 
     this.ghost = new GhostHand(paper);

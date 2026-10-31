@@ -30,7 +30,6 @@ import {
   stage,
 } from './stage-state.js';
 import { devInfo } from './dev-tools.js';
-import { buildTheatre } from './world/theatre.js';
 
 /** WebXR hand joint order: wrist, thumb (4), then index/middle/ring/pinky (5 each). */
 const JOINT_COUNT = 25;
@@ -244,7 +243,6 @@ export class ShadowStageSystem extends createSystem({}) {
     paperMesh.name = 'PaperSurface';
     this.paper.add(paperMesh);
 
-    this.paper.add(buildTheatre(PAPER_WIDTH, PAPER_HEIGHT));
 
     const shadowMaterial = new ShadowMaterial({
       color: 0x140b05,

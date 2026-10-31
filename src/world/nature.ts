@@ -34,12 +34,46 @@ const MODELS = {
   sorrel: 'gltf/nature/sorrel.glb',
   gazania: 'gltf/nature/gazania.glb',
   lantern: 'gltf/nature/lantern.glb',
+  anthurium: 'gltf/nature/anthurium.glb',
+  calathea: 'gltf/nature/calathea.glb',
+  elephantEar: 'gltf/nature/elephant_ear.glb',
+  periwinkle: 'gltf/nature/periwinkle.glb',
 } as const;
 export type NatureModel = keyof typeof MODELS;
 
-const SURFACES = ['ground', 'wood', 'velvet', 'pebbles'] as const;
+const SURFACES = ['ground', 'wood', 'velvet', 'pebbles', 'soil'] as const;
 export type Surface = (typeof SURFACES)[number];
-const FALLBACK: Record<Surface, number> = { ground: 0x5e6a3c, wood: 0x3a2416, velvet: 0x5a0f14, pebbles: 0x8a8070 };
+const FALLBACK: Record<Surface, number> = {
+  ground: 0x5e6a3c,
+  wood: 0x3a2416,
+  velvet: 0x5a0f14,
+  pebbles: 0x8a8070,
+  soil: 0x4a3524,
+};
+
+/**
+ * Photo-scanned leaves with cut-out masks (ambientCG, CC0), for vines and
+ * giant leaves. Each box is one leaf in the atlas: u0, v0, u1, v1.
+ */
+const ATLASES = {
+  ivy: [
+    [0.051, 0.676, 0.379, 0.984],
+    [0.621, 0.688, 0.871, 0.945],
+    [0.066, 0.324, 0.402, 0.629],
+    [0.629, 0.363, 0.906, 0.605],
+    [0.594, 0.023, 0.898, 0.309],
+    [0.047, 0.016, 0.43, 0.305],
+  ],
+  leaf: [
+    [0.051, 0.141, 0.457, 0.895],
+    [0.547, 0.137, 0.953, 0.891],
+  ],
+} as const;
+export type LeafAtlas = keyof typeof ATLASES;
+export type LeafBox = readonly [number, number, number, number];
+export function leafBoxes(atlas: LeafAtlas): readonly LeafBox[] {
+  return ATLASES[atlas];
+}
 
 export const nature = { version: 0 };
 
@@ -47,15 +81,24 @@ const url = (file: string) => `${import.meta.env.BASE_URL}${file}`;
 const textures = new Map<string, Texture>();
 let loading: Promise<void> | null = null;
 
-/** Starts loading every scenery asset once; resolves when all have arrived (or failed). */
+/** One asset to fetch, and what to do with it once it arrives. */
+type Job = () => Promise<unknown>;
+
+/** Tries each failed asset again a few times, waiting longer between rounds. */
+const RETRY_DELAYS = [2000, 6000];
+
+/**
+ * Starts loading every scenery asset once; resolves when all have arrived,
+ * or have failed even after retries (the world then keeps its stand-ins).
+ */
 export function preloadNature(): Promise<void> {
   if (loading) return loading;
-  const jobs: Array<Promise<unknown>> = [];
-  for (const [key, file] of Object.entries(MODELS)) jobs.push(AssetManager.loadGLTF(url(file), `nature-${key}`));
+  const jobs: Job[] = [];
+  for (const [key, file] of Object.entries(MODELS)) jobs.push(() => AssetManager.loadGLTF(url(file), `nature-${key}`));
   for (const name of SURFACES) {
     for (const map of ['diff', 'nor', 'rough']) {
       const key = `${name}_${map}`;
-      jobs.push(
+      jobs.push(() =>
         AssetManager.loadTexture(url(`textures/${key}.jpg`), `tex-${key}`).then((texture) => {
           if (map === 'diff') texture.colorSpace = SRGBColorSpace;
           texture.wrapS = texture.wrapT = RepeatWrapping;
@@ -66,12 +109,60 @@ export function preloadNature(): Promise<void> {
       );
     }
   }
-  loading = Promise.allSettled(jobs).then((results) => {
-    results.forEach((r) => r.status === 'rejected' && console.warn('Scenery asset failed', r.reason));
+  for (const atlas of Object.keys(ATLASES)) {
+    jobs.push(
+      () =>
+        AssetManager.loadTexture(url(`textures/${atlas}.png`), `tex-${atlas}`).then((texture) => {
+          texture.colorSpace = SRGBColorSpace;
+          textures.set(atlas, texture);
+        }),
+      () =>
+        AssetManager.loadTexture(url(`textures/${atlas}_nor.jpg`), `tex-${atlas}-nor`).then((texture) => {
+          textures.set(`${atlas}_nor`, texture);
+        }),
+    );
+  }
+  loading = runWithRetries(jobs).then(() => {
     for (const w of waiting.splice(0)) applyTextures(w.material, w.name, w.repeat, w.tint);
+    for (const [atlas, material] of leafMaterials) fillLeaf(material, atlas);
     nature.version++;
   });
   return loading;
+}
+
+/** At most this many downloads and decodes at once, to spare the headset's memory. */
+const PARALLEL = 3;
+
+/** Runs every job, a few at a time, and reports how each one ended. */
+async function settleAll(jobs: Job[]): Promise<PromiseSettledResult<unknown>[]> {
+  const results: PromiseSettledResult<unknown>[] = new Array(jobs.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < jobs.length) {
+      const i = next++;
+      try {
+        results[i] = { status: 'fulfilled', value: await jobs[i]() };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, jobs.length) }, worker));
+  return results;
+}
+
+async function runWithRetries(jobs: Job[]): Promise<void> {
+  let pending = jobs;
+  for (let round = 0; pending.length > 0; round++) {
+    const results = await settleAll(pending);
+    const failed = pending.filter((_, i) => results[i].status === 'rejected');
+    if (failed.length === 0 || round >= RETRY_DELAYS.length) {
+      results.forEach((r) => r.status === 'rejected' && console.warn('Scenery asset failed', r.reason));
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[round]));
+    pending = failed;
+  }
 }
 
 /**
@@ -135,16 +226,69 @@ function applyTextures(material: MeshStandardMaterial, name: Surface, repeat: [n
   return true;
 }
 
+const leafMaterials = new Map<LeafAtlas, MeshStandardMaterial>();
+
+/** Cut-out leaf material for an atlas: both faces lit, crisp edges from the mask. */
+export function leafMaterial(atlas: LeafAtlas): MeshStandardMaterial {
+  let material = leafMaterials.get(atlas);
+  if (!material) {
+    material = new MeshStandardMaterial({ color: 0x4f6b2c, side: DoubleSide, alphaTest: 0.5, roughness: 0.6, metalness: 0 });
+    leafMaterials.set(atlas, material);
+    fillLeaf(material, atlas);
+  }
+  return material;
+}
+
+function fillLeaf(material: MeshStandardMaterial, atlas: LeafAtlas): void {
+  const map = textures.get(atlas);
+  if (!map || material.map) return;
+  material.map = map;
+  material.normalMap = textures.get(`${atlas}_nor`) ?? null;
+  material.color.setHex(0xffffff);
+  material.needsUpdate = true;
+}
+
 // ---------------------------------------------------------------- Ground
 
 export interface GroundSpec {
-  radius: number;
+  /** Distance from the centre to the edge, by angle atan2(z, x). */
+  edge: (angle: number) => number;
+  /** Ground texture (forest floor by default) and how often it tiles per metre. */
+  surface?: Surface;
+  tiles?: number;
   /** A hollow filled with water: centre and radius on the stage. */
   pond?: { x: number; z: number; r: number };
   /** Multiplies the ground texture: cooler by the pond, greyer on the mountain. */
   tint?: number;
   /** Height of the rolling bumps, in metres. */
   relief?: number;
+  /** Thickness of the slab of earth under the edge, in metres. */
+  depth?: number;
+}
+
+export interface OutlineSpec {
+  left: number;
+  right: number;
+  front: number;
+  back: number;
+  /** How ragged the edge is, in metres. */
+  wobble: number;
+  seed: number;
+}
+
+/** A natural, uneven outline: a rounded rectangle with a ragged, eroded edge. */
+export function organicOutline(o: OutlineSpec): (angle: number) => number {
+  return (a) => {
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    const ax = c >= 0 ? o.right : o.left;
+    const az = sn >= 0 ? o.front : o.back;
+    const n = 3.2;
+    const r = 1 / ((Math.abs(c) / ax) ** n + (Math.abs(sn) / az) ** n) ** (1 / n);
+    const k = o.seed;
+    const ragged = Math.sin(3 * a + k) * 0.5 + Math.sin(7 * a + k * 2.3) * 0.3 + Math.sin(17 * a + k * 0.7) * 0.2;
+    return r + ragged * o.wobble;
+  };
 }
 
 /** Smooth deterministic bumps, so every visit looks the same. */
@@ -157,11 +301,17 @@ function smooth(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** Height of the ground at a stage point; 0 at the rim, so the edge meets the plinth. */
+/** True if a stage point lies on the ground, `margin` metres in from the edge. */
+export function onGround(spec: GroundSpec, x: number, z: number, margin = 0): boolean {
+  return Math.hypot(x, z) < spec.edge(Math.atan2(z, x)) - margin;
+}
+
+/** Height of the ground at a stage point; it rolls over at the lip like a real bank of earth. */
 export function groundHeight(spec: GroundSpec, x: number, z: number): number {
   const r = Math.hypot(x, z);
-  const edge = smooth(spec.radius, spec.radius * 0.88, r);
-  let h = bumps(x, z) * (spec.relief ?? 0.0018) * edge;
+  const e = spec.edge(Math.atan2(z, x));
+  const inside = smooth(e, e - 0.035, r);
+  let h = bumps(x, z) * (spec.relief ?? 0.0018) * inside - 0.006 * (1 - inside);
   if (spec.pond) {
     const d = Math.hypot(x - spec.pond.x, z - spec.pond.z) / spec.pond.r;
     // A shallow bowl with a soft bank.
@@ -170,28 +320,89 @@ export function groundHeight(spec: GroundSpec, x: number, z: number): number {
   return h;
 }
 
-/** The diorama's earth: a gently rolling disc of forest floor (with a pond hollow). */
-export function ground(spec: GroundSpec): Mesh {
-  const geometry = new RingGeometry(0.002, spec.radius, 160, 36);
+/** The world's earth: rolling ground on a thick, eroded slab with an uneven outline. */
+export function ground(spec: GroundSpec): Group {
+  const group = new Group();
+  group.name = 'Earth';
+  const tiles = spec.tiles ?? 4;
+  const geometry = new RingGeometry(0.001, 1, 200, 40);
   geometry.rotateX(-Math.PI / 2);
   const position = geometry.attributes.position as BufferAttribute;
   const uv = geometry.attributes.uv as BufferAttribute;
   for (let i = 0; i < position.count; i++) {
-    const x = position.getX(i);
-    const z = position.getZ(i);
-    position.setY(i, groundHeight(spec, x, z));
-    uv.setXY(i, x / (spec.radius * 2) + 0.5, z / (spec.radius * 2) + 0.5);
+    const ux = position.getX(i);
+    const uz = position.getZ(i);
+    const e = spec.edge(Math.atan2(uz, ux));
+    const x = ux * e;
+    const z = uz * e;
+    position.setXYZ(i, x, groundHeight(spec, x, z), z);
+    uv.setXY(i, x, z);
   }
   geometry.computeVertexNormals();
-  const mesh = new Mesh(geometry, surface('ground', 2.2, 2.2, spec.tint));
-  mesh.name = 'Ground';
+  const top = new Mesh(geometry, surface(spec.surface ?? 'ground', tiles, tiles, spec.tint));
+  top.name = 'Ground';
+  group.add(top);
+  group.add(earthSide(spec));
+  return group;
+}
+
+/**
+ * The cut face of the earth all round the edge: soil that bulges out a
+ * little below the lip, then tucks under, with an uneven bottom.
+ */
+function earthSide(spec: GroundSpec): Mesh {
+  const around = 240;
+  const rows = 6;
+  const depth = spec.depth ?? 0.045;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  let perimeter = 0;
+  let px = 0;
+  let pz = 0;
+  for (let i = 0; i <= around; i++) {
+    const a = (i / around) * Math.PI * 2;
+    const e = spec.edge(a);
+    const cx = Math.cos(a);
+    const cz = Math.sin(a);
+    const x0 = cx * e;
+    const z0 = cz * e;
+    if (i > 0) perimeter += Math.hypot(x0 - px, z0 - pz);
+    px = x0;
+    pz = z0;
+    const bottom = depth * (0.75 + 0.25 * (Math.sin(a * 5 + 1) * 0.6 + Math.sin(a * 13) * 0.4));
+    for (let k = 0; k <= rows; k++) {
+      const t = k / rows;
+      const bulge = Math.sin(t * Math.PI) * 0.006 - t * t * 0.02;
+      const r = e + bulge;
+      const y = groundHeight(spec, x0, z0) * (1 - t) - bottom * t;
+      positions.push(cx * r, y, cz * r);
+      uvs.push(perimeter * 6, -y * 6);
+    }
+  }
+  for (let i = 0; i < around; i++) {
+    for (let k = 0; k < rows; k++) {
+      const a = i * (rows + 1) + k;
+      const b = a + rows + 1;
+      indices.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3));
+  geometry.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const material = surface('soil', 1, 1, 0xb8a898);
+  material.side = DoubleSide;
+  const mesh = new Mesh(geometry, material);
+  mesh.name = 'EarthSide';
   return mesh;
 }
 
 // ----------------------------------------------------------------- Grass
 
-/** Shared clock for swaying grass and rippling water. */
-const clock = { value: 0 };
+/** Shared clock for swaying grass, rippling water and drifting fireflies. */
+export const clock = { value: 0 };
 
 /** One blade: a tapered, slightly bent strip, 1 unit tall. Colour runs dark root → sunlit tip. */
 function bladeGeometry(): BufferGeometry {
@@ -275,13 +486,13 @@ export function grass(spec: GrassSpec): InstancedMesh {
   const axis = new Vector3();
   const tint = new Color();
   let n = 0;
-  for (let tries = 0; n < spec.count && tries < spec.count * 6; tries++) {
+  for (let tries = 0; n < spec.count && tries < spec.count * 12; tries++) {
     const bias = spec.edgeBias ?? 0;
     const r = spec.inner + (spec.outer - spec.inner) * Math.sqrt(rand()) ** (1 - bias * 0.6);
     const a = rand() * Math.PI * 2;
     const x = (spec.center?.[0] ?? 0) + Math.cos(a) * r;
     const z = (spec.center?.[1] ?? 0) + Math.sin(a) * r;
-    if (Math.hypot(x, z) > spec.ground.radius - 0.004) continue;
+    if (!onGround(spec.ground, x, z, 0.008)) continue;
     if (spec.avoid?.some(([ax, az, ar]) => Math.hypot(x - ax, z - az) < ar)) continue;
     // Clumps: skip some spots so the cover is patchy, as real grass is.
     if (bumps(x * 1.7 + 3, z * 1.7) < -0.35) continue;

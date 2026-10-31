@@ -2,18 +2,14 @@ import {
   CanvasTexture,
   CircleGeometry,
   createSystem,
-  CylinderGeometry,
   DirectionalLight,
   Group,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
-  RingGeometry,
   type Entity,
   type Object3D,
   Quaternion,
   SRGBColorSpace,
-  TorusGeometry,
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
@@ -23,7 +19,7 @@ import { flattenGroups, mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { Diorama } from '../world/diorama.js';
-import { preloadNature, surface } from '../world/nature.js';
+import { preloadNature } from '../world/nature.js';
 import { Beast, createBeast, preloadBeasts } from './beast.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
@@ -294,36 +290,10 @@ function animatedParts(rig: CreatureRig): Set<Object3D> {
   ]);
 }
 
-/**
- * A round walnut plinth with a brass inlay ring at the top edge. Origin at
- * its base; the world's miniature landscape sits on top.
- */
+/** Where the world's earth and its friends sit, in front of the screen. */
 function buildStage(): Group {
   const root = new Group();
   root.name = 'CreatureStage';
-  const wood = surface('wood', 6, 0.35, 0xd8c4b4);
-  const side = new Mesh(new CylinderGeometry(STAGE_RADIUS, STAGE_RADIUS * 1.03, STAGE_HEIGHT, 96, 1, true), wood);
-  side.name = 'PlinthSide';
-  side.position.y = STAGE_HEIGHT / 2;
-  root.add(side);
-  const capWood = surface('wood', 1.2, 1.2, 0xd8c4b4);
-  const rim = new Mesh(new RingGeometry(STAGE_RADIUS * 0.94, STAGE_RADIUS, 96, 1), capWood);
-  rim.name = 'PlinthRim';
-  rim.rotation.x = -Math.PI / 2;
-  rim.position.y = STAGE_HEIGHT;
-  root.add(rim);
-  const bottom = new Mesh(new CircleGeometry(STAGE_RADIUS * 1.03, 96), capWood);
-  bottom.name = 'PlinthBottom';
-  bottom.rotation.x = Math.PI / 2;
-  root.add(bottom);
-  const brass = new Mesh(
-    new TorusGeometry(STAGE_RADIUS * 0.955, 0.0018, 8, 128),
-    new MeshStandardMaterial({ color: 0xc89b52, metalness: 1, roughness: 0.3 }),
-  );
-  brass.name = 'BrassInlay';
-  brass.rotation.x = -Math.PI / 2;
-  brass.position.y = STAGE_HEIGHT + 0.0004;
-  root.add(brass);
   return root;
 }
 

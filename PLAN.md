@@ -93,6 +93,12 @@ on device: hop onto the real table, hide behind real objects.
       lip, walnut plinth with brass inlay, rolling forest-floor ground, swaying grass,
       scanned ferns / flowers / mossy rocks / stump, pond with rippling water and pebble
       bank, warm studio HDRI lighting. Credits in CREDITS.md
+- [x] Jungle grows into your room (Oct 31 feedback: no round table): an organic slab of
+      jungle earth with a ragged eroded edge, bamboo screen frame lashed with rope and ivy,
+      life-size tropical plants on the floor around the player, hanging vines, fireflies.
+      Scenery loads a few files at a time and retries failures.
+- [ ] Next: "lay your hand on your table" so the jungle earth sits on the real table;
+      more themes (river, mountain cave) re-skinning slab, frame and room plants
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

@@ -1,4 +1,5 @@
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
+import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, nature } from './nature.js';
 import { playAwaken } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
@@ -21,6 +22,11 @@ interface Tween {
  */
 export class Diorama {
   private readonly decor = new Group();
+  /** The screen's frame, in paper space. */
+  private readonly screen = new Group();
+  /** Life-size plants around the player, floor at y = 0. */
+  private readonly room = new Group();
+  private readonly paperAt = new Vector3();
   private readonly props = new Group();
   private worldIndex = -1;
   /** Scenery asset version the current decoration was built with. */
@@ -40,7 +46,10 @@ export class Diorama {
   ) {
     this.decor.name = 'WorldScenery';
     this.props.name = 'PuzzleProps';
+    this.screen.name = 'ScreenFrame';
+    this.room.name = 'RoomJungle';
     stageRoot.add(this.decor, this.props);
+    stage.paper!.add(this.screen, this.room);
     this.kit = {
       floor,
       at: (x, y, z) => this.stageRoot.localToWorld(new Vector3(x, y, z)),
@@ -73,7 +82,17 @@ export class Diorama {
     this.worldIndex = world;
     this.decorVersion = nature.version;
     clear(this.decor);
-    WORLDS[world].decorate(this.decor, this.floor);
+    clear(this.screen);
+    clear(this.room);
+    WORLDS[world].decorate({
+      stage: this.decor,
+      floor: this.floor,
+      screen: this.screen,
+      screenWidth: PAPER_WIDTH,
+      screenHeight: PAPER_HEIGHT,
+      screenGround: this.stageRoot.position.y + this.floor,
+      room: this.room,
+    });
     mergeStatic(this.decor);
   }
 
@@ -105,6 +124,9 @@ export class Diorama {
     // The photo-real scenery arrived: swap the stand-in for it.
     if (this.worldIndex >= 0 && nature.version !== this.decorVersion) this.decorate(this.worldIndex);
     animateNature(dt);
+    // The room's plants stand on the real floor (y = 0), wherever the screen is.
+    stage.paper!.getWorldPosition(this.paperAt);
+    this.room.position.y = -this.paperAt.y;
     for (const spinner of this.spinners) spinner.object.rotation.y += spinner.speed * dt;
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tween = this.tweens[i];

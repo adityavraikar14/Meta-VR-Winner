@@ -2,7 +2,7 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
-import { decorateForest, decorateMountain, decoratePond } from './scenery.js';
+import { decorateJungle, decorateMountain, decoratePond, type SceneryRoots } from './scenery.js';
 import {
   berries,
   berryTree,
@@ -70,8 +70,8 @@ export interface Puzzle {
 
 export interface World {
   name: string;
-  /** Builds the world's miniature landscape on the stage, its ground at `floor`. */
-  decorate(root: Group, floor: number): void;
+  /** Builds the world: its earth on the stage, the screen's frame, and the plants in your room. */
+  decorate(roots: SceneryRoots): void;
 }
 
 const NAMES: Record<string, string> = {
@@ -99,7 +99,7 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 // ---------------------------------------------------------------- Worlds
 
 export const WORLDS: World[] = [
-  { name: 'Whispering Forest', decorate: decorateForest },
+  { name: 'The Jungle', decorate: decorateJungle },
   { name: 'Moonlit Pond', decorate: decoratePond },
   { name: "Dragon's Mountain", decorate: decorateMountain },
 ];
