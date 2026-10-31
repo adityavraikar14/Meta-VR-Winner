@@ -14,7 +14,8 @@ export type DebugCommand =
   | { type: 'recipe'; item: Item }
   | { type: 'handsOff' }
   | { type: 'clear' }
-  | { type: 'recenter' };
+  | { type: 'recenter' }
+  | { type: 'toggleReadout' };
 
 export interface DebugApi {
   command(command: DebugCommand): void;
@@ -49,6 +50,7 @@ const MOVE_BUTTONS: ButtonSpec[] = [
 const UTILITY_BUTTONS: ButtonSpec[] = [
   { label: '✖ Clear', key: 'c', command: { type: 'clear' } },
   { label: '⟳ Recenter', key: 'r', command: { type: 'recenter' } },
+  { label: '👓 Headset readout', key: 'h', command: { type: 'toggleReadout' } },
 ];
 
 const STYLE = `

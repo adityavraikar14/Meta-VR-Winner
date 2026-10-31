@@ -8,7 +8,7 @@
  *   ball   grows on the open palm; push or throw the palm forward to launch it.
  *   wall   rises in front of the player and blocks orbs for a few seconds.
  */
-import { Group, Vector3 } from '@iwsdk/core';
+import { Group, Quaternion, Vector3 } from '@iwsdk/core';
 import { isFist, Item } from './gestures.js';
 import { HandState, Side } from './hands.js';
 import type { Foe } from './opponent.js';
@@ -53,6 +53,11 @@ const SPEAR_GRAVITY = 3;
 const PROJECTILE_LIFE = 4;
 /** A thrown spear stays stuck in the target this long. */
 const STUCK_TIME = 1.2;
+/**
+ * How quickly a held sword or spear turns to follow the hand (per second).
+ * High enough to feel attached, low enough to hide knuckle jitter.
+ */
+const HOLD_SMOOTHING = 22;
 /** Throws within this angle (cosine) of the target get nudged onto it. */
 const AIM_ASSIST = Math.cos((25 * Math.PI) / 180);
 const AIM_PULL = 0.7;
@@ -74,7 +79,10 @@ export interface Anchor {
   position: Vector3;
   /** Direction the hand points (forward for a controller). */
   pointing: Vector3;
+  /** The hand, while it is tracked. */
   hand: HandState | null;
+  /** The hand, while it is briefly lost (position is then where it was last seen). */
+  recent: HandState | null;
 }
 
 export type AnchorFn = (side: Side, out: Anchor) => Anchor;
@@ -112,7 +120,8 @@ export class Arsenal {
   private wallCenter = new Vector3();
   private wallRight = new Vector3();
   private wallNormal = new Vector3();
-  private anchor: Anchor = { position: new Vector3(), pointing: new Vector3(), hand: null };
+  private anchor: Anchor = { position: new Vector3(), pointing: new Vector3(), hand: null, recent: null };
+  private target = new Quaternion();
   private axis = new Vector3();
   private tip = new Vector3();
   private mid = new Vector3();
@@ -212,11 +221,23 @@ export class Arsenal {
     const hand = anchor.hand;
     const object = held.object;
 
+    // The hand vanished mid-throw: throw along the way it was moving.
+    const recent = anchor.recent;
+    if (recent && held.item !== 'sword' && (held.item === 'spear' || held.age >= BALL_GROW)) {
+      const v = recent.lastVelocity;
+      if (v.length() > THROW_SPEED && v.dot(forward) > 0) {
+        this.dir.copy(v).multiplyScalar(THROW_BOOST);
+        this.launch(held, this.dir);
+        return;
+      }
+    }
+
     if (held.item === 'ball') {
       const grow = Math.min(1, held.age / BALL_GROW);
       object.scale.setScalar(0.01 + grow * (1 + Math.sin(held.age * 9) * 0.04));
       object.position.copy(anchor.position);
-      if (hand) object.position.addScaledVector(hand.normal, BALL_LIFT);
+      const palm = hand ?? recent;
+      if (palm) object.position.addScaledVector(palm.normal, BALL_LIFT);
       else object.position.addScaledVector(anchor.pointing, BALL_LIFT);
       if (hand && grow >= 1) {
         const speed = hand.velocity.length();
@@ -230,11 +251,16 @@ export class Arsenal {
       return;
     }
 
-    // Sword along the knuckle line of a tracked fist; otherwise along the pointing direction.
-    if (held.item === 'sword' && hand) this.axis.copy(hand.knuckles);
+    // Sword along the knuckle line of the fist; otherwise along the pointing direction.
+    // The blade eases towards that direction, which hides tracking jitter.
+    const fist = hand ?? recent;
+    if (held.item === 'sword' && fist) this.axis.copy(fist.knuckles);
     else this.axis.copy(anchor.pointing);
     object.position.copy(anchor.position);
-    object.quaternion.setFromUnitVectors(Y, this.axis);
+    this.target.setFromUnitVectors(Y, this.axis);
+    if (held.age <= dt) object.quaternion.copy(this.target);
+    else object.quaternion.slerp(this.target, 1 - Math.exp(-HOLD_SMOOTHING * dt));
+    this.axis.copy(Y).applyQuaternion(object.quaternion);
 
     const reach = held.item === 'sword' ? SWORD_LENGTH : SPEAR_TIP;
     this.tip.copy(anchor.position).addScaledVector(this.axis, reach);

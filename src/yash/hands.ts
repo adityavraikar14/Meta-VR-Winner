@@ -14,6 +14,12 @@ const FINGER_BASES = [5, 10, 15, 20] as const;
 /** Hand speed is measured over roughly this many seconds. */
 const VELOCITY_WINDOW = 0.08;
 const HISTORY = 16;
+/**
+ * How much of each new frame goes into the smoothed palm normal and finger
+ * values (the rest is last frame's). Real tracking jitters a little every
+ * frame; this steadies sign detection without adding noticeable lag.
+ */
+const SMOOTHING = 0.55;
 
 export type Side = 'left' | 'right';
 export const SIDES: readonly Side[] = ['left', 'right'];
@@ -24,8 +30,8 @@ export const SIDES: readonly Side[] = ['left', 'right'];
  */
 export class HandState {
   tracked = false;
-  /** Seconds since the hand was last tracked (0 while tracked). */
-  lostFor = 0;
+  /** Seconds since the hand was last tracked (0 while tracked, Infinity if never seen). */
+  lostFor = Infinity;
   readonly joints = new Float32Array(JOINT_COUNT * 3);
   /** Centre of the palm. */
   readonly palm = new Vector3();
@@ -41,7 +47,14 @@ export class HandState {
   pinch = 1;
   /** Palm velocity in m/s, smoothed over VELOCITY_WINDOW. */
   readonly velocity = new Vector3();
+  /**
+   * Palm velocity on the last tracked frame. Fast throws often lose tracking
+   * mid-motion; this lets a throw still go where the hand was heading.
+   */
+  readonly lastVelocity = new Vector3();
 
+  /** True until the first frame after (re)appearing, so smoothing starts fresh. */
+  private fresh = true;
   private readonly histPos = new Float32Array(HISTORY * 3);
   private readonly histTime = new Float64Array(HISTORY);
   private histHead = 0;
@@ -49,6 +62,7 @@ export class HandState {
   private a = new Vector3();
   private b = new Vector3();
   private c = new Vector3();
+  private d = new Vector3();
 
   constructor(readonly side: Side) {}
 
@@ -68,24 +82,34 @@ export class HandState {
     // The cross product points out of the palm for a right hand; mirror it for a left.
     const index = this.joint(INDEX_KNUCKLE, this.b).sub(wrist);
     const pinky = this.joint(PINKY_KNUCKLE, this.c).sub(wrist);
-    this.normal.crossVectors(index, pinky).normalize();
-    if (this.side === 'left') this.normal.negate();
-    this.knuckles.copy(index).sub(pinky).normalize();
+    const k = this.fresh ? 1 : SMOOTHING;
+    const normal = this.c.crossVectors(index, pinky).normalize();
+    if (this.side === 'left') normal.negate();
+    if (this.fresh) this.normal.copy(normal);
+    else this.normal.lerp(normal, k).normalize();
+    this.knuckles.copy(index).sub(this.joint(PINKY_KNUCKLE, this.c).sub(wrist)).normalize();
 
+    // Straightness compares wrist → knuckle with knuckle → fingertip. Both spans
+    // are 7–9 cm long, so a few millimetres of tracking jitter barely move them.
+    const wristAgain = this.joint(WRIST, this.a);
     for (let f = 0; f < 4; f++) {
       const base = FINGER_BASES[f];
-      const bone = this.joint(base + 1, this.b).sub(this.joint(base, this.c)).normalize();
-      const tip = this.joint(base + 4, this.c).sub(this.joint(base + 2, this.a)).normalize();
-      this.straight[f] = bone.dot(tip);
+      const knuckle = this.joint(base + 1, this.c);
+      const bone = this.b.copy(knuckle).sub(wristAgain).normalize();
+      const tip = this.joint(base + 4, this.d).sub(knuckle).normalize();
+      this.straight[f] += (bone.dot(tip) - this.straight[f]) * k;
     }
     this.pinch = this.joint(THUMB_TIP, this.a).distanceTo(this.joint(INDEX_TIP, this.b));
+    this.fresh = false;
     this.record(time);
+    this.lastVelocity.copy(this.velocity);
   }
 
   /** Forgets motion history, so a hand that reappears doesn't "teleport-throw". */
   lose(dt: number): void {
     this.tracked = false;
     this.lostFor += dt;
+    this.fresh = true;
     this.histCount = 0;
     this.velocity.set(0, 0, 0);
   }

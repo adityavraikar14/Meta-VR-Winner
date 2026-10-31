@@ -264,6 +264,45 @@ export class Label {
   }
 }
 
+/** A camera-facing multi-line text panel, for the in-headset debug readout. */
+export class TextPanel {
+  readonly sprite: Sprite;
+  private canvas: HTMLCanvasElement;
+  private texture: CanvasTexture;
+  private text = '';
+
+  constructor(width: number, private lines = 14) {
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = 640;
+    this.canvas.height = 28 * lines + 24;
+    this.texture = new CanvasTexture(this.canvas);
+    this.texture.colorSpace = SRGBColorSpace;
+    this.sprite = new Sprite(new SpriteMaterial({ map: this.texture, transparent: true, depthTest: false }));
+    this.sprite.renderOrder = 13;
+    this.sprite.scale.set(width, (width * this.canvas.height) / this.canvas.width, 1);
+  }
+
+  set(text: string): void {
+    if (text === this.text) return;
+    this.text = text;
+    const g = this.canvas.getContext('2d');
+    if (!g) return;
+    g.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    g.fillStyle = 'rgba(8, 14, 28, 0.82)';
+    g.beginPath();
+    g.roundRect(0, 0, this.canvas.width, this.canvas.height, 18);
+    g.fill();
+    g.font = '21px ui-monospace, Consolas, monospace';
+    g.fillStyle = '#e6f3ff';
+    g.textBaseline = 'top';
+    text
+      .split('\n')
+      .slice(0, this.lines)
+      .forEach((line, i) => g.fillText(line, 14, 12 + i * 28, this.canvas.width - 28));
+    this.texture.needsUpdate = true;
+  }
+}
+
 interface Burst {
   mesh: Mesh;
   material: MeshBasicMaterial;

@@ -34,7 +34,7 @@ import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 import { MAX_HP, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
 import { HandSkeleton, SimHands } from './sim-hands.js';
-import { Bursts, Label, makeRing, setRing } from './visuals.js';
+import { Bursts, Label, makeRing, setRing, TextPanel } from './visuals.js';
 
 /** WebXR Hand Input batch query, missing from the bundled XRFrame types. */
 interface XRHandFrame {
@@ -47,6 +47,13 @@ const ICON_DROP = 0.3;
 const ICON_GAP = 0.17;
 /** "Show your hands" appears after the hands are gone this long. */
 const SHOW_HANDS_AFTER = 0.8;
+/** A held item stays where a lost hand was last seen for this long, instead of jumping away. */
+const KEEP_THROUGH_LOSS = 0.5;
+/** The in-headset readout floats this far ahead, left and down from the eyes (inside a comfortable view). */
+const READOUT_AHEAD = 0.8;
+const READOUT_LEFT = 0.36;
+const READOUT_DOWN = 0.05;
+const READOUT_REFRESH = 0.2;
 const HURT_TIME = 0.45;
 const UP = new Vector3(0, 1, 0);
 
@@ -78,6 +85,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private hurt!: Mesh;
   private hurtMaterial!: MeshBasicMaterial;
   private hurtLeft = 0;
+  /** Development-only readout visible inside the headset, where the browser panel isn't. */
+  private headsetReadout: TextPanel | null = null;
+  private readoutOn = true;
+  private readoutTimer = 0;
 
   private inXR = false;
   private placed = false;
@@ -112,6 +123,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.wireSplash();
 
     if (import.meta.env.DEV) {
+      this.headsetReadout = new TextPanel(0.34, 15);
+      this.root.add(this.headsetReadout.sprite);
       this.cleanupFuncs.push(
         mountDebugPanel({
           command: (command) => this.debug(command),
@@ -135,7 +148,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const anyHand = this.hands.left.tracked || this.hands.right.tracked;
     // Lost tracking pauses the sign timers instead of failing them.
     if (anyHand) {
-      classify(this.hands.left, this.hands.right, this.forward, this.reading);
+      classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
       this.recognizer.update(dt, this.reading, this.events);
     } else {
       this.reading.sign = 'none';
@@ -152,13 +165,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
   /** Where a side's hand is: the tracked hand, else its controller, else a spot by the chest. */
   private anchorOf = (side: Side, out: Anchor): Anchor => {
     const hand = this.hands[side];
-    if (hand.tracked) {
+    out.hand = null;
+    out.recent = null;
+    if (hand.tracked || hand.lostFor < KEEP_THROUGH_LOSS) {
       out.position.copy(hand.palm);
       out.pointing.copy(hand.pointing);
-      out.hand = hand;
+      if (hand.tracked) out.hand = hand;
+      else out.recent = hand;
       return out;
     }
-    out.hand = null;
     if (this.controllers[side]) {
       const grip = this.player.gripSpaces[side];
       grip.getWorldPosition(out.position);
@@ -332,6 +347,21 @@ export class ArsenalLevelSystem extends createSystem({}) {
     );
     this.statusLabel.sprite.position.copy(o.center).setY(o.center.y + 0.7);
 
+    const panel = this.headsetReadout;
+    if (panel) {
+      panel.sprite.visible = this.inXR && this.readoutOn;
+      panel.sprite.position
+        .copy(this.head)
+        .addScaledVector(this.forward, READOUT_AHEAD)
+        .addScaledVector(this.right, -READOUT_LEFT)
+        .setY(this.head.y - READOUT_DOWN);
+      this.readoutTimer -= dt;
+      if (this.inXR && this.readoutTimer <= 0) {
+        this.readoutTimer = READOUT_REFRESH;
+        panel.set(this.readout());
+      }
+    }
+
     this.hurtLeft = Math.max(0, this.hurtLeft - dt);
     this.hurt.visible = this.hurtLeft > 0;
     this.hurtMaterial.opacity = (this.hurtLeft / HURT_TIME) * 0.2;
@@ -411,6 +441,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
         break;
       case 'recenter':
         this.placed = false;
+        break;
+      case 'toggleReadout':
+        this.readoutOn = !this.readoutOn;
         break;
     }
   }
