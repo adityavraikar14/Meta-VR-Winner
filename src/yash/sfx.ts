@@ -117,6 +117,10 @@ export const sfx = {
     tone(660, 0.25, { type: 'square', gain: 0.06, to: 990 });
     noise(0.2, 0.2, 3000, 6000);
   },
+  wallBreak(): void {
+    noise(0.6, 0.45, 2500, 300);
+    tone(330, 0.5, { type: 'square', gain: 0.06, to: 90 });
+  },
   hurt(): void {
     tone(220, 0.3, { type: 'sawtooth', gain: 0.12, to: 110 });
   },

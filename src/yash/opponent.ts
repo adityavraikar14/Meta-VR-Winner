@@ -132,7 +132,8 @@ export class Opponent implements Foe {
     dt: number,
     time: number,
     head: Vector3,
-    blocks: (point: Vector3, radius: number) => boolean,
+    /** True when something (the wall) took the orb; it handles its own damage. */
+    absorbs: (point: Vector3, radius: number) => boolean,
   ): void {
     const root = this.rig.root;
     this.aim.copy(head);
@@ -175,7 +176,7 @@ export class Opponent implements Foe {
     else color.setRGB(0.29 + windUp * 0.6, 0.14 + windUp * 0.2, 0.44 - windUp * 0.2);
     this.rig.barFill.scale.x = Math.max(0.001, this.hp / MAX_HP);
 
-    this.updateOrbs(dt, blocks);
+    this.updateOrbs(dt, absorbs);
   }
 
   private fire(): void {
@@ -187,13 +188,13 @@ export class Opponent implements Foe {
     this.orbs.push({ object, velocity });
   }
 
-  private updateOrbs(dt: number, blocks: (point: Vector3, radius: number) => boolean): void {
+  private updateOrbs(dt: number, absorbs: (point: Vector3, radius: number) => boolean): void {
     for (let i = this.orbs.length - 1; i >= 0; i--) {
       const orb = this.orbs[i];
       const p = orb.object.position;
       p.addScaledVector(orb.velocity, dt);
       orb.object.rotation.y += dt * 4;
-      if (blocks(p, ORB_RADIUS)) {
+      if (absorbs(p, ORB_RADIUS)) {
         this.bursts.spawn(p, 0x9fe8ff, 0.35);
         sfx.block();
         this.removeOrb(i);

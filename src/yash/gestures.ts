@@ -17,7 +17,32 @@ import type { HandState, Side } from './hands.js';
 
 export type Item = 'sword' | 'spear' | 'ball' | 'wall';
 export const ITEMS: readonly Item[] = ['sword', 'spear', 'ball', 'wall'];
+/** Each item's sign shares its name; `arm` is the base sign every recipe starts with. */
 export type Sign = 'none' | 'arm' | Item;
+
+/** What each sign looks like, for recipes, buttons and the in-game menu. */
+export const SIGN_LABELS: Record<Exclude<Sign, 'none'>, string> = {
+  arm: '🤲 Hold a ball',
+  sword: '✊ Fist',
+  spear: '✊✊ Fists stacked',
+  ball: '🫴 Palm up',
+  wall: '🙌 Palms forward',
+};
+
+export const ITEM_LABELS: Record<Item, string> = {
+  sword: '🗡️ Sword',
+  spear: '🔱 Spear',
+  ball: '🔮 Power ball',
+  wall: '🧱 Wall',
+};
+
+/** The signs that summon each item, in order. */
+export const RECIPES: Record<Item, readonly Exclude<Sign, 'none'>[]> = {
+  sword: ['arm', 'sword'],
+  spear: ['arm', 'spear'],
+  ball: ['arm', 'ball'],
+  wall: ['arm', 'wall'],
+};
 
 /** Finger straightness (see HandState.straight) above which a finger is straight… */
 const STRAIGHT = 0.6;
@@ -211,20 +236,6 @@ export class GestureRecognizer {
       this.reset();
       events.push({ type: 'summon', item, hand });
     }
-  }
-
-  /** Debug buttons: skip straight to armed. */
-  forceArm(events: GestureEvent[]): void {
-    this.reset();
-    this.phase = 'armed';
-    this.armedLeft = ARMED_WINDOW;
-    events.push({ type: 'armed' });
-  }
-
-  /** Debug buttons: summon as if the full sequence had been made. */
-  forceSummon(item: Item, events: GestureEvent[]): void {
-    this.reset();
-    events.push({ type: 'summon', item, hand: null });
   }
 
   reset(): void {

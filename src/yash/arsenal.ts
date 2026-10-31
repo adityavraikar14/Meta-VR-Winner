@@ -24,6 +24,7 @@ import {
   SWORD_LENGTH,
   WALL_HEIGHT,
   WALL_WIDTH,
+  WallRig,
 } from './visuals.js';
 
 /** A blade or spear point must move at least this fast (m/s) to cut or hurt. */
@@ -59,9 +60,12 @@ const AIM_PULL = 0.7;
 /** The wall rises this far in front of the eyes, and lasts this long. */
 const WALL_DISTANCE = 0.75;
 const WALL_DROP = 0.75;
-const WALL_LIFE = 6;
+const WALL_LIFE = 8;
 const WALL_RISE = 0.25;
 const WALL_FADE = 1;
+/** Orbs the wall can take before it shatters. */
+export const WALL_HP = 5;
+const WALL_FLASH = 0.15;
 
 const Y = new Vector3(0, 1, 0);
 
@@ -101,8 +105,10 @@ export class Arsenal {
   readonly projectiles: Projectile[] = [];
   /** Seconds left on the wall, 0 when there is none. */
   wallLeft = 0;
+  wallHp = 0;
 
-  private wall: Group;
+  private wall: WallRig;
+  private wallFlash = 0;
   private wallCenter = new Vector3();
   private wallRight = new Vector3();
   private wallNormal = new Vector3();
@@ -120,8 +126,8 @@ export class Arsenal {
     private anchorOf: AnchorFn,
   ) {
     this.wall = makeWall();
-    this.wall.visible = false;
-    root.add(this.wall);
+    this.wall.root.visible = false;
+    root.add(this.wall.root);
   }
 
   summon(item: Item, side: Side | null, head: Vector3, forward: Vector3): void {
@@ -159,19 +165,27 @@ export class Arsenal {
     for (const p of this.projectiles) this.dispose(p.object);
     this.projectiles.length = 0;
     this.wallLeft = 0;
-    this.wall.visible = false;
+    this.wall.root.visible = false;
   }
 
-  /** Debug: throws the held ball or spear straight ahead, at the target if it's close. */
-  throwHeld(forward: Vector3): void {
-    const held = this.held;
-    if (!held || held.item === 'sword') return;
-    this.dir.copy(forward).multiplyScalar(7);
-    this.launch(held, this.dir);
+  /**
+   * True when a sphere at `point` hits the wall. The wall takes the hit: it
+   * loses health, and shatters when it has none left.
+   */
+  absorb(point: Vector3, radius: number): boolean {
+    if (!this.inWall(point, radius)) return false;
+    this.wallHp--;
+    this.wallFlash = WALL_FLASH;
+    if (this.wallHp <= 0) {
+      this.wallLeft = 0;
+      this.wall.root.visible = false;
+      this.bursts.spawn(this.wallCenter, 0x9fe8ff, 0.9, 0.6);
+      sfx.wallBreak();
+    }
+    return true;
   }
 
-  /** True when a sphere at `point` is inside the wall. */
-  blocks(point: Vector3, radius: number): boolean {
+  private inWall(point: Vector3, radius: number): boolean {
     if (this.wallLeft <= 0) return false;
     const dx = point.x - this.wallCenter.x;
     const dy = point.y - this.wallCenter.y;
@@ -314,10 +328,13 @@ export class Arsenal {
     this.wallCenter.y = head.y - WALL_DROP + WALL_HEIGHT / 2;
     this.wallNormal.copy(forward);
     this.wallRight.set(-forward.z, 0, forward.x);
-    this.wall.position.set(this.wallCenter.x, head.y - WALL_DROP, this.wallCenter.z);
-    this.wall.rotation.set(0, Math.atan2(-forward.x, -forward.z), 0);
-    this.wall.visible = true;
+    const root = this.wall.root;
+    root.position.set(this.wallCenter.x, head.y - WALL_DROP, this.wallCenter.z);
+    root.rotation.set(0, Math.atan2(-forward.x, -forward.z), 0);
+    root.visible = true;
     this.wallLeft = WALL_LIFE;
+    this.wallHp = WALL_HP;
+    this.wallFlash = 0;
     this.bursts.spawn(this.wallCenter, 0x9fe8ff, 0.6, 0.5);
   }
 
@@ -327,8 +344,16 @@ export class Arsenal {
     const age = WALL_LIFE - this.wallLeft;
     const rise = Math.min(1, age / WALL_RISE);
     const fade = Math.min(1, this.wallLeft / WALL_FADE);
-    this.wall.scale.set(1, Math.max(0.001, rise * fade), 1);
-    if (this.wallLeft <= 0) this.wall.visible = false;
+    this.wall.root.scale.set(1, Math.max(0.001, rise * fade), 1);
+    if (this.wallLeft <= 0) this.wall.root.visible = false;
+
+    // Health bar: green when fresh, through amber, to red when about to break.
+    const health = this.wallHp / WALL_HP;
+    this.wall.barFill.scale.x = Math.max(0.001, health);
+    this.wall.barMaterial.color.setRGB(Math.min(1, 2 - 2 * health), Math.min(1, 2 * health), 0.3);
+    this.wallFlash = Math.max(0, this.wallFlash - dt);
+    this.wall.panelMaterial.color.setHex(this.wallFlash > 0 ? 0xffffff : 0x59c8ff);
+    this.wall.panelMaterial.opacity = this.wallFlash > 0 ? 0.5 : 0.12 + 0.1 * health;
   }
 
   private removeProjectile(index: number): void {

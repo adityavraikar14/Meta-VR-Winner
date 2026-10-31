@@ -96,28 +96,48 @@ export function makeBall(): Group {
   return ball;
 }
 
-/** Bottom edge at the origin, facing +Z. */
-export function makeWall(): Group {
+export interface WallRig {
+  root: Group;
+  panelMaterial: MeshBasicMaterial;
+  /** Health bar fill: scale x from 0 to 1. */
+  barFill: Mesh;
+  barMaterial: MeshBasicMaterial;
+}
+
+/** Bottom edge at the origin, facing +Z, with a health bar along the top. */
+export function makeWall(): WallRig {
   const wall = new Group();
   wall.name = 'LightWall';
   const box = new BoxGeometry(WALL_WIDTH, WALL_HEIGHT, 0.02);
-  const panel = new Mesh(box, glow(0x59c8ff, 0.22));
+  const panelMaterial = glow(0x59c8ff, 0.22);
+  const panel = new Mesh(box, panelMaterial);
   const edges = new LineSegments(
     new EdgesGeometry(box),
     new LineBasicMaterial({ color: 0xaee9ff, transparent: true, opacity: 0.9 }),
   );
-  const bars = new Group();
-  const barMaterial = glow(0x9fe8ff, 0.25);
+  const stripes = new Group();
+  const stripeMaterial = glow(0x9fe8ff, 0.25);
   for (let i = 1; i < 4; i++) {
-    const bar = new Mesh(new PlaneGeometry(WALL_WIDTH, 0.012), barMaterial);
-    bar.position.y = (i / 4 - 0.5) * WALL_HEIGHT;
-    bars.add(bar);
+    const stripe = new Mesh(new PlaneGeometry(WALL_WIDTH, 0.012), stripeMaterial);
+    stripe.position.y = (i / 4 - 0.5) * WALL_HEIGHT;
+    stripes.add(stripe);
   }
   const body = new Group();
-  body.add(panel, edges, bars);
+  body.add(panel, edges, stripes);
   body.position.y = WALL_HEIGHT / 2;
-  wall.add(body);
-  return wall;
+
+  // Health bar just above the top edge, on the player's side.
+  const bar = new Group();
+  bar.position.set(0, WALL_HEIGHT + 0.06, 0.02);
+  const back = new Mesh(new PlaneGeometry(0.62, 0.05), new MeshBasicMaterial({ color: 0x0c1a2c }));
+  const fillGeometry = new PlaneGeometry(0.6, 0.034);
+  fillGeometry.translate(0.3, 0, 0);
+  const barMaterial = new MeshBasicMaterial({ color: 0x5fe08a });
+  const barFill = new Mesh(fillGeometry, barMaterial);
+  barFill.position.set(-0.3, 0, 0.002);
+  bar.add(back, barFill);
+  wall.add(body, bar);
+  return { root: wall, panelMaterial, barFill, barMaterial };
 }
 
 export interface FoeRig {

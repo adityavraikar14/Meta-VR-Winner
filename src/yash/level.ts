@@ -16,20 +16,24 @@ import {
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
-import { Anchor, Arsenal } from './arsenal.js';
+import { Anchor, Arsenal, WALL_HP } from './arsenal.js';
 import { DebugCommand, mountDebugPanel } from './debug-panel.js';
 import {
+  ARM_HOLD,
   ARMED_WINDOW,
   classify,
   GestureEvent,
   GestureRecognizer,
+  ITEM_HOLD,
   Item,
   ITEMS,
   Reading,
+  SIGN_LABELS,
 } from './gestures.js';
 import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 import { MAX_HP, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
+import { HandSkeleton, SimHands } from './sim-hands.js';
 import { Bursts, Label, makeRing, setRing } from './visuals.js';
 
 /** WebXR Hand Input batch query, missing from the bundled XRFrame types. */
@@ -37,12 +41,6 @@ interface XRHandFrame {
   fillPoses(spaces: XRSpace[], baseSpace: XRSpace, transforms: Float32Array): boolean;
 }
 
-const ICONS: Record<Item, string> = {
-  sword: '🗡️ Fist',
-  spear: '🔱 Fists stacked',
-  ball: '🔮 Palm up',
-  wall: '🧱 Palms out',
-};
 /** Item icons float this far ahead of and below the eyes, this far apart. */
 const ICON_DISTANCE = 0.55;
 const ICON_DROP = 0.3;
@@ -67,6 +65,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private bursts!: Bursts;
   private opponent!: Opponent;
   private arsenal!: Arsenal;
+  /** Stand-in hands for the test panel; real tracked hands always win. */
+  private sim = new SimHands();
+  private skeletons!: Record<Side, HandSkeleton>;
 
   private ring!: Mesh;
   private ringMaterial!: MeshBasicMaterial;
@@ -102,6 +103,11 @@ export class ArsenalLevelSystem extends createSystem({}) {
       this.hurtLeft = HURT_TIME;
     });
     this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
+    this.skeletons = { left: new HandSkeleton(0xffd9b8), right: new HandSkeleton(0xffd9b8) };
+    for (const side of SIDES) {
+      this.skeletons[side].root.visible = false;
+      this.root.add(this.skeletons[side].root);
+    }
     this.buildHud();
     this.wireSplash();
 
@@ -110,6 +116,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
         mountDebugPanel({
           command: (command) => this.debug(command),
           readout: () => this.readout(),
+          activePose: () => (this.sim.active ? this.sim.pose : null),
         }),
       );
     }
@@ -137,7 +144,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.handleEvents();
 
     this.arsenal.update(dt, this.forward);
-    this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.blocks(point, radius));
+    this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
     this.bursts.update(dt);
     this.updateHud(dt, anyHand);
   }
@@ -210,7 +217,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
         seen[side] = true;
       }
     }
+    // Real hands take over from simulated ones the moment they show up.
+    if (seen.left || seen.right) this.sim.release();
+    else if (this.sim.active) {
+      this.sim.apply(dt, time, this.head, this.forward, this.hands);
+      seen.left = seen.right = true;
+    }
     for (const side of SIDES) {
+      this.skeletons[side].root.visible = this.sim.active;
+      if (this.sim.active) this.skeletons[side].update(this.hands[side]);
       if (!seen[side]) {
         this.hands[side].lose(dt);
         this.jointSpaces[side] = null;
@@ -244,7 +259,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.icons = {} as Record<Item, Label>;
     for (const item of ITEMS) {
       const label = new Label(0.05);
-      label.set(ICONS[item]);
+      label.set(SIGN_LABELS[item]);
       this.icons[item] = label;
       this.root.add(label.sprite);
     }
@@ -327,13 +342,33 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private wireSplash(): void {
     const splash = document.getElementById('splash');
     const button = document.getElementById('splash-play') as HTMLButtonElement | null;
+    const note = document.getElementById('splash-note');
     if (!splash || !button) return;
-    if (!this.world.xrEnabled) {
-      button.textContent = 'Open on Meta Quest';
+    const noHeadset = () => {
+      button.textContent = 'No headset found';
+      if (note) {
+        note.hidden = false;
+        note.textContent = import.meta.env.DEV
+          ? 'On this PC, open https://localhost:8081/yash.html to use the emulator, or open this page on your Quest.'
+          : 'Open this page in the Meta Quest browser.';
+      }
+    };
+    if (!this.world.xrEnabled || !navigator.xr) {
+      noHeadset();
       return;
     }
-    button.disabled = false;
-    button.textContent = 'Enter the Arsenal';
+    // A browser can have WebXR but no headset (e.g. desktop Chrome off localhost, where the emulator doesn't load).
+    void navigator.xr
+      .isSessionSupported('immersive-ar')
+      .then((ar) => ar || navigator.xr!.isSessionSupported('immersive-vr'))
+      .catch(() => false)
+      .then((supported) => {
+        if (!supported) noHeadset();
+        else {
+          button.disabled = false;
+          button.textContent = 'Enter the Arsenal';
+        }
+      });
     const launch = () => {
       sfx.unlock();
       this.world.launchXR();
@@ -352,12 +387,22 @@ export class ArsenalLevelSystem extends createSystem({}) {
 
   private debug(command: DebugCommand): void {
     sfx.unlock();
-    switch (command) {
-      case 'arm':
-        this.recognizer.forceArm(this.events);
+    switch (command.type) {
+      case 'pose':
+        this.sim.setPose(command.pose);
         break;
-      case 'throw':
-        this.arsenal.throwHeld(this.look);
+      case 'move':
+        this.sim.startMove(command.move);
+        break;
+      case 'recipe':
+        this.recognizer.reset();
+        this.sim.play([
+          { pose: 'arm', seconds: ARM_HOLD },
+          { pose: command.item, seconds: ITEM_HOLD },
+        ]);
+        break;
+      case 'handsOff':
+        this.sim.release();
         break;
       case 'clear':
         this.arsenal.clear();
@@ -367,8 +412,6 @@ export class ArsenalLevelSystem extends createSystem({}) {
       case 'recenter':
         this.placed = false;
         break;
-      default:
-        this.recognizer.forceSummon(command, this.events);
     }
   }
 
@@ -377,7 +420,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const lines: string[] = [];
     const r = this.recognizer;
     lines.push(
-      `view: ${this.inXR ? 'XR' : 'flat'} · controllers L${this.controllers.left ? '✓' : '–'} R${this.controllers.right ? '✓' : '–'}`,
+      `view: ${this.inXR ? 'XR' : 'flat'} · hands: ${this.sim.active ? `simulated (${this.sim.pose}${this.sim.move ? ', ' + this.sim.move : ''})` : 'real/none'}`,
+      `controllers L${this.controllers.left ? '✓' : '–'} R${this.controllers.right ? '✓' : '–'}`,
       `sign: ${this.reading.sign}${this.reading.hand ? ` (${this.reading.hand})` : ''}`,
       `phase: ${r.phase}${r.phase === 'armed' ? ` ${r.armedLeft.toFixed(1)}s` : ''} · hold ${Math.round(r.progress * 100)}%`,
     );
@@ -398,7 +442,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
     const a = this.arsenal;
     lines.push(
-      `held: ${a.held ? a.held.item : '–'} · flying ${a.projectiles.length} · wall ${a.wallLeft > 0 ? a.wallLeft.toFixed(1) + 's' : '–'}`,
+      `held: ${a.held ? a.held.item : '–'} · flying ${a.projectiles.length} · wall ${a.wallLeft > 0 ? `${a.wallHp}/${WALL_HP} hp, ${a.wallLeft.toFixed(1)}s` : '–'}`,
       `sentinel ${this.opponent.hp}/${MAX_HP} · hits taken ${this.opponent.hitsTaken} · defeated ${this.opponent.defeats}`,
     );
     return lines.join('\n');
