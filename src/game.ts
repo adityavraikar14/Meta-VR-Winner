@@ -7,6 +7,8 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   Pressed,
+  Raycaster,
+  Vector2,
   RayInteractable,
   SRGBColorSpace,
   Vector3,
@@ -302,6 +304,7 @@ export class ShadowGameSystem extends createSystem({
     this.queries.rayPressed.subscribe('qualify', (entity) => {
       if (entity === this.buttonEntity) this.rayClick = true;
     });
+    this.addDesktopPress();
     this.intro = new IntroShow(paper);
     this.shadowWorld = new ShadowWorld(paper);
     devInfo.shadowWorld = () => ({
@@ -483,6 +486,35 @@ export class ShadowGameSystem extends createSystem({
     this.playButton.show(true);
     this.setCaption(fresh ? 'Welcome! Push the button to begin' : 'Welcome back! Push the button to continue');
     this.setPhase('title');
+  }
+
+  /**
+   * Desktop fallback for the emulator and a flat browser, where no hand ray
+   * points at the button: a mouse click on it, or Enter / Space.
+   */
+  private addDesktopPress(): void {
+    const canvas = this.renderer.domElement;
+    const raycaster = new Raycaster();
+    const ndc = new Vector2();
+    const onPointer = (event: PointerEvent) => {
+      if (!this.playButton.visible) return;
+      const rect = canvas.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+      ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      const camera = this.renderer.xr.isPresenting ? this.renderer.xr.getCamera() : this.camera;
+      raycaster.setFromCamera(ndc, camera);
+      if (raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.key === 'Enter' || event.key === ' ') && this.playButton.visible) this.rayClick = true;
+    };
+    // Capture on the window: the emulator layers its own controls over the canvas.
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('keydown', onKey);
+    this.cleanupFuncs.push(
+      () => window.removeEventListener('pointerdown', onPointer, true),
+      () => window.removeEventListener('keydown', onKey),
+    );
   }
 
   /** Each hand's pinch, in paper space, for drawing shadow ink. */
