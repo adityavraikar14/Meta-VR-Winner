@@ -1,0 +1,406 @@
+/**
+ * The Arsenal level: hand signs summon a sword, a spear, a power ball or a
+ * wall, and a training sentinel attacks so each one has something to do.
+ *
+ * Self-contained on purpose: nothing here imports from, or is imported by,
+ * the shadow levels. Everything hangs under one root group under the player.
+ */
+import {
+  createSystem,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  Quaternion,
+  UIKitMLAsset,
+  Vector3,
+  VisibilityState,
+} from '@iwsdk/core';
+import { Anchor, Arsenal } from './arsenal.js';
+import { DebugCommand, mountDebugPanel } from './debug-panel.js';
+import {
+  ARMED_WINDOW,
+  classify,
+  GestureEvent,
+  GestureRecognizer,
+  Item,
+  ITEMS,
+  Reading,
+} from './gestures.js';
+import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
+import { MAX_HP, Opponent } from './opponent.js';
+import { sfx } from './sfx.js';
+import { Bursts, Label, makeRing, setRing } from './visuals.js';
+
+/** WebXR Hand Input batch query, missing from the bundled XRFrame types. */
+interface XRHandFrame {
+  fillPoses(spaces: XRSpace[], baseSpace: XRSpace, transforms: Float32Array): boolean;
+}
+
+const ICONS: Record<Item, string> = {
+  sword: '🗡️ Fist',
+  spear: '🔱 Fists stacked',
+  ball: '🔮 Palm up',
+  wall: '🧱 Palms out',
+};
+/** Item icons float this far ahead of and below the eyes, this far apart. */
+const ICON_DISTANCE = 0.55;
+const ICON_DROP = 0.3;
+const ICON_GAP = 0.17;
+/** "Show your hands" appears after the hands are gone this long. */
+const SHOW_HANDS_AFTER = 0.8;
+const HURT_TIME = 0.45;
+const UP = new Vector3(0, 1, 0);
+
+export class ArsenalLevelSystem extends createSystem({}) {
+  private root!: Group;
+  private hands: Record<Side, HandState> = {
+    left: new HandState('left'),
+    right: new HandState('right'),
+  };
+  private jointSpaces: Record<Side, XRJointSpace[] | null> = { left: null, right: null };
+  private controllers: Record<Side, boolean> = { left: false, right: false };
+  private poses = new Float32Array(JOINT_COUNT * 16);
+  private recognizer = new GestureRecognizer();
+  private reading: Reading = { sign: 'none', hand: null };
+  private events: GestureEvent[] = [];
+  private bursts!: Bursts;
+  private opponent!: Opponent;
+  private arsenal!: Arsenal;
+
+  private ring!: Mesh;
+  private ringMaterial!: MeshBasicMaterial;
+  private armedLabel!: Label;
+  private handsLabel!: Label;
+  private statusLabel!: Label;
+  private icons!: Record<Item, Label>;
+  private hurt!: Mesh;
+  private hurtMaterial!: MeshBasicMaterial;
+  private hurtLeft = 0;
+
+  private inXR = false;
+  private placed = false;
+  private noHandsFor = 0;
+  private head = new Vector3();
+  private headQuat = new Quaternion();
+  private look = new Vector3();
+  private forward = new Vector3(0, 0, -1);
+  private right = new Vector3(1, 0, 0);
+  private tmp = new Vector3();
+  private tmpQuat = new Quaternion();
+
+  init(): void {
+    // This page replaces the template's floating welcome panel.
+    const panel = this.world.getSceneObject<UIKitMLAsset>('welcome-panel');
+    if (panel) panel.visible = false;
+
+    this.root = new Group();
+    this.root.name = 'ArsenalLevel';
+    this.player.add(this.root);
+    this.bursts = new Bursts(this.root);
+    this.opponent = new Opponent(this.root, this.bursts, () => {
+      this.hurtLeft = HURT_TIME;
+    });
+    this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
+    this.buildHud();
+    this.wireSplash();
+
+    if (import.meta.env.DEV) {
+      this.cleanupFuncs.push(
+        mountDebugPanel({
+          command: (command) => this.debug(command),
+          readout: () => this.readout(),
+        }),
+      );
+    }
+  }
+
+  update(delta: number, time: number): void {
+    if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
+    const dt = Math.min(delta, 0.05);
+    this.readHead();
+    if (!this.placed && this.head.y > 0.3) {
+      this.opponent.place(this.head, this.forward);
+      this.placed = true;
+    }
+    this.readHands(dt, time);
+
+    const anyHand = this.hands.left.tracked || this.hands.right.tracked;
+    // Lost tracking pauses the sign timers instead of failing them.
+    if (anyHand) {
+      classify(this.hands.left, this.hands.right, this.forward, this.reading);
+      this.recognizer.update(dt, this.reading, this.events);
+    } else {
+      this.reading.sign = 'none';
+      this.reading.hand = null;
+    }
+    this.handleEvents();
+
+    this.arsenal.update(dt, this.forward);
+    this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.blocks(point, radius));
+    this.bursts.update(dt);
+    this.updateHud(dt, anyHand);
+  }
+
+  /** Where a side's hand is: the tracked hand, else its controller, else a spot by the chest. */
+  private anchorOf = (side: Side, out: Anchor): Anchor => {
+    const hand = this.hands[side];
+    if (hand.tracked) {
+      out.position.copy(hand.palm);
+      out.pointing.copy(hand.pointing);
+      out.hand = hand;
+      return out;
+    }
+    out.hand = null;
+    if (this.controllers[side]) {
+      const grip = this.player.gripSpaces[side];
+      grip.getWorldPosition(out.position);
+      this.player.worldToLocal(out.position);
+      out.pointing.set(0, 0, -1).applyQuaternion(grip.getWorldQuaternion(this.tmpQuat));
+      return out;
+    }
+    const sign = side === 'right' ? 1 : -1;
+    out.position.copy(this.head).addScaledVector(this.forward, 0.4).addScaledVector(this.right, 0.18 * sign);
+    out.position.y -= 0.3;
+    out.pointing.copy(this.look).addScaledVector(UP, 0.8).normalize();
+    return out;
+  };
+
+  private readHead(): void {
+    this.inXR = this.visibilityState.peek() !== VisibilityState.NonImmersive;
+    const viewer = this.inXR ? this.player.head : this.camera;
+    viewer.getWorldPosition(this.head);
+    this.player.worldToLocal(this.head);
+    viewer.getWorldQuaternion(this.headQuat);
+    this.look.set(0, 0, -1).applyQuaternion(this.headQuat);
+    this.tmp.set(this.look.x, 0, this.look.z);
+    if (this.tmp.lengthSq() > 1e-4) this.forward.copy(this.tmp.normalize());
+    this.right.set(-this.forward.z, 0, this.forward.x);
+  }
+
+  private readHands(dt: number, time: number): void {
+    const seen: Record<Side, boolean> = { left: false, right: false };
+    this.controllers.left = false;
+    this.controllers.right = false;
+    const frame = this.xrFrame;
+    const refSpace = this.renderer.xr.getReferenceSpace();
+    if (this.inXR && frame && refSpace) {
+      for (const source of frame.session.inputSources) {
+        const side: Side | null =
+          source.handedness === 'left' ? 'left' : source.handedness === 'right' ? 'right' : null;
+        if (!side) continue;
+        if (!source.hand) {
+          if (source.gripSpace) this.controllers[side] = true;
+          continue;
+        }
+        let spaces = this.jointSpaces[side];
+        if (spaces === null || spaces.length !== JOINT_COUNT) {
+          spaces = this.jointSpaces[side] = Array.from(source.hand.values());
+        }
+        if (!(frame as unknown as XRHandFrame).fillPoses(spaces, refSpace, this.poses)) continue;
+        const hand = this.hands[side];
+        for (let i = 0; i < JOINT_COUNT; i++) {
+          hand.joints[i * 3] = this.poses[i * 16 + 12];
+          hand.joints[i * 3 + 1] = this.poses[i * 16 + 13];
+          hand.joints[i * 3 + 2] = this.poses[i * 16 + 14];
+        }
+        hand.tracked = true;
+        hand.lostFor = 0;
+        hand.update(time);
+        seen[side] = true;
+      }
+    }
+    for (const side of SIDES) {
+      if (!seen[side]) {
+        this.hands[side].lose(dt);
+        this.jointSpaces[side] = null;
+      }
+    }
+  }
+
+  private handleEvents(): void {
+    for (const event of this.events) {
+      if (event.type === 'armed') {
+        sfx.armed();
+        this.bursts.spawn(this.ring.position, 0x9fe8ff, 0.25);
+      } else if (event.type === 'fizzle') {
+        sfx.fizzle();
+      } else {
+        this.arsenal.summon(event.item, event.hand, this.head, this.forward);
+      }
+    }
+    this.events.length = 0;
+  }
+
+  private buildHud(): void {
+    this.ring = makeRing(0.07, 0x9fe8ff);
+    this.ringMaterial = this.ring.material as MeshBasicMaterial;
+    this.ring.visible = false;
+    this.armedLabel = new Label(0.05);
+    this.armedLabel.set('Armed! Make a sign:', '#bff0ff');
+    this.handsLabel = new Label(0.07);
+    this.handsLabel.set('✋ Show your hands', '#ffe9b0');
+    this.statusLabel = new Label(0.12);
+    this.icons = {} as Record<Item, Label>;
+    for (const item of ITEMS) {
+      const label = new Label(0.05);
+      label.set(ICONS[item]);
+      this.icons[item] = label;
+      this.root.add(label.sprite);
+    }
+    this.hurtMaterial = new MeshBasicMaterial({
+      color: 0xff2a2a,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+    });
+    this.hurt = new Mesh(new PlaneGeometry(0.6, 0.4), this.hurtMaterial);
+    this.hurt.renderOrder = 12;
+    this.root.add(
+      this.ring,
+      this.armedLabel.sprite,
+      this.handsLabel.sprite,
+      this.statusLabel.sprite,
+      this.hurt,
+    );
+  }
+
+  private updateHud(dt: number, anyHand: boolean): void {
+    const r = this.recognizer;
+    const armed = r.phase === 'armed';
+
+    // Ring: filling while arming, gold while summoning, draining while armed and waiting.
+    const left = this.hands.left;
+    const right = this.hands.right;
+    if (left.tracked && right.tracked) this.ring.position.copy(left.palm).lerp(right.palm, 0.5);
+    else if (right.tracked) this.ring.position.copy(right.palm);
+    else if (left.tracked) this.ring.position.copy(left.palm);
+    else this.ring.position.copy(this.head).addScaledVector(this.forward, 0.4).setY(this.head.y - 0.25);
+    this.ring.quaternion.copy(this.headQuat);
+    if (!armed && r.progress > 0) {
+      this.ring.visible = true;
+      this.ringMaterial.color.setHex(0x9fe8ff);
+      setRing(this.ring, r.progress);
+    } else if (armed) {
+      this.ring.visible = true;
+      const summoning = r.progress > 0;
+      this.ringMaterial.color.setHex(summoning ? 0xffd27a : 0x5a8cc8);
+      setRing(this.ring, summoning ? r.progress : r.armedLeft / ARMED_WINDOW);
+    } else {
+      this.ring.visible = false;
+    }
+
+    // Item menu while armed.
+    const center = this.tmp.copy(this.head).addScaledVector(this.forward, ICON_DISTANCE);
+    center.y = this.head.y - ICON_DROP;
+    this.armedLabel.sprite.visible = armed;
+    this.armedLabel.sprite.position.copy(center).setY(center.y + 0.08);
+    ITEMS.forEach((item, i) => {
+      const icon = this.icons[item];
+      icon.sprite.visible = armed;
+      icon.sprite.position.copy(center).addScaledVector(this.right, (i - 1.5) * ICON_GAP);
+      const active = armed && r.candidate === item;
+      icon.sprite.material.opacity = active ? 1 : 0.75;
+      icon.resize(active ? 0.065 : 0.05);
+    });
+
+    // "Show your hands" only matters in the headset with no controllers either.
+    const handsGone = this.inXR && !anyHand && !this.controllers.left && !this.controllers.right;
+    this.noHandsFor = handsGone ? this.noHandsFor + dt : 0;
+    this.handsLabel.sprite.visible = this.noHandsFor > SHOW_HANDS_AFTER;
+    this.handsLabel.sprite.position.copy(this.head).addScaledVector(this.look, 0.7);
+
+    const o = this.opponent;
+    this.statusLabel.set(
+      o.alive ? `Sentinel ${o.hp}/${MAX_HP} · hits taken ${o.hitsTaken}` : `Defeated! (${o.defeats})`,
+      o.alive ? '#ffffff' : '#ffe27a',
+    );
+    this.statusLabel.sprite.position.copy(o.center).setY(o.center.y + 0.7);
+
+    this.hurtLeft = Math.max(0, this.hurtLeft - dt);
+    this.hurt.visible = this.hurtLeft > 0;
+    this.hurtMaterial.opacity = (this.hurtLeft / HURT_TIME) * 0.2;
+    this.hurt.position.copy(this.head).addScaledVector(this.look, 0.25);
+    this.hurt.quaternion.copy(this.headQuat);
+  }
+
+  private wireSplash(): void {
+    const splash = document.getElementById('splash');
+    const button = document.getElementById('splash-play') as HTMLButtonElement | null;
+    if (!splash || !button) return;
+    if (!this.world.xrEnabled) {
+      button.textContent = 'Open on Meta Quest';
+      return;
+    }
+    button.disabled = false;
+    button.textContent = 'Enter the Arsenal';
+    const launch = () => {
+      sfx.unlock();
+      this.world.launchXR();
+    };
+    button.addEventListener('click', launch);
+    this.cleanupFuncs.push(
+      () => button.removeEventListener('click', launch),
+      this.world.visibilityState.subscribe((state) => {
+        // Put the sentinel in front of wherever the player is when the view changes.
+        this.placed = false;
+        if (state === VisibilityState.NonImmersive) splash.removeAttribute('data-hidden');
+        else splash.setAttribute('data-hidden', '');
+      }),
+    );
+  }
+
+  private debug(command: DebugCommand): void {
+    sfx.unlock();
+    switch (command) {
+      case 'arm':
+        this.recognizer.forceArm(this.events);
+        break;
+      case 'throw':
+        this.arsenal.throwHeld(this.look);
+        break;
+      case 'clear':
+        this.arsenal.clear();
+        this.recognizer.reset();
+        this.opponent.reset();
+        break;
+      case 'recenter':
+        this.placed = false;
+        break;
+      default:
+        this.recognizer.forceSummon(command, this.events);
+    }
+  }
+
+  private readout(): string {
+    const f = (n: number) => (n >= 0 ? ' ' : '') + n.toFixed(2);
+    const lines: string[] = [];
+    const r = this.recognizer;
+    lines.push(
+      `view: ${this.inXR ? 'XR' : 'flat'} · controllers L${this.controllers.left ? '✓' : '–'} R${this.controllers.right ? '✓' : '–'}`,
+      `sign: ${this.reading.sign}${this.reading.hand ? ` (${this.reading.hand})` : ''}`,
+      `phase: ${r.phase}${r.phase === 'armed' ? ` ${r.armedLeft.toFixed(1)}s` : ''} · hold ${Math.round(r.progress * 100)}%`,
+    );
+    for (const side of SIDES) {
+      const h = this.hands[side];
+      if (!h.tracked) {
+        lines.push(`${side[0].toUpperCase()}: not tracked`);
+        continue;
+      }
+      const fingers = Array.from(h.straight, (s) => f(s)).join('');
+      lines.push(
+        `${side[0].toUpperCase()}: fingers${fingers}`,
+        `   palm up${f(h.normal.dot(UP))} fwd${f(h.normal.dot(this.forward))} speed ${h.velocity.length().toFixed(1)}`,
+      );
+    }
+    if (this.hands.left.tracked && this.hands.right.tracked) {
+      lines.push(`gap ${this.hands.left.palm.distanceTo(this.hands.right.palm).toFixed(2)} m`);
+    }
+    const a = this.arsenal;
+    lines.push(
+      `held: ${a.held ? a.held.item : '–'} · flying ${a.projectiles.length} · wall ${a.wallLeft > 0 ? a.wallLeft.toFixed(1) + 's' : '–'}`,
+      `sentinel ${this.opponent.hp}/${MAX_HP} · hits taken ${this.opponent.hitsTaken} · defeated ${this.opponent.defeats}`,
+    );
+    return lines.join('\n');
+  }
+}
