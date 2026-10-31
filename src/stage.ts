@@ -125,7 +125,7 @@ export class ShadowStageSystem extends createSystem({}) {
     this.paper.name = 'PaperScreen';
     this.buildPaper();
     this.buildLantern();
-    this.world.createTransformEntity(this.paper);
+    stage.paperEntity = this.world.createTransformEntity(this.paper);
     stage.paper = this.paper;
 
     this.poses = new Float32Array(JOINT_COUNT * 16);

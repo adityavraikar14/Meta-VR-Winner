@@ -1,4 +1,4 @@
-import type { Group, ShadowMaterial } from '@iwsdk/core';
+import type { Entity, Group, ShadowMaterial } from '@iwsdk/core';
 
 /** Paper screen size in meters. */
 export const PAPER_WIDTH = 1.0;
@@ -15,6 +15,8 @@ export const MASK_HEIGHT = 56;
 export const stage = {
   /** Paper root. Local +Z faces the player, origin is the paper center. */
   paper: null as Group | null,
+  /** The paper's entity, for parenting interactive children. */
+  paperEntity: null as Entity | null,
   shadowMaterial: null as ShadowMaterial | null,
   /** RGBA shadow mask as seen from the lantern, row 0 at the paper bottom. */
   mask: new Uint8Array(MASK_WIDTH * MASK_HEIGHT * 4),

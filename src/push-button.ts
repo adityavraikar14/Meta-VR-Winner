@@ -1,5 +1,6 @@
 import {
   CanvasTexture,
+  CircleGeometry,
   Color,
   CylinderGeometry,
   Group,
@@ -7,14 +8,13 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
-  PlaneGeometry,
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
 
-const BASE_RADIUS = 0.046;
+const BASE_RADIUS = 0.06;
 const BASE_DEPTH = 0.016;
-const CAP_RADIUS = 0.035;
+const CAP_RADIUS = 0.048;
 const CAP_DEPTH = 0.018;
 /** Cap face when nothing touches it, measured out from the back of the base. */
 const CAP_REST = BASE_DEPTH + 0.014;
@@ -31,17 +31,18 @@ const IDLE = new Color(0xffb84a);
 const LIT = new Color(0xffe08a);
 
 /**
- * A chunky round button you push with a fingertip. The cap follows the
- * finger down, clicks near the bottom of its travel and springs back up,
- * so it feels like a real switch rather than a hover target.
+ * A chunky round button with its word printed on the cap. Push it with a
+ * fingertip: the cap follows the finger down, clicks near the bottom of its
+ * travel and springs back up. A ray click (mouse, controller or pinch)
+ * presses it too.
  */
 export class PushButton {
   readonly root = new Group();
   private cap: Mesh;
   private capMaterial: MeshStandardMaterial;
-  private label: Mesh;
-  private labelCanvas: HTMLCanvasElement;
-  private labelTexture: CanvasTexture;
+  private face: Mesh;
+  private faceCanvas: HTMLCanvasElement;
+  private faceTexture: CanvasTexture;
   private travel = 0;
   private armed = true;
   private appear = 0;
@@ -54,8 +55,8 @@ export class PushButton {
     this.root.visible = false;
 
     const base = new Mesh(
-      new CylinderGeometry(BASE_RADIUS, BASE_RADIUS * 1.08, BASE_DEPTH, 40),
-      new MeshStandardMaterial({ color: 0x7a4a26, roughness: 0.8 }),
+      new CylinderGeometry(BASE_RADIUS, BASE_RADIUS * 1.08, BASE_DEPTH, 48),
+      new MeshStandardMaterial({ color: 0x6e4122, roughness: 0.8 }),
     );
     base.rotation.x = Math.PI / 2;
     base.position.z = BASE_DEPTH / 2;
@@ -67,46 +68,43 @@ export class PushButton {
       emissive: IDLE.clone(),
       emissiveIntensity: 0.35,
     });
-    this.cap = new Mesh(new CylinderGeometry(CAP_RADIUS * 0.92, CAP_RADIUS, CAP_DEPTH, 40), this.capMaterial);
+    this.cap = new Mesh(new CylinderGeometry(CAP_RADIUS * 0.94, CAP_RADIUS, CAP_DEPTH, 48), this.capMaterial);
     this.cap.rotation.x = Math.PI / 2;
     this.root.add(this.cap);
 
-    this.labelCanvas = document.createElement('canvas');
-    this.labelCanvas.width = 512;
-    this.labelCanvas.height = 160;
-    this.labelTexture = new CanvasTexture(this.labelCanvas);
-    this.labelTexture.colorSpace = SRGBColorSpace;
-    this.label = new Mesh(
-      new PlaneGeometry(0.15, 0.047),
-      new MeshBasicMaterial({ map: this.labelTexture, transparent: true, depthWrite: false }),
+    this.faceCanvas = document.createElement('canvas');
+    this.faceCanvas.width = 256;
+    this.faceCanvas.height = 256;
+    this.faceTexture = new CanvasTexture(this.faceCanvas);
+    this.faceTexture.colorSpace = SRGBColorSpace;
+    this.face = new Mesh(
+      new CircleGeometry(CAP_RADIUS * 0.92, 48),
+      new MeshBasicMaterial({ map: this.faceTexture, transparent: true }),
     );
-    this.label.position.set(0, BASE_RADIUS + 0.034, 0.004);
-    this.root.add(this.label);
+    this.root.add(this.face);
     this.setText(text);
     this.placeCap();
     parent.add(this.root);
   }
 
   setText(text: string): void {
-    const canvas = this.labelCanvas;
+    const canvas = this.faceCanvas;
     const ctx = canvas.getContext('2d')!;
+    const c = canvas.width / 2;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(40, 22, 10, 0.86)';
-    const r = 70;
+    const glow = ctx.createRadialGradient(c, c * 0.8, 10, c, c, c);
+    glow.addColorStop(0, '#ffe7a6');
+    glow.addColorStop(1, '#f4a43c');
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.moveTo(r, 6);
-    ctx.arcTo(canvas.width - 6, 6, canvas.width - 6, canvas.height - 6, r);
-    ctx.arcTo(canvas.width - 6, canvas.height - 6, 6, canvas.height - 6, r);
-    ctx.arcTo(6, canvas.height - 6, 6, 6, r);
-    ctx.arcTo(6, 6, canvas.width - 6, 6, r);
-    ctx.closePath();
+    ctx.arc(c, c, c - 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#ffe2a8';
-    ctx.font = '700 84px Georgia, "Times New Roman", serif';
+    ctx.fillStyle = '#4a250c';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 4, canvas.width - 60);
-    this.labelTexture.needsUpdate = true;
+    ctx.font = `700 ${text.length > 5 ? 46 : 64}px Georgia, "Times New Roman", serif`;
+    ctx.fillText(text, c, c + 4, canvas.width - 40);
+    this.faceTexture.needsUpdate = true;
   }
 
   show(shown: boolean): void {
@@ -123,9 +121,10 @@ export class PushButton {
 
   /**
    * Moves the cap with any fingertip pushing on it (world positions) and
-   * returns true on the frame it clicks.
+   * returns true on the frame it clicks. `rayClick` is a ray press that
+   * landed on it this frame; the cap dips as if pushed.
    */
-  update(dt: number, tips: readonly Vector3[]): boolean {
+  update(dt: number, tips: readonly Vector3[], rayClick: boolean): boolean {
     this.time += dt;
     this.appear += ((this.shown ? 1 : 0) - this.appear) * Math.min(1, dt * 6);
     this.root.visible = this.appear > 0.02;
@@ -135,6 +134,7 @@ export class PushButton {
 
     let push = 0;
     let near = Infinity;
+    if (rayClick) this.travel = TRAVEL;
     this.root.updateWorldMatrix(true, false);
     for (const tip of tips) {
       this.local.copy(tip);
@@ -158,7 +158,7 @@ export class PushButton {
     this.capMaterial.emissiveIntensity = 0.25 + 0.2 * breathe + 0.45 * glow;
 
     let clicked = false;
-    if (this.shown && this.armed && this.travel >= CLICK_AT) {
+    if (this.shown && (rayClick || (this.armed && this.travel >= CLICK_AT))) {
       this.armed = false;
       clicked = true;
     } else if (!this.armed && this.travel <= REARM_AT) {
@@ -169,5 +169,6 @@ export class PushButton {
 
   private placeCap(): void {
     this.cap.position.z = CAP_REST - CAP_DEPTH / 2 - this.travel;
+    this.face.position.z = CAP_REST - this.travel + 0.0005;
   }
 }

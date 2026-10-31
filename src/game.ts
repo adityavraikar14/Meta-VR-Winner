@@ -2,14 +2,17 @@ import {
   CanvasTexture,
   Color,
   createSystem,
+  type Entity,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Pressed,
+  RayInteractable,
   SRGBColorSpace,
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
-import { playAwaken, playPrompt } from './audio.js';
+import { playAwaken, playClick, playPrompt } from './audio.js';
 import { devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -41,6 +44,7 @@ import {
   MaskChannel,
   normalizeMask,
 } from './matcher.js';
+import { IntroShow } from './intro.js';
 import { PushButton } from './push-button.js';
 import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
@@ -52,7 +56,7 @@ import {
 } from './stage-state.js';
 import { friendName, type Puzzle, PUZZLES, WORLDS } from './world/puzzles.js';
 
-type Phase = 'title' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
+type Phase = 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
 type Problem =
   | Finger
   | 'direction'
@@ -83,7 +87,7 @@ const CARD_GAP = 0.125;
 const CARD_Y = PAPER_HEIGHT / 2 - 0.075;
 const RING_STEPS = 40;
 /** The title screen's Play button, in paper space: low and within easy reach. */
-const PLAY_BUTTON = new Vector3(0, -0.1, 0.6);
+const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
 const VIEWER = new Vector3(0, 0.12, 1.0);
 const INDEX_TIP = 9;
 
@@ -109,7 +113,9 @@ function levelFor(kind: string): Level {
  * the player's hand shapes against the friends allowed, releases the
  * matched shadow as a creature that tries the puzzle, and awards stars.
  */
-export class ShadowGameSystem extends createSystem({}) {
+export class ShadowGameSystem extends createSystem({
+  rayPressed: { required: [RayInteractable, Pressed] },
+}) {
   private phase: Phase = 'story';
   private phaseTime = 0;
   private puzzleIndex = 0;
@@ -177,6 +183,13 @@ export class ShadowGameSystem extends createSystem({}) {
   private ghost!: GhostHand;
   private leftHanded = false;
   private playButton!: PushButton;
+  private buttonEntity!: Entity;
+  private intro!: IntroShow;
+  private introLine: string | null = null;
+  /** A brand-new story: Play shows the opening show first. */
+  private fresh = false;
+  /** A ray press landed on the button since the last frame (presses can be shorter than a frame). */
+  private rayClick = false;
   private tips = [new Vector3(), new Vector3()];
   private liveTips: Vector3[] = [];
 
@@ -276,6 +289,13 @@ export class ShadowGameSystem extends createSystem({}) {
     this.playButton = new PushButton(paper, 'Play');
     this.playButton.root.position.copy(PLAY_BUTTON);
     this.playButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
+    // Mouse, controller and pinch rays can press it too, not only a fingertip.
+    this.buttonEntity = this.world.createTransformEntity(this.playButton.root, { parent: stage.paperEntity! });
+    this.buttonEntity.addComponent(RayInteractable);
+    this.queries.rayPressed.subscribe('qualify', (entity) => {
+      if (entity === this.buttonEntity) this.rayClick = true;
+    });
+    this.intro = new IntroShow(paper);
     devInfo.playButton = () => {
       const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
       const at = this.playButton.root.getWorldPosition(new Vector3());
@@ -334,16 +354,33 @@ export class ShadowGameSystem extends createSystem({}) {
     this.handleCommand();
 
     this.readTips();
-    const pressed = this.playButton.update(dt, this.liveTips);
+    const pressed = this.playButton.update(dt, this.liveTips, this.rayClick);
+    this.rayClick = false;
+    if (pressed) playClick();
+    this.introLine = this.intro.update(dt);
 
     switch (this.phase) {
       case 'title':
-        if (pressed) {
+        if (pressed && this.fresh) {
+          this.bannerShown = false;
+          this.playButton.setText('Skip');
+          this.intro.start();
+          this.setPhase('intro');
+        } else if (pressed) {
           playAwaken();
           this.playButton.show(false);
           this.startPuzzle(this.puzzleIndex);
         } else if (this.phaseTime > 6) {
-          this.setCaption('Push the glowing button with one finger');
+          this.setCaption('Push the glowing button, or point and pinch');
+        }
+        break;
+      case 'intro':
+        if (pressed || this.introLine === null) {
+          this.intro.stop();
+          this.playButton.show(false);
+          this.startPuzzle(this.puzzleIndex);
+        } else {
+          this.setCaption(this.introLine);
         }
         break;
       case 'story':
@@ -396,11 +433,12 @@ export class ShadowGameSystem extends createSystem({}) {
     this.smooth = [];
     this.best = -1;
     const fresh = resume === 0 && totalStars() === 0;
+    this.fresh = fresh;
     const next = PUZZLES[resume];
     const footer = fresh
       ? 'Push the button to open the book'
       : next
-        ? `Continue: ${WORLDS[next.world].name} · ${next.title}  ·  ${totalStars()} ★`
+        ? `Next: ${next.title}  ·  ${totalStars()} ★`
         : `Every chapter read  ·  ${totalStars()} ★`;
     this.drawBanner(
       'A hand-shadow storybook',
