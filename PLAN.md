@@ -82,7 +82,7 @@ to AI-generated HD models (Meshy / Tripo) supplied by the user. Rights must be c
 - [x] One friend on stage at a time, draw-call pass
 
 ## Schedule
-- [ ] **Nov 1 – 3** Shadow world on the paper (walk on hand shadows), size from optics, draw-with-light lines
+- [ ] **Nov 1 – 3** Shadow world on the paper (walk on hand shadows ✅ Shadow Bridge level), size from optics, draw-with-light lines
 - [ ] **Nov 4 – 6** Havok physics, precise grab / throw, new restyled characters
 - [ ] **Nov 7 – 9** Character brain: reactions, personalities, voices, shadow language
 - [ ] **Nov 10 – 12** Chemistry engine, mechanisms, levels 3 – 6

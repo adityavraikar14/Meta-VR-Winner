@@ -84,6 +84,8 @@ interface HandRig {
   forearm: Mesh;
   /** Draws this hand into its own mask channel: left red, right green. */
   maskMaterial: MeshBasicMaterial;
+  /** Forearms go in blue: solid ground in the shadow world, ignored by matching. */
+  forearmMask: MeshBasicMaterial;
   jointSpaces: XRJointSpace[] | null;
   source: XRInputSource | null;
 }
@@ -104,6 +106,8 @@ export class ShadowStageSystem extends createSystem({}) {
   private needsLayout = true;
   private frameCount = 0;
   private readPending = false;
+  /** The mask still shows hands that have since left; clear it once they go. */
+  private maskStale = false;
 
   private a = new Vector3();
   private b = new Vector3();
@@ -194,6 +198,10 @@ export class ShadowStageSystem extends createSystem({}) {
       this.frameCount % MASK_INTERVAL === 0
     ) {
       this.renderMask();
+    } else if (stage.handCount === 0 && this.maskStale && !this.readPending) {
+      stage.mask.fill(0);
+      stage.maskVersion++;
+      this.maskStale = false;
     }
   }
 
@@ -303,10 +311,11 @@ export class ShadowStageSystem extends createSystem({}) {
       mesh.frustumCulled = false;
       root.add(mesh);
     }
-    // The forearm casts a shadow for the look, but is left out of matching so
+    // The forearm is drawn into its own channel, which matching ignores so
     // the score does not depend on how much arm is in view.
     joints.layers.enable(MASK_LAYER);
     bones.layers.enable(MASK_LAYER);
+    forearm.layers.enable(MASK_LAYER);
 
     this.player.add(root);
     return {
@@ -315,6 +324,8 @@ export class ShadowStageSystem extends createSystem({}) {
       bones,
       forearm,
       maskMaterial: new MeshBasicMaterial({ color: maskColor }),
+      // Drawn first without depth, so the hand always wins where they overlap.
+      forearmMask: new MeshBasicMaterial({ color: 0x0000ff, depthTest: false, depthWrite: false }),
       jointSpaces: null,
       source: null,
     };
@@ -496,6 +507,8 @@ export class ShadowStageSystem extends createSystem({}) {
     for (const hand of this.hands) {
       hand.joints.material = hand.maskMaterial;
       hand.bones.material = hand.maskMaterial;
+      hand.forearm.material = hand.forearmMask;
+      hand.forearm.renderOrder = -1;
     }
     renderer.setRenderTarget(this.maskTarget);
     renderer.setClearColor(0x000000, 1);
@@ -505,6 +518,8 @@ export class ShadowStageSystem extends createSystem({}) {
     for (const hand of this.hands) {
       hand.joints.material = this.casterMaterial;
       hand.bones.material = this.casterMaterial;
+      hand.forearm.material = this.casterMaterial;
+      hand.forearm.renderOrder = 0;
     }
     renderer.setClearColor(this.clearColor, previousAlpha);
     renderer.setRenderTarget(previousTarget);
@@ -514,6 +529,7 @@ export class ShadowStageSystem extends createSystem({}) {
     renderer.xr.enabled = xrEnabled;
 
     this.readPending = true;
+    this.maskStale = true;
     renderer
       .readRenderTargetPixelsAsync(
         this.maskTarget,

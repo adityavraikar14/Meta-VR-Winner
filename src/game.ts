@@ -46,6 +46,7 @@ import {
 } from './matcher.js';
 import { IntroShow } from './intro.js';
 import { PushButton } from './push-button.js';
+import { ShadowWorld } from './shadow-world.js';
 import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
   MASK_HEIGHT,
@@ -185,9 +186,12 @@ export class ShadowGameSystem extends createSystem({
   private playButton!: PushButton;
   private buttonEntity!: Entity;
   private intro!: IntroShow;
+  private shadowWorld!: ShadowWorld;
   private introLine: string | null = null;
   /** A brand-new story: Play shows the opening show first. */
   private fresh = false;
+  private walkCleared = false;
+  private walkClearAt = 0;
   /** A ray press landed on the button since the last frame (presses can be shorter than a frame). */
   private rayClick = false;
   private tips = [new Vector3(), new Vector3()];
@@ -296,6 +300,26 @@ export class ShadowGameSystem extends createSystem({
       if (entity === this.buttonEntity) this.rayClick = true;
     });
     this.intro = new IntroShow(paper);
+    this.shadowWorld = new ShadowWorld(paper);
+    devInfo.shadowWorld = () => ({
+      mood: this.shadowWorld.mood,
+      at: this.shadowWorld.position.map((n) => Number(n.toFixed(3))),
+      falls: this.shadowWorld.falls,
+      reached: this.shadowWorld.reached,
+      // Bounding box of every lit mask cell: [minX, minY, maxX, maxY].
+      shadow: (() => {
+        const box = [MASK_WIDTH, MASK_HEIGHT, -1, -1];
+        for (let i = 0; i < MASK_WIDTH * MASK_HEIGHT; i++) {
+          const o = i * 4;
+          if (stage.mask[o] < 128 && stage.mask[o + 1] < 128 && stage.mask[o + 2] < 128) continue;
+          const x = i % MASK_WIDTH;
+          const y = Math.floor(i / MASK_WIDTH);
+          box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y);
+          box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
+        }
+        return box;
+      })(),
+    });
     devInfo.playButton = () => {
       const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
       const at = this.playButton.root.getWorldPosition(new Vector3());
@@ -358,6 +382,7 @@ export class ShadowGameSystem extends createSystem({
     this.rayClick = false;
     if (pressed) playClick();
     this.introLine = this.intro.update(dt);
+    this.shadowWorld.update(dt);
 
     switch (this.phase) {
       case 'title':
@@ -392,6 +417,7 @@ export class ShadowGameSystem extends createSystem({
           this.holdTime = 0;
           this.setCaption('Paused · poke a button, or lower your hand');
         } else if (this.puzzle?.warmup) this.updateWarmup(dt);
+        else if (this.puzzle?.walk) this.updateWalk(dt);
         else this.updateMatching(dt);
         break;
       case 'awakening':
@@ -475,7 +501,7 @@ export class ShadowGameSystem extends createSystem({
     const puzzle = this.puzzle;
     if (!puzzle) {
       this.candidates = [...LEVELS];
-    } else if (puzzle.warmup) {
+    } else if (puzzle.warmup || puzzle.walk) {
       this.candidates = [];
     } else if (puzzle.teach) {
       this.candidates = [levelFor(puzzle.teach)];
@@ -483,6 +509,7 @@ export class ShadowGameSystem extends createSystem({
       // Every friend taught so far in the story.
       this.candidates = PUZZLES.slice(0, index).flatMap((p) => (p.teach ? [levelFor(p.teach)] : []));
     }
+    this.walkCleared = false;
     this.raw = this.candidates.map(() => 0);
     this.smooth = this.candidates.map(() => 0);
     this.candidateShadow = this.candidates.map(() => false);
@@ -498,6 +525,9 @@ export class ShadowGameSystem extends createSystem({
     this.ring.visible = false;
     this.creature.visible = false;
     this.ghost.show(null);
+    this.playButton.show(false);
+    this.intro.stop();
+    this.shadowWorld.load(puzzle?.walk ?? null);
     if (stage.shadowMaterial) stage.shadowMaterial.opacity = SHADOW_OPACITY;
 
     if (puzzle) {
@@ -601,6 +631,30 @@ export class ShadowGameSystem extends createSystem({
       playAwaken();
       this.clearPuzzle();
     }
+  }
+
+  /** Shadow-world levels: the little friend does the walking; hands make the ground. */
+  private updateWalk(dt: number): void {
+    const world = this.shadowWorld;
+    if (world.reached) {
+      // Let it cheer for a moment before the stars card.
+      if (!this.walkCleared) {
+        this.walkCleared = true;
+        this.walkClearAt = this.phaseTime + 1.6;
+      }
+      if (this.phaseTime >= this.walkClearAt) {
+        playAwaken();
+        this.clearPuzzle();
+      }
+      this.setCaption('Hooray! Your shadow was the bridge!');
+      return;
+    }
+    this.matchTime += dt;
+    let text = this.puzzle!.ask;
+    if (world.mood === 'gone') text = world.falls > 1 ? 'Oops! Hold your hand still while it crosses' : 'Whoops! It fell. Try again!';
+    else if (world.mood === 'edge') text = stage.handCount === 0 ? 'Raise your hand into the lantern light' : 'Lay your hand’s shadow across the gap';
+    else if (world.mood === 'walk' && this.phaseTime > 2) text = 'Hold it steady…';
+    this.setCaption(text);
   }
 
   private updateMatching(dt: number): void {
@@ -712,7 +766,9 @@ export class ShadowGameSystem extends createSystem({
     if (puzzle.teach && !play.unlocked.includes(puzzle.teach)) play.unlocked.push(puzzle.teach);
     const stars = puzzle.warmup
       ? 3
-      : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
+      : puzzle.walk
+        ? 1 + (this.shadowWorld.falls === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0)
+        : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
     play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
     // Resume from the next level if the player leaves now.
     play.puzzleIndex = this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;

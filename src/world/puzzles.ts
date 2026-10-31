@@ -1,6 +1,7 @@
 import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
+import type { WalkLevel } from '../shadow-world.js';
 import {
   berries,
   berryTree,
@@ -63,6 +64,8 @@ export interface Puzzle {
   teach?: string;
   /** Just raise a hand to cast a shadow: the very first moment. */
   warmup?: boolean;
+  /** A shadow-world level on the paper: help a tiny shadow friend across. */
+  walk?: WalkLevel;
   /** Caption once solved. */
   solved: string;
   build(root: Group, kit: Kit): PuzzleScene;
@@ -176,6 +179,23 @@ const warmup: Puzzle = {
     const star = goldStar(0.02);
     place(root, star.group, 0, kit.floor + 0.06, 0);
     kit.spin(star.group, 1.2);
+    return { start: new Vector3(0, kit.floor, 0.05), attempt: () => ({ steps: [], solved: true }) };
+  },
+};
+
+const shadowBridge: Puzzle = {
+  id: 'shadow-bridge',
+  world: 0,
+  title: 'The Shadow Bridge',
+  story: 'In the shadow world, your shadow is solid! A little shadow rabbit wants that star.',
+  ask: 'Make a bridge with your hand’s shadow',
+  solved: 'Across! Your shadow was the bridge.',
+  walk: {
+    cliffs: [[0, 28, 27], [52, 80, 27]],
+    start: [7, 27],
+    goal: [72, 27],
+  },
+  build(root, kit) {
     return { start: new Vector3(0, kit.floor, 0.05), attempt: () => ({ steps: [], solved: true }) };
   },
 };
@@ -431,6 +451,7 @@ function findStar(
 
 export const PUZZLES: Puzzle[] = [
   warmup,
+  shadowBridge,
   fallenLog,
   tinyTunnel,
   highBerries,
