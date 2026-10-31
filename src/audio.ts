@@ -365,3 +365,14 @@ export function playHoof(volume = 0.03): void {
   sweep(ctx, 'sine', 180 + Math.random() * 30, 70, now, 0.07, volume);
   noise(ctx, now, 0.05, 'highpass', 2500, 0.7, volume * 0.4);
 }
+
+/** The jungle springing up: a rising rustle of leaves under a warm swelling chord. */
+export function playGrow(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const rustle = noise(ctx, now, 1.8, 'bandpass', 900, 0.6, 0.05);
+  rustle.frequency.setValueAtTime(500, now);
+  rustle.frequency.exponentialRampToValueAtTime(3200, now + 1.6);
+  [196, 293.66, 392, 587.33].forEach((f, i) => tone(ctx, f, now + 0.25 + i * 0.16, 2.2, 0.035));
+}

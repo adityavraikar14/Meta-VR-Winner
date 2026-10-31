@@ -41,6 +41,8 @@ const STAGE_HEIGHT = 0.016;
  * looking down, and within easy reach of a seated player.
  */
 const STAGE_OFFSET = new Vector3(0, -0.22, 0.5);
+/** How far the earth may move from its default height to sit on a real table. */
+const TABLE_RANGE: [number, number] = [-0.5, -0.1];
 /** One friend on the stage at a time: calling another sends the last one home. */
 const MAX_CREATURES = 1;
 /** Display scale per kind, so big creatures do not crowd the stage. */
@@ -165,6 +167,12 @@ export class CreatureSystem extends createSystem({}) {
       while (this.creatures.length > 0) this.remove(0);
       this.diorama.load();
     }
+    this.followTable();
+    this.diorama.setHidden(stage.sceneryHidden);
+    if (stage.grow) {
+      this.diorama.grow(stage.grow.from);
+      stage.grow = null;
+    }
     this.diorama.update(dt);
     this.ground.blockers = this.diorama.blockers;
 
@@ -203,6 +211,24 @@ export class CreatureSystem extends createSystem({}) {
     }
     setPurr(purr);
     this.fx.update(dt);
+  }
+
+  /**
+   * Keep the earth's surface on the player's real table: the screen stays at
+   * eye height, the earth (and the screen's poles) move down or up to the table.
+   */
+  private followTable(): void {
+    let y = STAGE_OFFSET.y;
+    if (stage.tableHeight !== null) {
+      stage.paper!.getWorldPosition(this.landing);
+      y = stage.tableHeight - this.landing.y - STAGE_HEIGHT;
+      y = Math.min(TABLE_RANGE[1], Math.max(TABLE_RANGE[0], y));
+    }
+    if (Math.abs(this.stageRoot.position.y - y) < 0.002) return;
+    this.stageRoot.position.y = y;
+    this.stageRoot.updateMatrixWorld(true);
+    while (this.creatures.length > 0) this.remove(0);
+    this.diorama.relayout();
   }
 
   private spawn(kind: string, x: number, y: number, attempt: boolean): void {

@@ -27,6 +27,9 @@ export class Diorama {
   /** Life-size plants around the player, floor at y = 0. */
   private readonly room = new Group();
   private readonly paperAt = new Vector3();
+  /** Seconds since the world started growing (Infinity: fully grown). */
+  private growTime = Infinity;
+  private growFrom = new Vector3();
   private readonly props = new Group();
   private worldIndex = -1;
   /** Scenery asset version the current decoration was built with. */
@@ -64,6 +67,50 @@ export class Diorama {
   }
 
   /** Rebuild for the puzzle at `play.puzzleIndex` (or free play at -1). */
+  /** Rebuild everything for the current puzzle, e.g. after the earth moved to the table. */
+  relayout(): void {
+    this.worldIndex = -1;
+    this.load();
+  }
+
+  /** Show or hide the whole world (it stays hidden until the table is found). */
+  setHidden(hidden: boolean): void {
+    for (const group of [this.decor, this.props, this.screen, this.room]) group.visible = !hidden;
+  }
+
+  /**
+   * The jungle grows: the earth spreads out from where the hand lay, the
+   * screen's poles rise, and the room's plants unfurl, nearest first.
+   */
+  grow(fromWorld: Vector3 | null): void {
+    this.growTime = 0;
+    if (fromWorld) this.stageRoot.worldToLocal(this.growFrom.copy(fromWorld)).setY(0);
+    else this.growFrom.set(0, 0, 0);
+    this.applyGrowth();
+  }
+
+  private applyGrowth(): void {
+    const t = this.growTime;
+    const spread = backOut(clamp01(t / 1.6));
+    this.decor.scale.setScalar(Math.max(0.001, spread));
+    this.decor.position.set(this.growFrom.x * (1 - spread), 0, this.growFrom.z * (1 - spread));
+    this.props.scale.copy(this.decor.scale);
+    this.props.position.copy(this.decor.position);
+    this.screen.scale.set(1, Math.max(0.001, easeOut(clamp01((t - 0.5) / 1.2))), 1);
+    for (const plant of this.room.children) {
+      // Vines and fireflies are built in place around the origin: they appear rather than grow.
+      if (plant.position.lengthSq() === 0) {
+        plant.visible = t > 1.4;
+        continue;
+      }
+      const base = (plant.userData.baseScale as Vector3 | undefined) ?? plant.scale.clone();
+      plant.userData.baseScale = base;
+      const delay = 0.4 + Math.hypot(plant.position.x, plant.position.z - 1) * 0.35;
+      const k = Math.max(0.001, backOut(clamp01((t - delay) / 1.3)));
+      plant.scale.copy(base).multiplyScalar(k);
+    }
+  }
+
   load(): void {
     const puzzle = PUZZLES[play.puzzleIndex];
     const world = puzzle ? puzzle.world : WORLDS.length - 1;
@@ -121,6 +168,10 @@ export class Diorama {
   }
 
   update(dt: number): void {
+    if (this.growTime < 4) {
+      this.growTime += dt;
+      this.applyGrowth();
+    }
     // The photo-real scenery arrived: swap the stand-in for it.
     if (this.worldIndex >= 0 && nature.version !== this.decorVersion) this.decorate(this.worldIndex);
     animateNature(dt);
@@ -136,6 +187,20 @@ export class Diorama {
       if (k >= 1) this.tweens.splice(i, 1);
     }
   }
+}
+
+function clamp01(x: number): number {
+  return Math.min(1, Math.max(0, x));
+}
+
+function easeOut(x: number): number {
+  return 1 - (1 - x) ** 3;
+}
+
+/** Overshoots a little and settles, like something springing up. */
+function backOut(x: number): number {
+  const c = 1.4;
+  return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2;
 }
 
 /**

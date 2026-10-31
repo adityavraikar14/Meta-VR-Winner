@@ -97,8 +97,9 @@ on device: hop onto the real table, hide behind real objects.
       jungle earth with a ragged eroded edge, bamboo screen frame lashed with rope and ivy,
       life-size tropical plants on the floor around the player, hanging vines, fireflies.
       Scenery loads a few files at a time and retries failures.
-- [ ] Next: "lay your hand on your table" so the jungle earth sits on the real table;
-      more themes (river, mountain cave) re-skinning slab, frame and room plants
+- [x] "Lay one hand flat on your table": a held flat palm finds the real table; the
+      jungle grows out of it (earth spreads from the palm, poles rise, room plants unfurl)
+- [ ] Next: more themes (river, mountain cave) re-skinning slab, frame and room plants
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

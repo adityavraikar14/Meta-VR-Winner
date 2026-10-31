@@ -1,4 +1,4 @@
-import type { Entity, Group, ShadowMaterial } from '@iwsdk/core';
+import type { Entity, Group, ShadowMaterial, Vector3 } from '@iwsdk/core';
 
 /** Paper screen size in meters. */
 export const PAPER_WIDTH = 1.0;
@@ -40,6 +40,12 @@ export const stage = {
   command: null as MenuCommand | null,
   /** The hand menu is open: the game pauses judging so the menu hand is not scored. */
   menuOpen: false,
+  /** World height of the player's real table, once they have laid a hand on it. */
+  tableHeight: null as number | null,
+  /** The world is not here yet: the player hasn't shown us their table. */
+  sceneryHidden: false,
+  /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
+  grow: null as { from: Vector3 | null } | null,
 };
 
 export type MenuCommand = 'recenter' | 'restart' | 'skip';

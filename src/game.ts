@@ -14,7 +14,7 @@ import {
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
-import { playAwaken, playClick, playPrompt } from './audio.js';
+import { playAwaken, playClick, playGrow, playPrompt } from './audio.js';
 import { devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -49,6 +49,7 @@ import {
 import { IntroShow } from './intro.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
+import { TableFinder } from './table.js';
 import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
   MASK_HEIGHT,
@@ -59,7 +60,7 @@ import {
 } from './stage-state.js';
 import { friendName, type Puzzle, PUZZLES, WORLDS } from './world/puzzles.js';
 
-type Phase = 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
+type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
 type Problem =
   | Finger
   | 'direction'
@@ -76,6 +77,8 @@ const AWAKEN_SHIVER = 0.45;
 const AWAKEN_DURATION = 1.8;
 /** Seconds the story card stays up before play starts. */
 const STORY_TIME = 4.5;
+/** Seconds the jungle takes to grow before the title appears. */
+const GROW_TIME = 2.6;
 /** Seconds the stars card stays up after a level. */
 const CLEAR_TIME = 5;
 /** Seconds to read why the wrong friend could not help. */
@@ -189,6 +192,8 @@ export class ShadowGameSystem extends createSystem({
   private playButton!: PushButton;
   private buttonEntity!: Entity;
   private intro!: IntroShow;
+  private table!: TableFinder;
+  private headAt = new Vector3();
   private shadowWorld!: ShadowWorld;
   private introLine: string | null = null;
   /** A brand-new story: Play shows the opening show first. */
@@ -337,7 +342,14 @@ export class ShadowGameSystem extends createSystem({
     };
 
     loadProgress();
-    this.showTitle();
+    this.table = new TableFinder(paper);
+    devInfo.table = () => ({
+      height: stage.tableHeight,
+      progress: Number(this.table.reading.progress.toFixed(2)),
+      close: this.table.reading.close,
+      hidden: stage.sceneryHidden,
+    });
+    this.showTable();
 
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
@@ -395,6 +407,12 @@ export class ShadowGameSystem extends createSystem({
     this.shadowWorld.update(dt);
 
     switch (this.phase) {
+      case 'table':
+        this.updateTable(dt, pressed);
+        break;
+      case 'growing':
+        if (this.phaseTime >= GROW_TIME) this.showTitle();
+        break;
       case 'title':
         if (pressed && this.fresh) {
           this.bannerShown = false;
@@ -458,6 +476,47 @@ export class ShadowGameSystem extends createSystem({
   }
 
   // ------------------------------------------------------------ Story flow
+
+  /**
+   * Before anything else: find the player's real table. The world stays
+   * hidden until a hand lies flat on it, then grows out from under the palm.
+   */
+  private showTable(): void {
+    if (stage.tableHeight !== null) {
+      this.showTitle();
+      return;
+    }
+    this.table.reset();
+    stage.sceneryHidden = true;
+    this.bannerShown = false;
+    this.playButton.setText('Skip');
+    this.playButton.show(true);
+    this.setCaption('Lay one hand flat on your table');
+    this.setPhase('table');
+  }
+
+  private updateTable(dt: number, skip: boolean): void {
+    this.player.head.getWorldPosition(this.headAt);
+    const reading = this.table.update(dt, stage.joints, stage.tracked, (v) => this.player.localToWorld(v), this.headAt.y);
+    if (reading.height !== null || skip) {
+      if (reading.height !== null) stage.tableHeight = reading.height;
+      stage.sceneryHidden = false;
+      stage.grow = { from: reading.height !== null ? reading.point.clone() : null };
+      this.table.hide();
+      this.playButton.show(false);
+      playGrow();
+      this.setCaption(reading.height !== null ? 'The jungle has found you…' : 'The jungle grows…');
+      this.setPhase('growing');
+      return;
+    }
+    if (reading.close) {
+      this.setCaption(`Hold still…  ${Math.round(reading.progress * 100)}%`);
+    } else if (this.phaseTime > 9) {
+      this.setCaption('No table nearby? Push Skip');
+    } else {
+      this.setCaption('Lay one hand flat on your table');
+    }
+  }
 
   /** The book's cover: a title card and a big button to start or continue. */
   private showTitle(): void {
@@ -545,6 +604,9 @@ export class ShadowGameSystem extends createSystem({
   }
 
   private startPuzzle(index: number): void {
+    // Jumping straight into a level (dev keys) skips the table: show the world as it is.
+    stage.sceneryHidden = false;
+    this.table.hide();
     this.puzzleIndex = index;
     this.puzzle = PUZZLES[index] ?? null;
     play.puzzleIndex = this.puzzle ? index : -1;
