@@ -1,13 +1,17 @@
 import {
   CanvasTexture,
   Group,
+  InstancedMesh,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   type Object3D,
   PlaneGeometry,
+  SphereGeometry,
   SRGBColorSpace,
+  Vector3,
 } from '@iwsdk/core';
-import { playBoing, playChirp, playSqueak } from './audio.js';
+import { playBoing, playChirp, playClick, playInk, playSqueak } from './audio.js';
 import { ellipse, INK, rabbit, star } from './puppets.js';
 import { MASK_HEIGHT, MASK_WIDTH, PAPER_HEIGHT, PAPER_WIDTH, stage } from './stage-state.js';
 
@@ -29,6 +33,16 @@ const MAX_DROP = 4;
 const HOP_UP = 3.4;
 const SUBSTEPS = 3;
 
+/** Pinch hysteresis (thumb-to-index tip distance, metres) and release debounce. */
+const PINCH_START = 0.02;
+const PINCH_END = 0.035;
+const RELEASE_DELAY = 0.075;
+/** A new point every this many metres of hand travel. */
+const INK_SPACING = 0.006;
+/** Half-thickness of a drawn line, in cells. */
+const INK_RADIUS = 0.9;
+const MAX_INK_POINTS = 900;
+
 /**
  * A shadow-world level: paper-cut cliffs and where the little friend starts
  * and wants to go, all in mask cells (row 0 is the bottom of the paper).
@@ -38,6 +52,15 @@ export interface WalkLevel {
   cliffs: Array<[x0: number, x1: number, top: number]>;
   start: [number, number];
   goal: [number, number];
+  /** How many shadow-ink lines the player may draw at once (none if absent). */
+  ink?: number;
+}
+
+interface Stroke {
+  /** Paper-space points of the thread in the air. */
+  air: Vector3[];
+  /** Where each point's shadow lands, in cells. */
+  cells: Array<[number, number]>;
 }
 
 type Mood = 'walk' | 'edge' | 'wall' | 'hop' | 'fall' | 'cheer' | 'gone';
@@ -61,6 +84,15 @@ export class ShadowWorld {
   private bubbleText = '';
 
   private level: WalkLevel | null = null;
+  private drawn = new Uint8Array(MASK_WIDTH * MASK_HEIGHT);
+  private strokes: Stroke[] = [];
+  private drawing: Array<Stroke | null> = [null, null];
+  private releaseTime = [0, 0];
+  private inkMesh: InstancedMesh;
+  private inkDirty = false;
+  /** Seconds since the last pen stroke ended; the air thread fades after it. */
+  private sinceInk = 99;
+  private mat = new Matrix4();
   private appear = 0;
   private x = 0;
   private y = 0;
@@ -107,6 +139,17 @@ export class ShadowWorld {
     this.goalStar.renderOrder = 4;
     this.root.add(this.goalStar);
 
+    this.inkMesh = new InstancedMesh(
+      new SphereGeometry(1, 8, 6),
+      new MeshBasicMaterial({ color: 0x2a1608 }),
+      MAX_INK_POINTS,
+    );
+    this.inkMesh.name = 'ShadowInk';
+    this.inkMesh.count = 0;
+    this.inkMesh.frustumCulled = false;
+    (this.inkMesh.material as MeshBasicMaterial).transparent = true;
+    this.root.add(this.inkMesh);
+
     this.bubbleCanvas = document.createElement('canvas');
     this.bubbleCanvas.width = 64;
     this.bubbleCanvas.height = 64;
@@ -125,16 +168,111 @@ export class ShadowWorld {
   load(level: WalkLevel | null): void {
     this.level = level;
     this.terrain.fill(0);
+    this.strokes = [];
+    this.drawing = [null, null];
+    this.rebuildInk();
     if (!level) return;
     for (const [x0, x1, top] of level.cliffs) {
       for (let cx = x0; cx < x1; cx++) {
         for (let cy = 0; cy < top; cy++) this.terrain[cy * MASK_WIDTH + cx] = 1;
       }
     }
-    this.drawTerrain(level);
+    this.drawTerrain();
     this.falls = 0;
     this.reached = false;
     this.spawn();
+  }
+
+  /** Lines drawn so far this level. */
+  get inkUsed(): number {
+    return this.strokes.length;
+  }
+
+  /** First and last cell of the newest line, for tests. */
+  get lastLine(): number[] {
+    const cells = this.strokes[this.strokes.length - 1]?.cells;
+    if (!cells?.length) return [];
+    const [a, b] = [cells[0], cells[cells.length - 1]];
+    return [a[0], a[1], b[0], b[1]].map((n) => Math.round(n));
+  }
+
+  /** Whether the current level lets the player draw. */
+  get canDraw(): boolean {
+    return (this.level?.ink ?? 0) > 0;
+  }
+
+  /**
+   * Feeds one hand's pinch: `gap` is the thumb-to-index tip distance and
+   * `point` the pinch in paper space. A pinch pulls a thread of shadow ink
+   * through the air; its shadow on the paper is solid ground.
+   */
+  drawInput(hand: number, tracked: boolean, gap: number, point: Vector3, dt: number): void {
+    const level = this.level;
+    if (!level?.ink) return;
+    let stroke = this.drawing[hand];
+    if (!tracked || gap > PINCH_END) {
+      this.releaseTime[hand] += dt;
+      if (stroke && this.releaseTime[hand] >= RELEASE_DELAY) this.endStroke(hand);
+      return;
+    }
+    this.releaseTime[hand] = 0;
+    if (!stroke) {
+      if (gap > PINCH_START) return;
+      stroke = { air: [], cells: [] };
+      this.drawing[hand] = stroke;
+      this.strokes.push(stroke);
+      // Out of ink: the oldest line fades away.
+      if (this.strokes.length > level.ink) {
+        this.strokes.shift();
+        this.rebuildInk();
+      }
+    }
+    const last = stroke.air[stroke.air.length - 1];
+    if (last && last.distanceTo(point) < INK_SPACING) return;
+    const cell = shadowCell(point);
+    if (!cell) return;
+    stroke.air.push(point.clone());
+    stroke.cells.push(cell);
+    const n = stroke.cells.length;
+    this.stampSegment(n > 1 ? stroke.cells[n - 2] : cell, cell);
+    if (n % 4 === 1) playInk();
+    this.inkDirty = true;
+  }
+
+  private endStroke(hand: number): void {
+    const stroke = this.drawing[hand]!;
+    this.drawing[hand] = null;
+    if (stroke.air.length < 3) {
+      // A tap, not a line.
+      this.strokes.splice(this.strokes.indexOf(stroke), 1);
+      this.rebuildInk();
+      return;
+    }
+    playClick();
+  }
+
+  /** Marks the cells under a line segment as solid. */
+  private stampSegment(a: [number, number], b: [number, number]): void {
+    const steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.25));
+    const r = Math.ceil(INK_RADIUS);
+    for (let i = 0; i <= steps; i++) {
+      const x = a[0] + ((b[0] - a[0]) * i) / steps;
+      const y = a[1] + ((b[1] - a[1]) * i) / steps;
+      for (let cy = Math.floor(y) - r; cy <= Math.floor(y) + r; cy++) {
+        for (let cx = Math.floor(x) - r; cx <= Math.floor(x) + r; cx++) {
+          if (cx < 0 || cy < 0 || cx >= MASK_WIDTH || cy >= MASK_HEIGHT) continue;
+          if (Math.hypot(cx + 0.5 - x, cy + 0.5 - y) <= INK_RADIUS + 0.35) this.drawn[cy * MASK_WIDTH + cx] = 1;
+        }
+      }
+    }
+  }
+
+  private rebuildInk(): void {
+    this.drawn.fill(0);
+    for (const stroke of this.strokes) {
+      stroke.cells.forEach((cell, i) => this.stampSegment(i > 0 ? stroke.cells[i - 1] : cell, cell));
+    }
+    this.inkDirty = true;
   }
 
   get active(): boolean {
@@ -154,6 +292,16 @@ export class ShadowWorld {
     if (!shown) return;
     this.time += dt;
     this.moodTime += dt;
+    if (this.inkDirty) {
+      this.inkDirty = false;
+      this.drawTerrain();
+      this.placeInk();
+    }
+    // The thread in the air is only feedback while drawing; the shadow is what stays.
+    this.sinceInk = this.drawing[0] || this.drawing[1] ? 0 : this.sinceInk + dt;
+    const thread = Math.max(0, 1 - Math.max(0, this.sinceInk - 0.4) / 0.6);
+    (this.inkMesh.material as MeshBasicMaterial).opacity = thread;
+    this.inkMesh.visible = thread > 0.01;
 
     if (this.mood === 'gone') {
       this.respawn -= dt;
@@ -182,12 +330,11 @@ export class ShadowWorld {
     const level = this.level!;
     // A shadow moving up into the friend lifts it (riding your hand); one
     // that swallows it whole leaves it standing in front of the shadow.
-    if (this.phasing) {
-      this.phasing = false;
-      if (!this.boxFree(this.x, this.y)) this.phasing = true;
-    } else if (!this.boxFree(this.x, this.y)) {
+    // Re-checked every step, so ink drawn through its feet becomes a ramp it stands on.
+    this.phasing = false;
+    if (!this.boxFree(this.x, this.y)) {
       let lifted = false;
-      for (let k = 0.25; k <= 3; k += 0.25) {
+      for (let k = 0.25; k <= 5; k += 0.25) {
         if (this.boxFree(this.x, this.y + k)) {
           this.y += k;
           this.vy = Math.max(this.vy, 0);
@@ -330,7 +477,9 @@ export class ShadowWorld {
     if (cy < 0 || cy >= MASK_HEIGHT) return false;
     const i = cy * MASK_WIDTH + cx;
     if (this.terrain[i]) return true;
-    if (this.phasing || stage.handCount === 0) return false;
+    if (this.phasing) return false;
+    if (this.drawn[i]) return true;
+    if (stage.handCount === 0) return false;
     const o = i * 4;
     const m = stage.mask;
     return m[o] > 127 || m[o + 1] > 127 || m[o + 2] > 127;
@@ -443,8 +592,25 @@ export class ShadowWorld {
     this.bubbleTexture.needsUpdate = true;
   }
 
-  /** Paper-cut cliffs: ink silhouettes with grass tufts along their tops. */
-  private drawTerrain(level: WalkLevel): void {
+  /** The thread in the air: a string of small ink beads. */
+  private placeInk(): void {
+    let n = 0;
+    const z = this.root.position.z;
+    for (const stroke of this.strokes) {
+      for (const p of stroke.air) {
+        if (n >= MAX_INK_POINTS) break;
+        this.mat.makeScale(0.0035, 0.0035, 0.0035).setPosition(p.x, p.y, p.z - z);
+        this.inkMesh.setMatrixAt(n++, this.mat);
+      }
+    }
+    this.inkMesh.count = n;
+    this.inkMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Paper-cut cliffs (ink silhouettes with grass tufts) and drawn ink lines. */
+  private drawTerrain(): void {
+    const level = this.level;
+    if (!level) return;
     const canvas = this.terrainCanvas;
     const ctx = canvas.getContext('2d')!;
     const px = canvas.width / MASK_WIDTH;
@@ -472,8 +638,38 @@ export class ShadowWorld {
         ctx.fill();
       }
     }
+    // Ink lines: the shadows of the threads drawn in the air.
+    ctx.strokeStyle = INK;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = INK_RADIUS * 2 * px;
+    for (const stroke of this.strokes) {
+      if (stroke.cells.length === 0) continue;
+      ctx.beginPath();
+      stroke.cells.forEach(([cx, cy], i) => {
+        const x = cx * px;
+        const y = canvas.height - cy * px;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      if (stroke.cells.length === 1) ctx.lineTo(stroke.cells[0][0] * px + 0.1, canvas.height - stroke.cells[0][1] * px);
+      ctx.stroke();
+    }
     this.terrainTexture.needsUpdate = true;
   }
+}
+
+/** Where a point in the air casts its shadow on the paper, in cells (null if off the paper). */
+function shadowCell(p: Vector3): [number, number] | null {
+  const [lx, ly, lz] = stage.lantern;
+  if (p.z <= 0.005 || p.z >= lz - 0.02) return null;
+  const t = lz / (lz - p.z);
+  const x = lx + (p.x - lx) * t;
+  const y = ly + (p.y - ly) * t;
+  const cx = (x / PAPER_WIDTH + 0.5) * MASK_WIDTH;
+  const cy = (y / PAPER_HEIGHT + 0.5) * MASK_HEIGHT;
+  if (cx < 0 || cy < 0 || cx >= MASK_WIDTH || cy >= MASK_HEIGHT) return null;
+  return [cx, cy];
 }
 
 function toPaperX(cx: number): number {

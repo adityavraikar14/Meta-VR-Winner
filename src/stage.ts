@@ -360,6 +360,7 @@ export class ShadowStageSystem extends createSystem({}) {
     const ly = PAPER_DROP - LANTERN_DROP;
     const d = PAPER_DISTANCE + LANTERN_BACK;
     this.lantern.position.set(lx, ly, d);
+    stage.lantern = [lx, ly, d];
     this.lantern.target.position.set(0, 0, 0);
     const reachX = PAPER_WIDTH / 2 + Math.abs(lx);
     const reachY = PAPER_HEIGHT / 2 + Math.abs(ly);

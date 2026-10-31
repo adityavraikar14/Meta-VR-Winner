@@ -91,6 +91,7 @@ const RING_STEPS = 40;
 const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
 const VIEWER = new Vector3(0, 0.12, 1.0);
 const INDEX_TIP = 9;
+const THUMB_TIP = 4;
 
 const DIM_OUTLINE = new Color(0x9a7442);
 const HOT_OUTLINE = new Color(0xffc34d);
@@ -195,6 +196,8 @@ export class ShadowGameSystem extends createSystem({
   /** A ray press landed on the button since the last frame (presses can be shorter than a frame). */
   private rayClick = false;
   private tips = [new Vector3(), new Vector3()];
+  private thumb = new Vector3();
+  private pinch = new Vector3();
   private liveTips: Vector3[] = [];
 
   private creatureX = 0;
@@ -306,6 +309,8 @@ export class ShadowGameSystem extends createSystem({
       at: this.shadowWorld.position.map((n) => Number(n.toFixed(3))),
       falls: this.shadowWorld.falls,
       reached: this.shadowWorld.reached,
+      ink: this.shadowWorld.inkUsed,
+      line: this.shadowWorld.lastLine,
       // Bounding box of every lit mask cell: [minX, minY, maxX, maxY].
       shadow: (() => {
         const box = [MASK_WIDTH, MASK_HEIGHT, -1, -1];
@@ -382,6 +387,7 @@ export class ShadowGameSystem extends createSystem({
     this.rayClick = false;
     if (pressed) playClick();
     this.introLine = this.intro.update(dt);
+    if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
 
     switch (this.phase) {
@@ -477,6 +483,21 @@ export class ShadowGameSystem extends createSystem({
     this.playButton.show(true);
     this.setCaption(fresh ? 'Welcome! Push the button to begin' : 'Welcome back! Push the button to continue');
     this.setPhase('title');
+  }
+
+  /** Each hand's pinch, in paper space, for drawing shadow ink. */
+  private feedInk(dt: number): void {
+    const paper = stage.paper!;
+    for (const hand of HAND_CHANNELS) {
+      const j = stage.joints[hand];
+      const tracked = stage.tracked[hand];
+      this.thumb.set(j[THUMB_TIP * 3], j[THUMB_TIP * 3 + 1], j[THUMB_TIP * 3 + 2]);
+      this.pinch.set(j[INDEX_TIP * 3], j[INDEX_TIP * 3 + 1], j[INDEX_TIP * 3 + 2]);
+      const gap = this.thumb.distanceTo(this.pinch);
+      this.pinch.add(this.thumb).multiplyScalar(0.5);
+      paper.worldToLocal(this.player.localToWorld(this.pinch));
+      this.shadowWorld.drawInput(hand, tracked, gap, this.pinch, dt);
+    }
   }
 
   /** World positions of the tracked index fingertips, for pushing buttons. */
@@ -644,13 +665,21 @@ export class ShadowGameSystem extends createSystem({
         playAwaken();
         this.clearPuzzle();
       }
-      this.setCaption('Hooray! Your shadow was the bridge!');
+      this.setCaption(this.puzzle!.solved);
       return;
     }
     this.matchTime += dt;
     let text = this.puzzle!.ask;
     if (world.mood === 'gone') text = world.falls > 1 ? 'Oops! Hold your hand still while it crosses' : 'Whoops! It fell. Try again!';
-    else if (world.mood === 'edge') text = stage.handCount === 0 ? 'Raise your hand into the lantern light' : 'Lay your hand’s shadow across the gap';
+    else if (world.mood === 'edge' || world.mood === 'wall') {
+      if (world.canDraw) {
+        text = world.inkUsed === 0 || this.phaseTime < 8
+          ? 'Pinch your fingers and draw a ramp in the air'
+          : 'Draw it from the rabbit up to the ledge';
+      } else {
+        text = stage.handCount === 0 ? 'Raise your hand into the lantern light' : 'Lay your hand’s shadow across the gap';
+      }
+    }
     else if (world.mood === 'walk' && this.phaseTime > 2) text = 'Hold it steady…';
     this.setCaption(text);
   }

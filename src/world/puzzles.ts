@@ -200,6 +200,24 @@ const shadowBridge: Puzzle = {
   },
 };
 
+const highLedge: Puzzle = {
+  id: 'high-ledge',
+  world: 0,
+  title: 'The High Ledge',
+  story: 'Pinch your fingers to pull a thread of shadow ink. Its shadow is solid too!',
+  ask: 'Draw a ramp up to the high ledge',
+  solved: 'Up and over! Ink, light and shadow.',
+  walk: {
+    cliffs: [[0, 30, 22], [52, 80, 38]],
+    start: [8, 22],
+    goal: [72, 38],
+    ink: 2,
+  },
+  build(root, kit) {
+    return { start: new Vector3(0, kit.floor, 0.05), attempt: () => ({ steps: [], solved: true }) };
+  },
+};
+
 const fallenLog: Puzzle = {
   id: 'fallen-log',
   world: 0,
@@ -452,6 +470,7 @@ function findStar(
 export const PUZZLES: Puzzle[] = [
   warmup,
   shadowBridge,
+  highLedge,
   fallenLog,
   tinyTunnel,
   highBerries,

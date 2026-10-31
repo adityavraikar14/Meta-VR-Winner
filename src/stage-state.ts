@@ -18,6 +18,8 @@ export const stage = {
   /** The paper's entity, for parenting interactive children. */
   paperEntity: null as Entity | null,
   shadowMaterial: null as ShadowMaterial | null,
+  /** Lantern position in paper space; shadows are cast from here. */
+  lantern: [0, 0, 1] as [number, number, number],
   /** RGBA shadow mask as seen from the lantern, row 0 at the paper bottom. */
   mask: new Uint8Array(MASK_WIDTH * MASK_HEIGHT * 4),
   /** Incremented every time a new mask has been read back. */

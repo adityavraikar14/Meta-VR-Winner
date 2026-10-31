@@ -269,3 +269,23 @@ export function playMenuOpen(): void {
   tone(ctx, 587, ctx.currentTime, 0.25, 0.03);
   tone(ctx, 784, ctx.currentTime + 0.06, 0.3, 0.03);
 }
+
+/** A soft brush scratch while drawing a thread of shadow ink. */
+export function playInk(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const length = Math.floor(ctx.sampleRate * 0.12);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 2200 + Math.random() * 800;
+  filter.Q.value = 1.2;
+  const gain = ctx.createGain();
+  gain.gain.value = 0.05;
+  source.connect(filter).connect(gain).connect(ctx.destination);
+  source.start();
+}
