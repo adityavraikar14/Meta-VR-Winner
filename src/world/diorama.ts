@@ -1,5 +1,6 @@
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { playAwaken } from '../audio.js';
+import type { Beast } from '../creatures/beast.js';
 import type { Creature } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import { mergeStatic } from '../merge.js';
@@ -83,10 +84,10 @@ export class Diorama {
   }
 
   /** Send a friend at the puzzle; the outcome arrives in `play.outcome`. */
-  send(creature: Creature, onSolved: () => void): void {
+  send(creature: Creature | Beast, onSolved: () => void): void {
     if (!this.scene) return;
     this.attempting = true;
-    const kind = creature.rig.kind;
+    const kind = creature.kind;
     const attempt = this.scene.attempt(kind);
     creature.perform(attempt.steps, () => {
       // A solved puzzle stays closed until the next one loads.

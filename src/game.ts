@@ -351,6 +351,7 @@ export class ShadowGameSystem extends createSystem({
         LEVELS.forEach((level, i) =>
           stage.spawns.push({ kind: level.id, x: -0.36 + i * 0.12, y: -0.12 }),
         ),
+      spawn: (kind: string) => stage.spawns.push({ kind, x: 0, y: -0.12 }),
       info: () => {
         const describe = (i: number) => {
           if (!stage.tracked[i]) return null;

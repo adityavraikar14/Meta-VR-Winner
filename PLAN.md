@@ -1,15 +1,28 @@
-# Shadowplay: build plan v2 (two worlds, one light)
+# Shadowplay: Escape the Lantern (build plan v3)
 
 Submission target: **Nov 17, 2026** (hard deadline Nov 19, 1:30am IST).
 Rule: every step ends playable. A tight, polished slice beats a broad one with gaps
-(Meta: "judges play what you submit").
+(Meta: "judges play what you submit"). Built brick by brick: one working piece at a time.
 
 ## The pitch
-Your hands cast real shadows from a lantern behind you. On the paper lives a flat
-**shadow world** where your hand shadows (and lines you draw) are solid ground. In
-front of the paper sits a 3D **diorama** with real physics and a chemistry engine.
-Friends born from your shadows travel between the two worlds, have personalities,
-and react to everything you do.
+You wake up trapped inside an old shadow-theatre box. The only way out is the
+**Shadow Dragon's gate**. Your hands are your only tool: their shadows come alive, and
+every chapter teaches a new power. In the last chapter you combine every power, charge
+an attack with hand signs, throw it at the dragon, and escape.
+
+## Chapters (each unlocks a power)
+| # | Chapter | What you do | Power |
+|---|---|---|---|
+| 1 | Wake Up | your hand's shadow is solid: be the bridge ✅ | Shadow Hands |
+| 2 | Ink | pinch and draw a ramp in the air ✅ | Draw with Light |
+| 3 | Friends | hand-shadow animals come alive: horse hauls the cart, bird carries the rope | Summon |
+| 4 | Forge | gather wood, stone, herbs, ember; mix with real heat rules (charcoal, iron, axe, health potion) | Craft |
+| 5 | Camp | build brick by brick or draw parts: tent, wall, bridge, catapult; weak builds fall | Build |
+| 6 | The Dragon | hand-sign sequence charges a power, throw it with real throw physics; hide behind your wall, heal with potions | Escape |
+| ∞ | Ink Fight | casual duel vs a computer shadow-puppet: draw objects, throw them, health bars | — |
+
+No online multiplayer (decided Oct 31): the duel is against the computer.
+Mounts never move the seated player; the world in front of you moves instead.
 
 ## Four real systems (no faked science)
 1. **Light / optics**: shadow size follows similar triangles (hand nearer the lantern =
@@ -59,38 +72,34 @@ on device: hop onto the real table, hide behind real objects.
 | Pocket Lands | build miniature worlds in mixed reality |
 | Breath of the Wild | the chemistry engine idea |
 
-## Levels (few, each dense)
-| # | Level | Systems |
-|---|---|---|
-| 1 | The Lantern | optics: shadow and size |
-| 2 | Shadow Bridge | 2D shadow world, hand shadows and drawn lines as ground |
-| 3 | Big & Small | shadow size → creature size, boulder, seesaw lever |
-| 4 | The Pond | buoyancy, wind from the bird, a drawn sail |
-| 5 | Sleeping Garden | coloured light, water, growth chain, pulley |
-| 6 | Dragon's Mountain | fire → melt → steam → balloon lift → Great Lantern |
-| ∞ | Workshop + free play | build, draw creatures, play with friends |
+## Characters (adult style, decided Oct 31)
+- Real animals: Quaternius CC0 rigged glTF (horse, stag; wolf available), realistic
+  proportions, no cartoon faces. Restyled: matte, slightly desaturated, lantern-lit.
+  Personality through body language: head follows your hand, flinches from a poke on
+  the poked side, relaxes when stroked, kicks after repeated jabs, comes to sniff a still hand.
+- Bird and dragon: no good adult CC0 models exist (all cute), so they are authored
+  in-house as paper-cut shadow puppets (Lotte Reiniger style) and as a huge shadow
+  dragon on the backdrop.
+- The old plush pets (rabbit, snail, butterfly) are being phased out of the story.
 
-## Characters
-Quaternius Ultimate Animated Animals (CC0, glTF, 12+ animations each) restyled: plush
-shading, big eyes, white outline, squash and stretch. Hero characters may be upgraded
-to AI-generated HD models (Meshy / Tripo) supplied by the user. Rights must be clear.
-
-## Already done (v1)
+## Already done
 - [x] Hand shadows, shape rules, matcher, ghost-hand guide, hand menu
-- [x] 7 code-built creatures with pet brain, Forest levels 1–5 (to be reworked)
 - [x] Start page, storybook cover with push button, intro shadow-puppet show
-- [x] One friend on stage at a time, draw-call pass
+- [x] One friend on stage at a time; stage cleared each level
+- [x] Chapter 1 Shadow Bridge, Chapter 2 drawn-ink ramp (2D shadow world)
+- [x] Rigged glTF animals (Beast): emerge from the paper, idle life, head tracking,
+      poke / stroke / temper reactions, synthesized snort, nicker and hooves
 
 ## Schedule
-- [ ] **Nov 1 – 3** Shadow world on the paper (walk on hand shadows ✅ Shadow Bridge level), size from optics, draw-with-light lines
-- [ ] **Nov 4 – 6** Havok physics, precise grab / throw, new restyled characters
-- [ ] **Nov 7 – 9** Character brain: reactions, personalities, voices, shadow language
-- [ ] **Nov 10 – 12** Chemistry engine, mechanisms, levels 3 – 6
-- [ ] **Nov 12 – 14** Workshop (build mode), on-device tuning, room features
-- [ ] **Nov 15 – 17** Music, polish, trailer, submit
+- [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving
+- [ ] **Nov 4 – 6** Chapter 4 Forge: resources, cauldron with heat rules, health, wrist inventory
+- [ ] **Nov 7 – 9** Chapter 5 Camp: brick-by-brick build mode with physics
+- [ ] **Nov 9 – 12** Chapter 6 Dragon: hand-sign detection, charge and throw, boss fight
+- [ ] **Nov 12 – 14** On a Quest: tune hand feel; Ink Fight vs computer
+- [ ] **Nov 15 – 17** Art, music, polish, trailer, submit
 
-If behind, cut in this order: coloured lanterns → Workshop saving → draw-a-creature →
-level 5. Never cut: shadow world, size optics, physical friends, chemistry finale.
+If behind, cut in this order: Ink Fight → catapult → bird chapter beat → extra recipes.
+Never cut: shadow world, summoned friends, crafting core, dragon finale.
 
 ## Risks
 - Real-hand feel needs a Quest by ~Nov 12.

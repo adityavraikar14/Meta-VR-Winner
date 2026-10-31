@@ -55,8 +55,8 @@ export const LEVELS: Level[] = [
       '00700380007003800070038000f0018000f00000006000000000000000000000',
   },
   {
-    id: 'deer',
-    name: 'Deer',
+    id: 'stag',
+    name: 'Stag',
     motion: 'hop',
     tip: 'three fingers up for antlers',
     shape: {
@@ -70,8 +70,8 @@ export const LEVELS: Level[] = [
       '01f1c7c003f1c3e003e1c3f003e1c3f000e1c3800001c0000001c0000001c000',
   },
   {
-    id: 'dog',
-    name: 'Dog',
+    id: 'horse',
+    name: 'Horse',
     motion: 'hop',
     tip: 'thumb up for the ear, drop your pinky for the jaw',
     shape: {

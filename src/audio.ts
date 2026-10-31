@@ -289,3 +289,79 @@ export function playInk(): void {
   source.connect(filter).connect(gain).connect(ctx.destination);
   source.start();
 }
+
+/** A burst of shaped noise through one filter: breath, hooves, scrapes. */
+function noise(ctx: AudioContext, start: number, duration: number, type: BiquadFilterType, frequency: number, q: number, volume: number): BiquadFilterNode {
+  const length = Math.floor(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = frequency;
+  filter.Q.value = q;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(volume, start + duration * 0.15);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  source.connect(filter).connect(gain).connect(ctx.destination);
+  source.start(start);
+  return filter;
+}
+
+/** A horse's snort: a fluttering burst of breath through the nostrils. */
+export function playSnort(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const filter = noise(ctx, now, 0.38, 'bandpass', 700, 0.9, volume);
+  // The lips flutter: wobble the breath's colour.
+  const flutter = ctx.createOscillator();
+  const depth = ctx.createGain();
+  flutter.frequency.value = 32;
+  depth.gain.value = 260;
+  flutter.connect(depth).connect(filter.frequency);
+  flutter.start(now);
+  flutter.stop(now + 0.4);
+}
+
+/** A soft, low nicker: a throaty call that steps down in pitch. */
+export function playNicker(pitch = 1, volume = 1): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const tremolo = ctx.createOscillator();
+  const depth = ctx.createGain();
+  const lowpass = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(210 * pitch, now);
+  osc.frequency.exponentialRampToValueAtTime(130 * pitch, now + 0.55);
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = 900 * pitch;
+  // The nicker's rapid pulses.
+  tremolo.frequency.value = 14;
+  depth.gain.value = 0.5;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.045 * volume, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+  tremolo.connect(depth).connect(gain.gain);
+  osc.connect(lowpass).connect(gain).connect(ctx.destination);
+  osc.start(now);
+  tremolo.start(now);
+  osc.stop(now + 0.62);
+  tremolo.stop(now + 0.62);
+  noise(ctx, now, 0.25, 'bandpass', 900, 0.8, 0.02 * volume);
+}
+
+/** One hoof on wood: a dull knock with a little scuff. */
+export function playHoof(volume = 0.03): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 180 + Math.random() * 30, 70, now, 0.07, volume);
+  noise(ctx, now, 0.05, 'highpass', 2500, 0.7, volume * 0.4);
+}

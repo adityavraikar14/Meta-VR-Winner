@@ -22,6 +22,7 @@ import { flattenGroups, mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { Diorama } from '../world/diorama.js';
+import { Beast, createBeast, preloadBeasts } from './beast.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
@@ -45,20 +46,24 @@ const STAGE_OFFSET = new Vector3(0, -0.22, 0.5);
 /** One friend on the stage at a time: calling another sends the last one home. */
 const MAX_CREATURES = 1;
 /** Display scale per kind, so big creatures do not crowd the stage. */
-const SCALES: Record<string, number> = { dragon: 0.95, deer: 1.05, dog: 1.15 };
+const SCALES: Record<string, number> = { dragon: 0.95, stag: 1.05, horse: 1.15 };
 
+/** Plush pets; the horse and stag use these only until their glTF models load. */
 const MODELS: Record<string, () => CreatureRig> = {
   rabbit: createRabbit,
   bird: createBird,
   snail: createSnail,
-  deer: createDeer,
-  dog: createDog,
+  stag: createDeer,
+  horse: createDog,
   butterfly: createButterfly,
   dragon: createDragon,
 };
 
+/** A friend on the stage: a plush pet or a rigged animal. */
+type Friend = Creature | Beast;
+
 interface Living {
-  creature: Creature;
+  creature: Friend;
   blob: Mesh;
   /** ECS entities that keep the creature and its blob in the scene. */
   entities: Entity[];
@@ -112,14 +117,15 @@ export class CreatureSystem extends createSystem({}) {
     this.world.createTransformEntity(this.fx.root);
     this.handInput = new HandInput();
     this.diorama = new Diorama(this.stageRoot, built.floor, STAGE_HEIGHT, this.fx);
+    preloadBeasts();
 
     const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
     devInfo.creatures = () =>
       this.creatures.map(({ creature }) => ({
+        kind: creature.kind,
         state: creature.state,
-        doing: creature.behavior,
+        doing: creature instanceof Beast ? `${creature.mood} ${creature.clip}` : creature.behavior,
         task: creature.taskLabel,
-        energy: Number(creature.brain.energy.toFixed(2)),
         at: round(creature.position),
         happy: Number(creature.happiness.toFixed(2)),
         petting: creature.petting,
@@ -194,7 +200,8 @@ export class CreatureSystem extends createSystem({}) {
       if (onStage) {
         blob.position.set(creature.position.x, this.ground.center.y + 0.001, creature.position.z);
         const fade = Math.max(0, 1 - lift / 0.3);
-        blob.scale.setScalar(0.045 * creature.scale * (0.6 + 0.4 * fade));
+        const size = creature instanceof Beast ? creature.footprint : 0.045 * creature.scale;
+        blob.scale.setScalar(size * (0.6 + 0.4 * fade));
       }
     }
     setPurr(purr);
@@ -202,17 +209,13 @@ export class CreatureSystem extends createSystem({}) {
   }
 
   private spawn(kind: string, x: number, y: number, attempt: boolean): void {
-    const make = MODELS[kind] ?? createRabbit;
     // A new shadow replaces the friend already out, so the stage stays one-on-one.
-    const twin = this.creatures.findIndex((living) => living.creature.rig.kind === kind);
+    const twin = this.creatures.findIndex((living) => living.creature.kind === kind);
     if (twin >= 0) this.remove(twin);
     else if (this.creatures.length >= MAX_CREATURES) this.remove(0);
     const paper = stage.paper!;
-    const rig = make();
-    flattenGroups(rig.root, animatedParts(rig));
-    mergeStatic(rig.root);
-    const creature = new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
-    const body = this.world.createTransformEntity(rig.root);
+    const creature = createBeast(kind, this.fx) ?? this.createPet(kind);
+    const body = this.world.createTransformEntity(creature.root);
     const blob = new Mesh(this.blobGeometry, this.blobMaterial);
     blob.name = 'CreatureContactShadow';
     blob.renderOrder = 1;
@@ -221,12 +224,26 @@ export class CreatureSystem extends createSystem({}) {
     // Start on the paper surface where the shadow creature stood, slightly
     // lowered so its feet sit at the bottom of the shadow.
     paper.updateWorldMatrix(true, false);
-    this.spawnPoint.set(x, y - rig.height * 0.4, 0.01).applyMatrix4(paper.matrixWorld);
+    this.spawnPoint.set(x, y - creature.height * 0.4, 0.01).applyMatrix4(paper.matrixWorld);
     paper.getWorldQuaternion(this.paperRotation);
     creature.emergeFrom(this.spawnPoint, this.paperRotation);
     this.creatures.push({ creature, blob, entities: [body, shadow], attempt });
-    this.ground.creatures = this.creatures.map((living) => living.creature);
+    this.syncGround();
     playTransform();
+  }
+
+  private createPet(kind: string): Creature {
+    const rig = (MODELS[kind] ?? createRabbit)();
+    flattenGroups(rig.root, animatedParts(rig));
+    mergeStatic(rig.root);
+    return new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
+  }
+
+  /** Plush pets look for each other on the stage; beasts keep to themselves. */
+  private syncGround(): void {
+    this.ground.creatures = this.creatures
+      .map((living) => living.creature)
+      .filter((friend): friend is Creature => friend instanceof Creature);
   }
 
   /** A creature vanishes in a puff of sparkles. */
@@ -235,14 +252,18 @@ export class CreatureSystem extends createSystem({}) {
     this.fx.burst(gone.creature.position, 16, 0.3);
     // Detaching the Object3D alone is not enough: the entity keeps it in the scene.
     for (const entity of gone.entities) entity.dispose({ disposeResources: false });
-    gone.creature.rig.root.removeFromParent();
     gone.blob.removeFromParent();
-    disposeRig(gone.creature.rig);
-    this.ground.creatures = this.creatures.map((living) => living.creature);
+    if (gone.creature instanceof Beast) {
+      gone.creature.dispose();
+    } else {
+      gone.creature.rig.root.removeFromParent();
+      disposeRig(gone.creature.rig);
+    }
+    this.syncGround();
   }
 
   /** A free spot on the stage, away from the creatures already there. */
-  private pickLanding(self: Creature): Vector3 {
+  private pickLanding(self: Friend): Vector3 {
     let best = 0;
     for (let attempt = 0; attempt < 12; attempt++) {
       const angle = Math.random() * Math.PI * 2;

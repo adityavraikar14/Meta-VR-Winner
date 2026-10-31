@@ -81,8 +81,8 @@ export interface World {
 const NAMES: Record<string, string> = {
   rabbit: 'Rabbit',
   snail: 'Snail',
-  deer: 'Deer',
-  dog: 'Dog',
+  stag: 'Stag',
+  horse: 'Horse',
   bird: 'Bird',
   butterfly: 'Butterfly',
   dragon: 'Dragon',
@@ -312,7 +312,7 @@ const highBerries: Puzzle = {
   title: 'The High Berries',
   story: 'Sweet berries hang from a branch, high up in the old tree.',
   ask: 'Who is tall enough to reach them?',
-  teach: 'deer',
+  teach: 'stag',
   solved: 'Berries for everyone!',
   build(root, kit) {
     const f = kit.floor;
@@ -408,7 +408,7 @@ const lostStar: Puzzle = {
             ],
           };
         }
-        const line = kind === 'deer'
+        const line = kind === 'stag'
           ? 'The Deer is far too tall for the log!'
           : `The ${friendName(kind)} is too big to fit inside!`;
         return bumpAndShrug(kit, along(-0.13), mouth, line);
@@ -448,8 +448,8 @@ function findStar(
           solved: true,
           steps: [
             { do: 'walk', to: kit.at(0.0, f, 0.01) },
-            { do: 'pose', pose: teach === 'dog' ? 'sniff' : 'look', time: 0.9, look: kit.at(0.06, f, 0) },
-            { do: 'pose', pose: teach === 'dog' ? 'dig' : 'reach', time: 1.1, look: kit.at(0.06, f, 0) },
+            { do: 'pose', pose: teach === 'horse' ? 'sniff' : 'look', time: 0.9, look: kit.at(0.06, f, 0) },
+            { do: 'pose', pose: teach === 'horse' ? 'dig' : 'reach', time: 1.1, look: kit.at(0.06, f, 0) },
             {
               do: 'call',
               run: () => {
@@ -475,7 +475,7 @@ export const PUZZLES: Puzzle[] = [
   tinyTunnel,
   highBerries,
   lostStar,
-  findStar('buried-lantern', 1, 'dog', 'The Buried Lantern', 'Something shiny is buried by the pond.', 'Who has the best nose?', 'Dig, dig, dig! The Dog found it!'),
+  findStar('buried-lantern', 1, 'horse', 'The Buried Lantern', 'Something shiny is buried by the pond.', 'Who has the best nose?', 'The Horse sniffed it out!'),
   findStar('pond-song', 1, 'bird', 'The Silent Pond', 'The pond is too quiet. It needs a song.', 'Who can sing the pond awake?', 'The Bird sang, and a star woke up!'),
   findStar('night-flowers', 1, 'butterfly', 'The Night Flowers', 'The flowers closed up for the night.', 'Who can wake the flowers gently?', 'The flowers opened for the Butterfly!'),
   findStar('great-lantern', 2, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),

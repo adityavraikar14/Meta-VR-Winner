@@ -1,4 +1,4 @@
-import { Color, Quaternion, Vector3 } from '@iwsdk/core';
+import { Color, type Group, Quaternion, Vector3 } from '@iwsdk/core';
 import {
   playBark,
   playBleat,
@@ -67,17 +67,17 @@ const VOICES: Record<string, () => void> = {
   rabbit: playGiggle,
   bird: playChirp,
   snail: playSqueak,
-  deer: playBleat,
-  dog: playBark,
+  stag: playBleat,
+  horse: playBark,
   butterfly: playTinkle,
   dragon: playRawr,
 };
 
 /** Temperament nudges per kind, applied on top of the random personality. */
 const TEMPERAMENT: Record<string, Partial<Record<'energetic' | 'affectionate' | 'playful' | 'curious', number>>> = {
-  dog: { affectionate: 1.5, playful: 1.3 },
+  horse: { affectionate: 1.5, playful: 1.3 },
   snail: { energetic: 0.55, curious: 1.3 },
-  deer: { energetic: 1.2, affectionate: 0.8 },
+  stag: { energetic: 1.2, affectionate: 0.8 },
   butterfly: { energetic: 1.3, playful: 1.2 },
   dragon: { playful: 1.4, energetic: 1.2 },
 };
@@ -182,6 +182,19 @@ export class Creature {
     this.yaw = Math.atan2(this.tmp.x, this.tmp.z);
     this.setTint(0);
     this.setState('emerging');
+  }
+
+  get kind(): string {
+    return this.rig.kind;
+  }
+
+  get root(): Group {
+    return this.rig.root;
+  }
+
+  /** Height on the stage, in metres. */
+  get height(): number {
+    return this.rig.height * this.scale;
   }
 
   /** True once the emerge animation has finished and the creature can move. */
@@ -644,7 +657,7 @@ export class Creature {
         this.fx.burst(this.position, 1, 0.01);
       }
     }
-    const lift = crawler ? 0 : this.rig.kind === 'deer' ? 1.8 : 0.9;
+    const lift = crawler ? 0 : this.rig.kind === 'stag' ? 1.8 : 0.9;
     if (this.hopT < 0) {
       const remaining = Math.hypot(goal.x - this.position.x, goal.z - this.position.z);
       if (remaining < 0.01) {
@@ -1142,7 +1155,7 @@ export class Creature {
     });
 
     const wagging = happy || this.behavior === 'beg';
-    if (rig.kind === 'dog') {
+    if (rig.kind === 'horse') {
       // Dogs wag all the time; faster when happy.
       rig.tail.rotation.y = Math.sin(time * (wagging ? 20 : 8)) * (wagging ? 0.6 : 0.25);
     } else {
