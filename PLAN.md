@@ -103,7 +103,10 @@ on device: hop onto the real table, hide behind real objects.
       Jungle (bamboo, ivy, tropical plants, fireflies), River (driftwood and moss, pond,
       life-size reeds, river stones, moonlit fireflies), Dragon's Mountain (timber mine
       entrance with hanging lantern, gravel, crystal clusters, boulders, rising embers)
-- [ ] Next: proper menu (title board, chapters map, wrist menu), then characters
+- [x] Menus: Home (Chapters / Play-Continue / Settings) on the screen with push buttons;
+      Chapters page with stars and locks where the room becomes each chapter's world as
+      you page through; Settings (mute, find table again, recenter); wrist menu gains Menu
+- [ ] Next: replace the remaining cute characters and v1 toy props; then Chapter 3 Summon
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

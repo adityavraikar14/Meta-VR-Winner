@@ -38,6 +38,8 @@ const LIT = new Color(0xffe08a);
  */
 export class PushButton {
   readonly root = new Group();
+  /** Overall size; the pop-in animation scales on top of it. */
+  size = 1;
   private cap: Mesh;
   private capMaterial: MeshStandardMaterial;
   private face: Mesh;
@@ -130,7 +132,7 @@ export class PushButton {
     this.root.visible = this.appear > 0.02;
     if (!this.root.visible) return false;
     const pop = this.shown ? 1 + Math.max(0, 1 - this.appear) * 0.3 : this.appear;
-    this.root.scale.setScalar(Math.max(0.001, pop));
+    this.root.scale.setScalar(Math.max(0.001, pop) * this.size);
 
     let push = 0;
     let near = Infinity;

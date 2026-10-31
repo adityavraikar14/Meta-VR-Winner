@@ -70,6 +70,8 @@ export interface Puzzle {
 
 export interface World {
   name: string;
+  /** Caption while this world grows into the room. */
+  grows: string;
   /** Builds the world: its earth on the stage, the screen's frame, and the plants in your room. */
   decorate(roots: SceneryRoots): void;
 }
@@ -99,9 +101,9 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 // ---------------------------------------------------------------- Worlds
 
 export const WORLDS: World[] = [
-  { name: 'The Jungle', decorate: decorateJungle },
-  { name: 'The River', decorate: decorateRiver },
-  { name: "Dragon's Mountain", decorate: decorateMountain },
+  { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle },
+  { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver },
+  { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain },
 ];
 
 // --------------------------------------------------------------- Puzzles

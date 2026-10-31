@@ -2,7 +2,32 @@
 
 let context: AudioContext | null = null;
 
+const MUTE_KEY = 'shadowplay.muted';
+let muted = (() => {
+  try {
+    return localStorage.getItem(MUTE_KEY) === '1';
+  } catch {
+    return false;
+  }
+})();
+
+export function isMuted(): boolean {
+  return muted;
+}
+
+/** Silence every sound (remembered between sessions). */
+export function setMuted(value: boolean): void {
+  if (value) setPurr(0);
+  muted = value;
+  try {
+    localStorage.setItem(MUTE_KEY, value ? '1' : '0');
+  } catch {
+    // Not remembered; the setting still applies now.
+  }
+}
+
 function audio(): AudioContext | null {
+  if (muted) return null;
   if (context === null) {
     try {
       context = new AudioContext();

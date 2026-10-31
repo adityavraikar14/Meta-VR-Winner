@@ -44,8 +44,10 @@ export const stage = {
   tableHeight: null as number | null,
   /** The world is not here yet: the player hasn't shown us their table. */
   sceneryHidden: false,
+  /** A world to show while the player browses chapters (null: the current level's world). */
+  previewWorld: null as number | null,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
   grow: null as { from: Vector3 | null } | null,
 };
 
-export type MenuCommand = 'recenter' | 'restart' | 'skip';
+export type MenuCommand = 'recenter' | 'restart' | 'skip' | 'menu';

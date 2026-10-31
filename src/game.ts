@@ -47,6 +47,7 @@ import {
   normalizeMask,
 } from './matcher.js';
 import { IntroShow } from './intro.js';
+import { MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
 import { TableFinder } from './table.js';
@@ -193,6 +194,11 @@ export class ShadowGameSystem extends createSystem({
   private buttonEntity!: Entity;
   private intro!: IntroShow;
   private table!: TableFinder;
+  private menu!: MainMenu;
+  /** Index of the menu button the mouse clicked this frame, or -1. */
+  private menuClick = -1;
+  /** Enter / Space pressed this frame with no other button to take it. */
+  private enterPressed = false;
   private headAt = new Vector3();
   private shadowWorld!: ShadowWorld;
   private introLine: string | null = null;
@@ -343,6 +349,10 @@ export class ShadowGameSystem extends createSystem({
     };
 
     loadProgress();
+    this.menu = new MainMenu(paper, VIEWER, (kicker, title, body, footer) => {
+      this.drawBanner(kicker, title, body, footer);
+      this.bannerShown = true;
+    });
     this.table = new TableFinder(paper);
     devInfo.table = () => ({
       height: stage.tableHeight,
@@ -403,6 +413,7 @@ export class ShadowGameSystem extends createSystem({
     const pressed = this.playButton.update(dt, this.liveTips, this.rayClick);
     this.rayClick = false;
     if (pressed) playClick();
+    if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
@@ -414,20 +425,12 @@ export class ShadowGameSystem extends createSystem({
       case 'growing':
         if (this.phaseTime >= GROW_TIME) this.showTitle();
         break;
-      case 'title':
-        if (pressed && this.fresh) {
-          this.bannerShown = false;
-          this.playButton.setText('Skip');
-          this.intro.start();
-          this.setPhase('intro');
-        } else if (pressed) {
-          playAwaken();
-          this.playButton.show(false);
-          this.startPuzzle(this.puzzleIndex);
-        } else if (this.phaseTime > 6) {
-          this.setCaption('Push the glowing button, or point and pinch');
-        }
+      case 'title': {
+        const action = this.menu.update(dt, this.liveTips, this.menuClick, this.enterPressed);
+        if (action) this.menuAction(action);
+        else if (this.phaseTime > 8) this.setCaption('Push a button with your fingertip, or point and pinch');
         break;
+      }
       case 'intro':
         if (pressed || this.introLine === null) {
           this.intro.stop();
@@ -471,6 +474,8 @@ export class ShadowGameSystem extends createSystem({
     const fade = this.phase === 'matching' && this.best >= 0 ? this.warmth(this.smooth[this.best]) : 0;
     this.ghost.update(dt, fade);
 
+    this.menuClick = -1;
+    this.enterPressed = false;
     const target = this.bannerShown ? 1 : 0;
     this.bannerMaterial.opacity += (target - this.bannerMaterial.opacity) * Math.min(1, dt * 5);
     this.banner.visible = this.bannerMaterial.opacity > 0.01;
@@ -506,7 +511,8 @@ export class ShadowGameSystem extends createSystem({
       this.table.hide();
       this.playButton.show(false);
       playGrow();
-      this.setCaption(reading.height !== null ? 'The jungle has found you…' : 'The jungle grows…');
+      const world = WORLDS[PUZZLES[resumeIndex()]?.world ?? WORLDS.length - 1];
+      this.setCaption(world.grows);
       this.setPhase('growing');
       return;
     }
@@ -519,34 +525,42 @@ export class ShadowGameSystem extends createSystem({
     }
   }
 
-  /** The book's cover: a title card and a big button to start or continue. */
+  /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
-    const resume = play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex;
+    const resume = resumeIndex();
     this.puzzleIndex = resume;
     this.puzzle = null;
     this.candidates = [];
     this.raw = [];
     this.smooth = [];
     this.best = -1;
-    const fresh = resume === 0 && totalStars() === 0;
-    this.fresh = fresh;
-    const next = PUZZLES[resume];
-    const footer = fresh
-      ? 'Push the button to open the book'
-      : next
-        ? `Next: ${next.title}  ·  ${totalStars()} ★`
-        : `Every chapter read  ·  ${totalStars()} ★`;
-    this.drawBanner(
-      'A hand-shadow storybook',
-      'Shadowplay',
-      'Your hands make the shadows. The shadows come alive.',
-      footer,
-    );
-    this.bannerShown = true;
-    this.playButton.setText(fresh ? 'Play' : 'Continue');
-    this.playButton.show(true);
-    this.setCaption(fresh ? 'Welcome! Push the button to begin' : 'Welcome back! Push the button to continue');
+    this.fresh = resume === 0 && totalStars() === 0;
+    this.intro.stop();
+    this.playButton.show(false);
+    this.menu.open('home');
+    this.setCaption(this.fresh ? 'Welcome! Push Play to begin' : 'Welcome back!');
     this.setPhase('title');
+  }
+
+  private menuAction(action: MenuAction): void {
+    this.menu.close();
+    if (action.do === 'table') {
+      stage.tableHeight = null;
+      this.showTable();
+    } else if (action.do === 'chapter') {
+      playAwaken();
+      this.startPuzzle(action.index);
+    } else if (this.fresh) {
+      // The very first time: the shadow-puppet prologue, then level one.
+      this.bannerShown = false;
+      this.playButton.setText('Skip');
+      this.playButton.show(true);
+      this.intro.start();
+      this.setPhase('intro');
+    } else {
+      playAwaken();
+      this.startPuzzle(this.puzzleIndex < PUZZLES.length ? this.puzzleIndex : 0);
+    }
   }
 
   /**
@@ -558,16 +572,21 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
-      if (!this.playButton.visible) return;
+      if (!this.playButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       const camera = this.renderer.xr.isPresenting ? this.renderer.xr.getCamera() : this.camera;
       raycaster.setFromCamera(ndc, camera);
-      if (raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
+      if (this.playButton.visible && raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
+      this.menu.roots.forEach((root, i) => {
+        if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
+      });
     };
     const onKey = (event: KeyboardEvent) => {
-      if ((event.key === 'Enter' || event.key === ' ') && this.playButton.visible) this.rayClick = true;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (this.playButton.visible) this.rayClick = true;
+      else this.enterPressed = true;
     };
     // Capture on the window: the emulator layers its own controls over the canvas.
     window.addEventListener('pointerdown', onPointer, true);
@@ -608,6 +627,7 @@ export class ShadowGameSystem extends createSystem({
     // Jumping straight into a level (dev keys) skips the table: show the world as it is.
     stage.sceneryHidden = false;
     this.table.hide();
+    this.menu.close();
     this.puzzleIndex = index;
     this.puzzle = PUZZLES[index] ?? null;
     play.puzzleIndex = this.puzzle ? index : -1;
@@ -664,8 +684,12 @@ export class ShadowGameSystem extends createSystem({
   /** Restart and Skip from the hand menu. */
   private handleCommand(): void {
     const command = stage.command;
-    if (command !== 'restart' && command !== 'skip') return;
+    if (command !== 'restart' && command !== 'skip' && command !== 'menu') return;
     stage.command = null;
+    if (command === 'menu') {
+      this.showTitle();
+      return;
+    }
     if (command === 'restart') this.startPuzzle(this.puzzleIndex);
     else if (this.puzzle) this.skip();
   }

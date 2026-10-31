@@ -27,6 +27,8 @@ export class Diorama {
   /** Life-size plants around the player, floor at y = 0. */
   private readonly room = new Group();
   private readonly paperAt = new Vector3();
+  /** Showing a chapter's world while browsing: the level's props are put away. */
+  private previewing = false;
   /** Seconds since the world started growing (Infinity: fully grown). */
   private growTime = Infinity;
   private growFrom = new Vector3();
@@ -75,7 +77,8 @@ export class Diorama {
 
   /** Show or hide the whole world (it stays hidden until the table is found). */
   setHidden(hidden: boolean): void {
-    for (const group of [this.decor, this.props, this.screen, this.room]) group.visible = !hidden;
+    for (const group of [this.decor, this.screen, this.room]) group.visible = !hidden;
+    this.props.visible = !hidden && !this.previewing;
   }
 
   /**
@@ -111,9 +114,15 @@ export class Diorama {
     }
   }
 
+  /** The world of the level in play (the last world in free play). */
+  private levelWorld(): number {
+    const puzzle = PUZZLES[play.puzzleIndex];
+    return puzzle ? puzzle.world : WORLDS.length - 1;
+  }
+
   load(): void {
     const puzzle = PUZZLES[play.puzzleIndex];
-    const world = puzzle ? puzzle.world : WORLDS.length - 1;
+    const world = stage.previewWorld ?? this.levelWorld();
     if (world !== this.worldIndex) this.decorate(world);
     clear(this.props);
     this.tweens = [];
@@ -174,6 +183,13 @@ export class Diorama {
     }
     // The photo-real scenery arrived: swap the stand-in for it.
     if (this.worldIndex >= 0 && nature.version !== this.decorVersion) this.decorate(this.worldIndex);
+    // Browsing chapters: the room becomes each chapter's world as it is shown.
+    const want = stage.previewWorld ?? this.levelWorld();
+    this.previewing = want !== this.levelWorld();
+    if (this.worldIndex >= 0 && want !== this.worldIndex) {
+      this.decorate(want);
+      this.grow(null);
+    }
     animateNature(dt);
     // The room's plants stand on the real floor (y = 0), wherever the screen is.
     stage.paper!.getWorldPosition(this.paperAt);
