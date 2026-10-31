@@ -6,34 +6,44 @@
  */
 
 import { createSystem, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
+import { loadProgress, play, totalStars } from './progress.js';
 
+/**
+ * The browser start screen (index.html #splash): shows while the page is
+ * flat, hands over to the headset on Play, and comes back after exiting.
+ */
 export class PanelSystem extends createSystem({}) {
   init(): void {
+    // The HTML splash replaces the template's floating welcome panel.
     const panel = this.world.getSceneObject<UIKitMLAsset>('welcome-panel');
-    const xrButton = panel?.getElementById('xr-button');
-    const exitButton = panel?.getElementById('exit-button');
-    if (xrButton == null || exitButton == null) {
-      return;
-    }
+    if (panel) panel.visible = false;
+
+    const splash = document.getElementById('splash');
+    const button = document.getElementById('splash-play') as HTMLButtonElement | null;
+    const bar = document.getElementById('splash-bar');
+    const note = document.getElementById('splash-note');
+    if (!splash || !button) return;
+    if (bar) bar.hidden = true;
+
     if (!this.world.xrEnabled) {
-      xrButton.setProperties({ display: 'none' });
-      exitButton.setProperties({ display: 'none' });
+      button.textContent = 'Open on Meta Quest';
+      if (note) note.textContent = 'This browser cannot open VR. Visit this page in the Meta Quest browser.';
       return;
     }
 
-    const launchXR = () => this.world.launchXR();
-    const exitXR = () => this.world.exitXR();
-    xrButton.addEventListener('click', launchXR);
-    exitButton.addEventListener('click', exitXR);
+    loadProgress();
+    const returning = play.puzzleIndex !== 0 || totalStars() > 0;
+    button.disabled = false;
+    button.textContent = returning ? 'Continue in VR' : 'Play in VR';
+    if (returning && note) note.textContent = `${totalStars()} ★ collected so far`;
+
+    const launch = () => this.world.launchXR();
+    button.addEventListener('click', launch);
     this.cleanupFuncs.push(
-      () => xrButton.removeEventListener('click', launchXR),
-      () => exitButton.removeEventListener('click', exitXR),
-      this.world.visibilityState.subscribe((visibilityState) => {
-        const is2D = visibilityState === VisibilityState.NonImmersive;
-        // In XR the paper screen is the whole experience.
-        if (panel) panel.visible = is2D;
-        xrButton.setProperties({ display: is2D ? 'flex' : 'none' });
-        exitButton.setProperties({ display: is2D ? 'none' : 'flex' });
+      () => button.removeEventListener('click', launch),
+      this.world.visibilityState.subscribe((state) => {
+        if (state === VisibilityState.NonImmersive) splash.removeAttribute('data-hidden');
+        else splash.setAttribute('data-hidden', '');
       }),
     );
   }

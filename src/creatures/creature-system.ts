@@ -41,7 +41,8 @@ const STAGE_HEIGHT = 0.016;
  * looking down, and within easy reach of a seated player.
  */
 const STAGE_OFFSET = new Vector3(0, -0.22, 0.5);
-const MAX_CREATURES = 7;
+/** One friend on the stage at a time: calling another sends the last one home. */
+const MAX_CREATURES = 1;
 /** Display scale per kind, so big creatures do not crowd the stage. */
 const SCALES: Record<string, number> = { dragon: 0.95, deer: 1.05, dog: 1.15 };
 
@@ -201,7 +202,7 @@ export class CreatureSystem extends createSystem({}) {
 
   private spawn(kind: string, x: number, y: number, attempt: boolean): void {
     const make = MODELS[kind] ?? createRabbit;
-    // One of each friend: a new shadow of the same kind replaces the old one.
+    // A new shadow replaces the friend already out, so the stage stays one-on-one.
     const twin = this.creatures.findIndex((living) => living.creature.rig.kind === kind);
     if (twin >= 0) this.remove(twin);
     else if (this.creatures.length >= MAX_CREATURES) this.remove(0);

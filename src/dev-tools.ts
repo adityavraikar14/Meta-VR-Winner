@@ -10,7 +10,7 @@
  *   N      next level
  *   R      reset story progress to the first level
  *   I      print game state and score
- *   A      spawn every creature at once
+ *   A      call every creature in turn (only the last one stays)
  */
 
 /** Extra debug readouts other systems add to the `I` info dump. */

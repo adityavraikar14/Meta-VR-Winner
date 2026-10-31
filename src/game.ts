@@ -6,10 +6,11 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   SRGBColorSpace,
+  Vector3,
   VisibilityState,
 } from '@iwsdk/core';
 import { playAwaken, playPrompt } from './audio.js';
-import { installDevTools } from './dev-tools.js';
+import { devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
   createExtension,
@@ -40,6 +41,7 @@ import {
   MaskChannel,
   normalizeMask,
 } from './matcher.js';
+import { PushButton } from './push-button.js';
 import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
   MASK_HEIGHT,
@@ -50,7 +52,7 @@ import {
 } from './stage-state.js';
 import { friendName, type Puzzle, PUZZLES, WORLDS } from './world/puzzles.js';
 
-type Phase = 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
+type Phase = 'title' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
 type Problem =
   | Finger
   | 'direction'
@@ -80,6 +82,10 @@ const CARD_GAP = 0.125;
 /** Cards line the top of the paper; the bottom is hidden behind the stage. */
 const CARD_Y = PAPER_HEIGHT / 2 - 0.075;
 const RING_STEPS = 40;
+/** The title screen's Play button, in paper space: low and within easy reach. */
+const PLAY_BUTTON = new Vector3(0, -0.1, 0.6);
+const VIEWER = new Vector3(0, 0.12, 1.0);
+const INDEX_TIP = 9;
 
 const DIM_OUTLINE = new Color(0x9a7442);
 const HOT_OUTLINE = new Color(0xffc34d);
@@ -170,6 +176,9 @@ export class ShadowGameSystem extends createSystem({}) {
 
   private ghost!: GhostHand;
   private leftHanded = false;
+  private playButton!: PushButton;
+  private tips = [new Vector3(), new Vector3()];
+  private liveTips: Vector3[] = [];
 
   private creatureX = 0;
   private creatureY = 0;
@@ -264,9 +273,19 @@ export class ShadowGameSystem extends createSystem({}) {
     paper.add(captionMesh);
 
     this.ghost = new GhostHand(paper);
+    this.playButton = new PushButton(paper, 'Play');
+    this.playButton.root.position.copy(PLAY_BUTTON);
+    this.playButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
+    devInfo.playButton = () => {
+      const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
+      const at = this.playButton.root.getWorldPosition(new Vector3());
+      // The right index tip in the button's own frame (+z out of the face).
+      const tip = stage.tracked[1] ? this.playButton.root.worldToLocal(this.tips[1].clone()) : null;
+      return { shown: this.playButton.visible, at: round(at), tip: tip && round(tip) };
+    };
 
     loadProgress();
-    this.startPuzzle(play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex);
+    this.showTitle();
 
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
@@ -314,7 +333,19 @@ export class ShadowGameSystem extends createSystem({}) {
     this.readShadows();
     this.handleCommand();
 
+    this.readTips();
+    const pressed = this.playButton.update(dt, this.liveTips);
+
     switch (this.phase) {
+      case 'title':
+        if (pressed) {
+          playAwaken();
+          this.playButton.show(false);
+          this.startPuzzle(this.puzzleIndex);
+        } else if (this.phaseTime > 6) {
+          this.setCaption('Push the glowing button with one finger');
+        }
+        break;
       case 'story':
         if (!this.welcomed) this.welcomeBack();
         if (this.phaseTime >= STORY_TIME) this.beginMatching();
@@ -354,6 +385,46 @@ export class ShadowGameSystem extends createSystem({}) {
   }
 
   // ------------------------------------------------------------ Story flow
+
+  /** The book's cover: a title card and a big button to start or continue. */
+  private showTitle(): void {
+    const resume = play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex;
+    this.puzzleIndex = resume;
+    this.puzzle = null;
+    this.candidates = [];
+    this.raw = [];
+    this.smooth = [];
+    this.best = -1;
+    const fresh = resume === 0 && totalStars() === 0;
+    const next = PUZZLES[resume];
+    const footer = fresh
+      ? 'Push the button to open the book'
+      : next
+        ? `Continue: ${WORLDS[next.world].name} · ${next.title}  ·  ${totalStars()} ★`
+        : `Every chapter read  ·  ${totalStars()} ★`;
+    this.drawBanner(
+      'A hand-shadow storybook',
+      'Shadowplay',
+      'Your hands make the shadows. The shadows come alive.',
+      footer,
+    );
+    this.bannerShown = true;
+    this.playButton.setText(fresh ? 'Play' : 'Continue');
+    this.playButton.show(true);
+    this.setCaption(fresh ? 'Welcome! Push the button to begin' : 'Welcome back! Push the button to continue');
+    this.setPhase('title');
+  }
+
+  /** World positions of the tracked index fingertips, for pushing buttons. */
+  private readTips(): void {
+    this.liveTips.length = 0;
+    for (const hand of HAND_CHANNELS) {
+      if (!stage.tracked[hand]) continue;
+      const j = stage.joints[hand];
+      const tip = this.tips[hand].set(j[INDEX_TIP * 3], j[INDEX_TIP * 3 + 1], j[INDEX_TIP * 3 + 2]);
+      this.liveTips.push(this.player.localToWorld(tip));
+    }
+  }
 
   private startPuzzle(index: number): void {
     this.puzzleIndex = index;
@@ -397,7 +468,7 @@ export class ShadowGameSystem extends createSystem({}) {
       this.drawBanner(firstOfWorld ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
       this.setCaption(puzzle.ask);
     } else {
-      this.drawBanner('Free play', 'The End… for now', 'All your friends are here. Make any shadow to call them!');
+      this.drawBanner('Free play', 'The End… for now', 'Every friend is yours now. Make any shadow to call one!');
       this.setCaption('Make any friend’s shadow');
     }
     this.bannerShown = true;
@@ -422,13 +493,11 @@ export class ShadowGameSystem extends createSystem({}) {
     this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
   }
 
-  /** Returning players find the friends they already made waiting for them. */
+  /** Returning players find their newest friend waiting for them. */
   private welcomeBack(): void {
     this.welcomed = true;
-    if (this.puzzleIndex === 0) return;
-    play.unlocked.forEach((kind, i) =>
-      stage.spawns.push({ kind, x: -0.3 + i * 0.1, y: -0.15 }),
-    );
+    const newest = play.unlocked[play.unlocked.length - 1];
+    if (this.puzzleIndex > 0 && newest) stage.spawns.push({ kind: newest, x: 0, y: -0.15 });
   }
 
   private beginMatching(): void {

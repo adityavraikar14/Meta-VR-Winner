@@ -6,10 +6,153 @@
       name="viewport"
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
+    <meta name="theme-color" content="#1c120b" />
     <link rel="icon" href="data:," />
-    <title>shadowplay</title>
+    <title>Shadowplay</title>
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+        box-sizing: border-box;
+        text-align: center;
+        color: #ffe9c4;
+        font-family: Georgia, 'Times New Roman', serif;
+        background:
+          radial-gradient(ellipse 60% 45% at 50% 38%, rgba(255, 196, 110, 0.35), transparent 70%),
+          radial-gradient(ellipse at 50% 120%, #3b2414, #120b06 70%);
+        transition: opacity 0.5s ease;
+      }
+      #splash[data-hidden] {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash .lantern {
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff3c9 0%, #ffbd55 45%, rgba(255, 150, 40, 0) 72%);
+        animation: flicker 3s ease-in-out infinite;
+      }
+      #splash .shadow {
+        font-size: 64px;
+        line-height: 1;
+        margin-top: -14px;
+        filter: brightness(0) drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+        animation: hop 2.4s ease-in-out infinite;
+      }
+      #splash h1 {
+        margin: 0;
+        font-size: clamp(44px, 9vw, 84px);
+        letter-spacing: 0.02em;
+        color: #fff1d6;
+        text-shadow: 0 4px 24px rgba(255, 170, 60, 0.45);
+      }
+      #splash .kicker {
+        font-style: italic;
+        font-size: 18px;
+        color: #d9a96a;
+        margin: 0;
+      }
+      #splash .tagline {
+        margin: 0;
+        max-width: 30em;
+        font-size: 19px;
+        line-height: 1.45;
+        color: #f3dcb6;
+      }
+      #splash button {
+        margin-top: 10px;
+        min-width: 240px;
+        padding: 16px 36px;
+        border: 0;
+        border-radius: 999px;
+        font: 700 22px Georgia, 'Times New Roman', serif;
+        color: #2b1709;
+        background: linear-gradient(#ffd27a, #f29b2e);
+        box-shadow: 0 6px 0 #9a5a1c, 0 10px 30px rgba(255, 160, 50, 0.35);
+        cursor: pointer;
+        transition: transform 0.08s ease, box-shadow 0.08s ease;
+      }
+      #splash button:active {
+        transform: translateY(5px);
+        box-shadow: 0 1px 0 #9a5a1c, 0 4px 14px rgba(255, 160, 50, 0.3);
+      }
+      #splash button:disabled {
+        cursor: default;
+        filter: grayscale(0.6) brightness(0.8);
+      }
+      #splash .bar {
+        width: 240px;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 233, 196, 0.15);
+        overflow: hidden;
+      }
+      #splash .bar span {
+        display: block;
+        height: 100%;
+        width: 30%;
+        border-radius: 3px;
+        background: #ffbd55;
+        animation: load 1.2s ease-in-out infinite;
+      }
+      #splash .hints {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px 22px;
+        margin: 6px 0 0;
+        padding: 0;
+        list-style: none;
+        font-size: 15px;
+        color: #c9a57a;
+      }
+      #splash .note {
+        font-size: 14px;
+        color: #a4825c;
+        margin: 0;
+      }
+      @keyframes flicker {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        45% { transform: scale(1.06); opacity: 0.92; }
+        60% { transform: scale(0.98); opacity: 1; }
+      }
+      @keyframes hop {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+      }
+      @keyframes load {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(340%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash * { animation: none !important; }
+      }
+    </style>
   </head>
-  <body style="margin: 0">
+  <body style="margin: 0; overflow: hidden; background: #120b06">
+    <div id="splash">
+      <div class="lantern" aria-hidden="true"></div>
+      <div class="shadow" aria-hidden="true">🐇</div>
+      <p class="kicker">A hand-shadow storybook</p>
+      <h1>Shadowplay</h1>
+      <p class="tagline">Your hands make the shadows. The shadows come alive.</p>
+      <div class="bar" id="splash-bar"><span></span></div>
+      <button id="splash-play" disabled>Loading…</button>
+      <ul class="hints">
+        <li>✋ Hands only, no controllers</li>
+        <li>🪑 Play seated</li>
+        <li>🕯️ About 10 minutes a chapter</li>
+      </ul>
+      <p class="note" id="splash-note">Best on Meta Quest with hand tracking on.</p>
+    </div>
     <div id="scene-container"></div>
     <script type="module" src="/src/index.ts"></script>
   </body>

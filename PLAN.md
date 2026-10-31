@@ -35,6 +35,19 @@ Stars per level (max 3): cleared · no hints and no wrong friend · fast.
   - [x] hand menu: look at your palm, poke Recenter / Restart / Skip (palm-up stays for pets)
   - [x] draw calls cut ~35% by merging static meshes; real fps check needs a Quest
   - [ ] deploy to Vercel for headset testing
+  - [x] start page in the browser (title, Play in VR / Continue, stars so far)
+  - [x] storybook cover in VR with a real push button (cap follows the finger, clicks, springs back)
+  - [x] one friend on the stage at a time; a new shadow sends the last friend home
+- [ ] **2b. Feel like a winner** (from the user's review of past winners: Tiny Golf,
+  Little Critters, the slime lab). Weave through phases 3 – 5:
+  - hands touch things for real: friends squash when poked, can be picked up and
+    carried, fall with gravity and bounce when dropped, react to where they are touched
+  - real science in the puzzles: shadow optics (hand closer to the lantern = bigger
+    shadow, so size is a puzzle tool), light and dark, a lantern you can move
+  - pushable, grabbable props in the diorama (levers, buttons, a lantern) instead of
+    only scripted animations
+  - polished app feel: a menu screen, settings, transitions, sound on every touch
+  - revisit character art so friends read as premium plush toys
 - [ ] **3. Moonlit Pond + Draw Mode** (Nov 5 – 10)
 - [ ] **4. Dragon's Mountain, ending, collection book, accessibility** (Nov 11 – 14)
   - one-hand alternatives for two-hand shapes, strictness setting, left-handed
