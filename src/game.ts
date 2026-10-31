@@ -296,7 +296,8 @@ export class ShadowGameSystem extends createSystem({
       new MeshBasicMaterial({ map: this.captionTexture, transparent: true }),
     );
     captionMesh.name = 'Caption';
-    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.115, 0.04);
+    // In front of every world's frame, so no beam or crossbar can cover it.
+    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.115, 0.075);
     paper.add(captionMesh);
 
     this.ghost = new GhostHand(paper);

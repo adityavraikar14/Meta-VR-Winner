@@ -99,7 +99,11 @@ on device: hop onto the real table, hide behind real objects.
       Scenery loads a few files at a time and retries failures.
 - [x] "Lay one hand flat on your table": a held flat palm finds the real table; the
       jungle grows out of it (earth spreads from the palm, poles rise, room plants unfurl)
-- [ ] Next: more themes (river, mountain cave) re-skinning slab, frame and room plants
+- [x] Three themed worlds, each with its own earth, screen frame and room scenery:
+      Jungle (bamboo, ivy, tropical plants, fireflies), River (driftwood and moss, pond,
+      life-size reeds, river stones, moonlit fireflies), Dragon's Mountain (timber mine
+      entrance with hanging lantern, gravel, crystal clusters, boulders, rising embers)
+- [ ] Next: proper menu (title board, chapters map, wrist menu), then characters
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

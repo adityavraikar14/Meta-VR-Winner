@@ -30,7 +30,6 @@ textures reduced to 512–1024 px.
 |---|---|---|
 | `public/textures/ground_*.jpg` | [Forrest Ground 01](https://polyhaven.com/a/forrest_ground_01), Poly Haven | CC0 |
 | `public/textures/wood_*.jpg` | [Dark Wood](https://polyhaven.com/a/dark_wood), Poly Haven | CC0 |
-| `public/textures/velvet_*.jpg` | [Velour Velvet](https://polyhaven.com/a/velour_velvet), Poly Haven | CC0 |
 | `public/textures/pebbles_*.jpg` | [Dry River Pebbles](https://polyhaven.com/a/dry_river_pebbles), Poly Haven | CC0 |
 | `public/textures/soil_*.jpg` | [Forest Ground 04](https://polyhaven.com/a/forest_ground_04), Poly Haven | CC0 |
 | `public/textures/ivy*.{png,jpg}` | [Leaf Set 017](https://ambientcg.com/view?id=LeafSet017), ambientCG | CC0 |
@@ -38,4 +37,4 @@ textures reduced to 512–1024 px.
 | `public/textures/studio.hdr` | [Brown Photostudio 02](https://polyhaven.com/a/brown_photostudio_02), Poly Haven | CC0 |
 
 Everything else (sounds, grass, water, bamboo, vines, giant leaves, fireflies,
-shadow puppets, the theatre and the earth slab) is made in code for this project.
+shadow puppets, driftwood, mine timbers, crystals and the earth slab) is made in code for this project.

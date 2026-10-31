@@ -2,7 +2,7 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
-import { decorateJungle, decorateMountain, decoratePond, type SceneryRoots } from './scenery.js';
+import { decorateJungle, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
 import {
   berries,
   berryTree,
@@ -100,7 +100,7 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 
 export const WORLDS: World[] = [
   { name: 'The Jungle', decorate: decorateJungle },
-  { name: 'Moonlit Pond', decorate: decoratePond },
+  { name: 'The River', decorate: decorateRiver },
   { name: "Dragon's Mountain", decorate: decorateMountain },
 ];
 

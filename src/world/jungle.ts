@@ -147,14 +147,20 @@ export function bambooFrame(width: number, height: number, groundY: number): Gro
   drape.push(new Vector3(poleX * 0.3, height / 2 - 0.04, 0.05), new Vector3(poleX * 0.33, height / 2 - 0.1, 0.05));
   group.add(vine(drape, { leaves: 30, leafSize: 0.026, stem: 0.0015, seed: 11 }));
 
-  // Cords from the screen's corners to the poles.
+  group.add(screenCords(width, height, poleX, height / 2 + 0.035, -height / 2 + 0.11));
+  return group;
+}
+
+/** Cords tying the screen's four corners out to its two poles. */
+export function screenCords(width: number, height: number, poleX: number, topY: number, lowY: number): Group {
+  const group = new Group();
+  group.name = 'Cords';
   const cord = new MeshStandardMaterial({ color: 0x7a6044, roughness: 0.95 });
   for (const sx of [-1, 1]) {
     for (const sy of [-1, 1]) {
-      const from = new Vector3(sx * width / 2, sy * height / 2, 0.004);
-      const to = new Vector3(sx * poleX, sy * height / 2 + (sy > 0 ? 0.035 : 0.11) - sy * 0.0, 0.01);
-      const length = from.distanceTo(to);
-      const line = new Mesh(new CylinderGeometry(0.0016, 0.0016, length, 5), cord);
+      const from = new Vector3((sx * width) / 2, (sy * height) / 2, 0.004);
+      const to = new Vector3(sx * poleX, sy > 0 ? topY : lowY, 0.01);
+      const line = new Mesh(new CylinderGeometry(0.0016, 0.0016, from.distanceTo(to), 5), cord);
       line.position.copy(from).add(to).multiplyScalar(0.5);
       line.lookAt(to);
       line.rotateX(Math.PI / 2);
@@ -305,27 +311,39 @@ export function giantLeafPlant(height: number, count: number, plantSeed: number)
 
 // -------------------------------------------------------------- Fireflies
 
-let glow: CanvasTexture | null = null;
+const glows = new Map<string, CanvasTexture>();
 
-function glowTexture(): CanvasTexture {
-  if (glow) return glow;
+/** A soft round glow, white-hot in the middle and fading out in `color`. */
+function glowTexture(color: string): CanvasTexture {
+  let texture = glows.get(color);
+  if (texture) return texture;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
   const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, 'rgba(255,250,200,1)');
-  g.addColorStop(0.25, 'rgba(220,240,120,0.7)');
-  g.addColorStop(1, 'rgba(160,200,60,0)');
+  g.addColorStop(0, 'rgba(255,252,230,1)');
+  g.addColorStop(0.25, `rgba(${color},0.7)`);
+  g.addColorStop(1, `rgba(${color},0)`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 64, 64);
-  glow = new CanvasTexture(canvas);
-  glow.colorSpace = SRGBColorSpace;
-  return glow;
+  texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  glows.set(color, texture);
+  return texture;
 }
 
-/** Fireflies drifting and blinking through a box of space. */
-export function fireflies(count: number, min: Vector3, max: Vector3, fireflySeed = 5): Points {
-  seed(fireflySeed);
+export interface GlowSpec {
+  /** Glow colour as "r,g,b" (0-255). */
+  color?: string;
+  /** Embers rise and loop back to the bottom; fireflies wander and blink. */
+  rise?: boolean;
+  size?: number;
+  seed?: number;
+}
+
+/** Points of light drifting through a box of space: fireflies, or rising embers. */
+export function fireflies(count: number, min: Vector3, max: Vector3, spec: GlowSpec = {}): Points {
+  seed(spec.seed ?? 5);
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
     positions[i * 3] = min.x + (max.x - min.x) * random();
@@ -335,12 +353,19 @@ export function fireflies(count: number, min: Vector3, max: Vector3, fireflySeed
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
   const material = new PointsMaterial({
-    map: glowTexture(),
-    size: 0.03,
+    map: glowTexture(spec.color ?? '220,240,120'),
+    size: spec.size ?? 0.03,
     transparent: true,
     depthWrite: false,
     blending: AdditiveBlending,
   });
+  const rise = spec.rise
+    ? `transformed.y = ${min.y.toFixed(3)} + mod(position.y - ${min.y.toFixed(3)} + uTime * 0.09 * (0.6 + 0.4 * sin(k)), ${(max.y - min.y).toFixed(3)});
+        transformed.xz += vec2(sin(uTime * 0.9 + k), cos(uTime * 0.7 + k)) * 0.04;`
+    : 'transformed += vec3(sin(uTime * 0.31 + k), sin(uTime * 0.47 + k * 1.3) * 0.6, cos(uTime * 0.27 + k * 0.7)) * 0.18;';
+  const blink = spec.rise
+    ? 'gl_PointSize = size * (0.6 + 0.4 * sin(uTime * 7.0 + k * 3.0));'
+    : 'gl_PointSize = size * max(0.0, sin(uTime * 1.3 + k * 2.1)) * (0.6 + 0.4 * sin(uTime * 9.0 + k));';
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = clock;
     shader.vertexShader = shader.vertexShader
@@ -349,15 +374,14 @@ export function fireflies(count: number, min: Vector3, max: Vector3, fireflySeed
         '#include <begin_vertex>',
         `#include <begin_vertex>
         float k = position.x * 13.0 + position.z * 7.0 + position.y * 3.0;
-        transformed += vec3(sin(uTime * 0.31 + k), sin(uTime * 0.47 + k * 1.3) * 0.6, cos(uTime * 0.27 + k * 0.7)) * 0.18;`,
+        ${rise}`,
       )
-      .replace(
-        'gl_PointSize = size;',
-        'gl_PointSize = size * max(0.0, sin(uTime * 1.3 + k * 2.1)) * (0.6 + 0.4 * sin(uTime * 9.0 + k));',
-      );
+      .replace('gl_PointSize = size;', blink);
   };
+  // Each variant compiles its own shader.
+  material.customProgramCacheKey = () => `glow-${spec.rise ? 'rise' : 'wander'}-${min.y}-${max.y}`;
   const points = new Points(geometry, material);
-  points.name = 'Fireflies';
+  points.name = spec.rise ? 'Embers' : 'Fireflies';
   points.frustumCulled = false;
   return points;
 }

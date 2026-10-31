@@ -22,7 +22,7 @@ import {
 
 /**
  * Photo-real scenery from Poly Haven (CC0): scanned plants and rocks, plus
- * PBR ground, wood, velvet and pebble textures. Everything loads in the
+ * PBR ground, wood, soil and pebble textures. Everything loads in the
  * background; `nature.version` bumps when it arrives so the diorama can
  * swap its stand-ins for the real thing.
  */
@@ -41,12 +41,11 @@ const MODELS = {
 } as const;
 export type NatureModel = keyof typeof MODELS;
 
-const SURFACES = ['ground', 'wood', 'velvet', 'pebbles', 'soil'] as const;
+const SURFACES = ['ground', 'wood', 'pebbles', 'soil'] as const;
 export type Surface = (typeof SURFACES)[number];
 const FALLBACK: Record<Surface, number> = {
   ground: 0x5e6a3c,
   wood: 0x3a2416,
-  velvet: 0x5a0f14,
   pebbles: 0x8a8070,
   soil: 0x4a3524,
 };

@@ -1,5 +1,6 @@
 import { BufferAttribute, Group, Mesh, RingGeometry, Vector3 } from '@iwsdk/core';
 import { bambooFrame, fireflies, giantLeafPlant, vine } from './jungle.js';
+import { crystals, driftwoodFrame, mineFrame } from './themes.js';
 import {
   ground,
   type GroundSpec,
@@ -11,7 +12,6 @@ import {
   surface,
   water,
 } from './nature.js';
-import { buildTheatre } from './theatre.js';
 
 /**
  * The worlds, built into your room. Each has three layers:
@@ -190,17 +190,20 @@ function junglePlantsInRoom(room: Group): void {
   room.add(fireflies(70, new Vector3(-1.5, 0.5, -0.8), new Vector3(1.5, 2.1, 2.3)));
 }
 
-// ------------------------------------------------------------------ Pond
+// ----------------------------------------------------------------- River
 
-/** Where the pond sits: back left, clear of the puzzles in the middle. */
-const POND = { x: -0.14, z: -0.18, r: 0.075 };
+/** The pool sits in the left wing, clear of the puzzles in the middle. */
+const POND = { x: -0.38, z: -0.1, r: 0.13 };
 
-export function decoratePond(roots: SceneryRoots): void {
+/** Flat ground for scattering life-size reeds over the room's floor. */
+const FLOOR: GroundSpec = { edge: () => 4, relief: 0 };
+
+export function decorateRiver(roots: SceneryRoots): void {
   const spec: GroundSpec = {
     edge: organicOutline({ ...SLAB, wobble: 0.03, seed: 4.1 }),
     pond: POND,
-    tint: 0xe4ebe6,
-    tiles: 4,
+    tint: 0xd5ded8,
+    tiles: 3.5,
   };
   const g = base(roots, spec);
 
@@ -210,27 +213,46 @@ export function decoratePond(roots: SceneryRoots): void {
   g.add(pebbleBank(spec));
 
   g.add(grass({
-    count: 5000, inner: 0.02, outer: 0.7, height: [0.008, 0.024], width: 0.0022,
-    edgeBias: 0.6, ground: spec, seed: 8,
-    avoid: [[POND.x, POND.z, POND.r * 1.3]],
+    count: 9000, inner: 0.02, outer: 0.7, height: [0.01, 0.03], width: 0.0026,
+    edgeBias: 0.5, ground: spec, seed: 8,
+    avoid: [[POND.x, POND.z, POND.r * 1.25]],
   }));
   // Reeds crowd the far bank.
   g.add(grass({
-    count: 420, inner: POND.r * 1.1, outer: POND.r * 1.55, center: [POND.x, POND.z], height: [0.03, 0.06],
-    width: 0.0026, ground: spec, seed: 21, avoid: [[POND.x + 0.03, POND.z + 0.08, 0.06]],
+    count: 700, inner: POND.r * 1.1, outer: POND.r * 1.6, center: [POND.x, POND.z], height: [0.04, 0.09],
+    width: 0.003, ground: spec, seed: 21, avoid: [[POND.x + 0.06, POND.z + 0.12, 0.1]],
   }));
   placeAll(g, spec, [
-    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: POND.x + 0.08, z: POND.z + 0.03, scale: 0.016, turn: 0.8, sink: 0.004 },
-    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: POND.x - 0.06, z: POND.z + 0.07, scale: 0.014, turn: 2.6, sink: 0.004 },
-    { model: 'fern', node: 'fern_02_b', x: 0.45, z: -0.25, scale: 0.18, turn: 2.4 },
-    { model: 'fern', node: 'fern_02_d', x: 0.47, z: 0.08, scale: 0.13, turn: 0.7 },
-    { model: 'calathea', node: 'calathea_orbifolia_01_c', x: -0.46, z: 0.05, scale: 0.3, turn: 1.0 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: POND.x + 0.13, z: POND.z + 0.05, scale: 0.022, turn: 0.8, sink: 0.006 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: POND.x - 0.03, z: POND.z + 0.14, scale: 0.018, turn: 2.6, sink: 0.005 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.35, z: -0.38, scale: 0.03, turn: 1.6, sink: 0.007 },
+    { model: 'fern', node: 'fern_02_b', x: 0.46, z: -0.25, scale: 0.2, turn: 2.4 },
+    { model: 'fern', node: 'fern_02_d', x: 0.47, z: 0.1, scale: 0.15, turn: 0.7 },
+    { model: 'calathea', node: 'calathea_orbifolia_01_c', x: 0.36, z: 0.18, scale: 0.3, turn: 1.0 },
+    { model: 'calathea', node: 'calathea_orbifolia_01_b', x: -0.5, z: 0.15, scale: 0.28, turn: 3.1 },
     { model: 'gazania', node: 'flower_gazania_d_LOD0', x: 0.25, z: 0.2, scale: 0.42, turn: 1.0 },
-    { model: 'dandelion', node: 'dandelion_01_c_LOD0', x: -0.3, z: 0.2, scale: 0.45, turn: 3.0 },
-    ...sorrelClump(-0.2, 0.22, 6, 2),
-    ...sorrelClump(0.3, -0.35, 5, 5),
+    { model: 'dandelion', node: 'dandelion_01_c_LOD0', x: -0.25, z: 0.21, scale: 0.45, turn: 3.0 },
+    ...sorrelClump(-0.12, 0.23, 6, 2),
+    ...sorrelClump(0.3, -0.12, 5, 5),
   ]);
-  roots.screen.add(buildTheatre(roots.screenWidth, roots.screenHeight));
+  roots.screen.add(driftwoodFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
+  riverbankInRoom(roots.room);
+}
+
+/** Tall reeds and smooth river stones on your floor, and pale moonlit fireflies. */
+function riverbankInRoom(room: Group): void {
+  const clumps = [[-1.1, 0.35, 160, 1], [1.2, 0.2, 180, 2], [-0.95, 1.6, 140, 3], [1.0, 1.75, 150, 4], [-0.7, -0.55, 120, 5], [0.75, -0.6, 130, 6]] as const;
+  for (const [x, z, n, s] of clumps) {
+    room.add(grass({ count: n, inner: 0, outer: 0.28, center: [x, z], height: [0.45, 1.15], width: 0.018, ground: FLOOR, seed: s }));
+  }
+  placeAll(room, null, [
+    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: -0.8, z: 0.75, scale: 0.18, turn: 0.4, sink: 0.05 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: 0.85, z: 0.95, scale: 0.2, turn: 2.0, sink: 0.05 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: -1.3, z: 1.1, scale: 0.15, turn: 1.0, sink: 0.04 },
+    { model: 'fern', node: 'fern_02_b', x: 1.35, z: 0.9, scale: 1.8, turn: 3.0 },
+    { model: 'calathea', node: 'calathea_orbifolia_01_a', x: -1.35, z: -0.1, scale: 2.0, turn: 0.6 },
+  ]);
+  room.add(fireflies(50, new Vector3(-1.5, 0.4, -0.8), new Vector3(1.5, 1.9, 2.3), { color: '170,210,255', seed: 8 }));
 }
 
 /** A ring of river pebbles lining the pond, following the dip of the bank. */
@@ -258,11 +280,12 @@ function pebbleBank(spec: GroundSpec): Mesh {
 
 export function decorateMountain(roots: SceneryRoots): void {
   const spec: GroundSpec = {
-    edge: organicOutline({ ...SLAB, wobble: 0.04, seed: 7.7 }),
-    tint: 0xb9b2a8,
+    edge: organicOutline({ ...SLAB, wobble: 0.045, seed: 7.7 }),
+    surface: 'pebbles',
+    tint: 0xa8a29c,
     relief: 0.004,
-    tiles: 4,
-    depth: 0.06,
+    tiles: 7,
+    depth: 0.07,
   };
   const g = base(roots, spec);
   g.add(grass({
@@ -270,12 +293,38 @@ export function decorateMountain(roots: SceneryRoots): void {
     edgeBias: 0.9, ground: spec, seed: 13,
   }));
   placeAll(g, spec, [
-    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: -0.42, z: -0.3, scale: 0.08, turn: 0.4, sink: 0.02 },
-    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: 0.43, z: -0.28, scale: 0.07, turn: 2.0, sink: 0.018 },
-    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.45, z: 0.12, scale: 0.04, turn: 1.1, sink: 0.01 },
-    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: -0.45, z: 0.14, scale: 0.035, turn: 3.6, sink: 0.008 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: -0.45, z: -0.3, scale: 0.08, turn: 0.4, sink: 0.02 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: 0.45, z: -0.28, scale: 0.07, turn: 2.0, sink: 0.018 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.47, z: 0.12, scale: 0.045, turn: 1.1, sink: 0.01 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: -0.46, z: 0.14, scale: 0.04, turn: 3.6, sink: 0.008 },
     { model: 'fern', node: 'fern_02_a', x: -0.15, z: -0.44, scale: 0.12, turn: 0.2 },
     { model: 'dandelion', node: 'dandelion_01_d_LOD0', x: 0.15, z: -0.42, scale: 0.45, turn: 1.0 },
   ]);
-  roots.screen.add(buildTheatre(roots.screenWidth, roots.screenHeight));
+  const clusters = [[-0.36, -0.2, 0.13, 8, 1], [0.37, -0.18, 0.11, 7, 2], [0.34, 0.2, 0.07, 6, 3], [-0.32, 0.19, 0.06, 5, 4], [-0.5, -0.05, 0.08, 6, 10], [0.52, 0.0, 0.07, 5, 11]] as const;
+  for (const [x, z, size, n, s] of clusters) {
+    const cluster = crystals(size, n, s);
+    cluster.position.set(x, groundHeight(spec, x, z) - 0.004, z);
+    g.add(cluster);
+  }
+  roots.screen.add(mineFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
+  mountainInRoom(roots.room);
+}
+
+/** Boulders on your floor, crystal clusters glowing among them, embers rising. */
+function mountainInRoom(room: Group): void {
+  placeAll(room, null, [
+    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: -1.15, z: 0.2, scale: 0.42, turn: 0.4, sink: 0.12 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: 1.25, z: 0.4, scale: 0.4, turn: 2.0, sink: 0.12 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: -1.0, z: 1.6, scale: 0.3, turn: 1.1, sink: 0.08 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: 1.05, z: 1.7, scale: 0.28, turn: 3.6, sink: 0.08 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: -0.8, z: -0.7, scale: 0.35, turn: 5.0, sink: 0.1 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.85, z: -0.65, scale: 0.33, turn: 0.8, sink: 0.09 },
+  ]);
+  const clusters = [[-0.75, 0.55, 0.45, 9, 5], [0.8, 0.75, 0.38, 8, 6], [-0.6, 1.9, 0.3, 6, 7], [0.55, -0.4, 0.5, 9, 8], [1.3, 1.2, 0.25, 5, 9]] as const;
+  for (const [x, z, size, n, s] of clusters) {
+    const cluster = crystals(size, n, s);
+    cluster.position.set(x, 0, z);
+    room.add(cluster);
+  }
+  room.add(fireflies(60, new Vector3(-1.2, 0.2, -0.6), new Vector3(1.2, 2.2, 2.0), { color: '255,140,50', rise: true, size: 0.022, seed: 3 }));
 }
