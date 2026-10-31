@@ -561,11 +561,9 @@ export class ShadowGameSystem extends createSystem({
     this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
   }
 
-  /** Returning players find their newest friend waiting for them. */
+  /** Each level starts on a clear stage now; kept as the hook for a returning-player greeting. */
   private welcomeBack(): void {
     this.welcomed = true;
-    const newest = play.unlocked[play.unlocked.length - 1];
-    if (this.puzzleIndex > 0 && newest) stage.spawns.push({ kind: newest, x: 0, y: -0.15 });
   }
 
   private beginMatching(): void {

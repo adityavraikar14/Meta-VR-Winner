@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  type Entity,
   type Object3D,
   Quaternion,
   SRGBColorSpace,
@@ -59,6 +60,8 @@ const MODELS: Record<string, () => CreatureRig> = {
 interface Living {
   creature: Creature;
   blob: Mesh;
+  /** ECS entities that keep the creature and its blob in the scene. */
+  entities: Entity[];
   /** Made to try the puzzle on stage. */
   attempt: boolean;
 }
@@ -155,10 +158,8 @@ export class CreatureSystem extends createSystem({}) {
 
     if (play.puzzleVersion !== this.puzzleVersion) {
       this.puzzleVersion = play.puzzleVersion;
-      for (const living of this.creatures) {
-        living.attempt = false;
-        living.creature.cancelTask();
-      }
+      // Every level starts with a clear stage; friends come when you call them.
+      while (this.creatures.length > 0) this.remove(0);
       this.diorama.load();
     }
     this.diorama.update(dt);
@@ -211,11 +212,11 @@ export class CreatureSystem extends createSystem({}) {
     flattenGroups(rig.root, animatedParts(rig));
     mergeStatic(rig.root);
     const creature = new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
-    this.world.createTransformEntity(rig.root);
+    const body = this.world.createTransformEntity(rig.root);
     const blob = new Mesh(this.blobGeometry, this.blobMaterial);
     blob.name = 'CreatureContactShadow';
     blob.renderOrder = 1;
-    this.world.createTransformEntity(blob);
+    const shadow = this.world.createTransformEntity(blob);
 
     // Start on the paper surface where the shadow creature stood, slightly
     // lowered so its feet sit at the bottom of the shadow.
@@ -223,7 +224,7 @@ export class CreatureSystem extends createSystem({}) {
     this.spawnPoint.set(x, y - rig.height * 0.4, 0.01).applyMatrix4(paper.matrixWorld);
     paper.getWorldQuaternion(this.paperRotation);
     creature.emergeFrom(this.spawnPoint, this.paperRotation);
-    this.creatures.push({ creature, blob, attempt });
+    this.creatures.push({ creature, blob, entities: [body, shadow], attempt });
     this.ground.creatures = this.creatures.map((living) => living.creature);
     playTransform();
   }
@@ -232,6 +233,8 @@ export class CreatureSystem extends createSystem({}) {
   private remove(index: number): void {
     const [gone] = this.creatures.splice(index, 1);
     this.fx.burst(gone.creature.position, 16, 0.3);
+    // Detaching the Object3D alone is not enough: the entity keeps it in the scene.
+    for (const entity of gone.entities) entity.dispose({ disposeResources: false });
     gone.creature.rig.root.removeFromParent();
     gone.blob.removeFromParent();
     disposeRig(gone.creature.rig);
