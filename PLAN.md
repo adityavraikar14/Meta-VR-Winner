@@ -1,58 +1,97 @@
-# Shadowplay: build plan (0 → 100)
+# Shadowplay: build plan v2 (two worlds, one light)
 
 Submission target: **Nov 17, 2026** (hard deadline Nov 19, 1:30am IST).
-Rule: every phase ends playable. Nothing half-done ships.
+Rule: every step ends playable. A tight, polished slice beats a broad one with gaps
+(Meta: "judges play what you submit").
 
-## Game structure
-A storybook in three worlds. Each world unfolds as a paper-theatre diorama
-on the table in front of you. Each level is a small problem in the scene;
-you choose the friend who can solve it and make its shadow with your hands.
-The shadow jumps out of the paper as a 3D creature and solves it.
+## The pitch
+Your hands cast real shadows from a lantern behind you. On the paper lives a flat
+**shadow world** where your hand shadows (and lines you draw) are solid ground. In
+front of the paper sits a 3D **diorama** with real physics and a chemistry engine.
+Friends born from your shadows travel between the two worlds, have personalities,
+and react to everything you do.
 
-| World | Friends | Levels |
+## Four real systems (no faked science)
+1. **Light / optics**: shadow size follows similar triangles (hand nearer the lantern =
+   bigger). Shadow size sets the size of the creature that comes alive. Soft edges from
+   the lantern's radius (penumbra). Later: coloured lanterns with additive mixing.
+2. **Shadow world (2D)**: tiny shadow creatures walk, jump and fall on the hand-shadow
+   mask and drawn lines, with real gravity and collision against the mask cells.
+3. **Rigid-body physics (3D, Havok)**: fixed step; per-material mass, friction,
+   restitution; "toy-scale" gravity so a 10 cm log falls like a real log looks.
+   Mechanisms: lever and seesaw (torque = F × d), pulley and counterweight,
+   spring (Hooke), pendulum, buoyancy (Archimedes), wind force.
+4. **Chemistry engine**: every object has a material and a temperature; elements route
+   through states. Fire heats → ice melts to water → water boils to steam (rises, lifts
+   a balloon) → cold freezes water into a walkable ice bridge; fire spreads on grass,
+   wind spreads fire, water + seed + light grows a plant. Same rule everywhere, no exceptions.
+
+## Hands, engineered precisely (from Meta's hand-tracking research)
+- Finger colliders are kinematic capsules moved by velocity, not teleported.
+- Grab = pinch or fist plus collider overlap; separate grab / release thresholds (hysteresis).
+- Release only after 75 ms of not grabbing, with good tracking confidence; wait 15 ms
+  after tracking returns.
+- Throw: keep a 1 s pose buffer, rewind ~40 ms for tracking latency, three confidence
+  tiers, and score the last second's vectors so throws never "dead drop".
+- Filtering: stillness freeze, small-change smoothing, extrapolate low-quality frames
+  with damping, blend back over 0.1 s.
+
+## Friends with personality
+Look at your hands and face; per-spot touch reactions (pat, tickle, boop, tail pull);
+pick up by the scruff (legs dangle on springs), throw → arc, bounce, dizzy, grumpy return;
+squash and stretch (volume preserved); personality per friend; gibberish voices;
+trust memory; react to your shadows (wolf = hide, bird = chase, giant = cower);
+on device: hop onto the real table, hide behind real objects.
+
+## Draw and build
+- **Draw with light**: pinch and draw in the air; the line casts a shadow on the paper and
+  is solid in the shadow world (bridge, ramp, wall). In the 3D world a drawn stroke becomes
+  a physical plank or rope. Draw a closed outline and it comes alive as your own creature.
+- **Workshop**: unlocked after the story. Place planks, springs, fans, seesaws, pulleys,
+  lanterns and build contraptions; friends ride them. Save and replay your own levels.
+
+## Ideas borrowed from winners (inspiration, not copies)
+| From | We take |
+|---|---|
+| Little Critters | physical comedy: grab, slap, throw; white outline for readability in your room |
+| Tiny Golf | one simple gesture (pinch, pull, release); tiny tabletop course; build your own |
+| The Nanauts (IWSDK winner) | characters that notice your room and you |
+| Pocket Lands | build miniature worlds in mixed reality |
+| Breath of the Wild | the chemistry engine idea |
+
+## Levels (few, each dense)
+| # | Level | Systems |
 |---|---|---|
-| 1. Whispering Forest | Rabbit, Snail, Deer | Warm-up, Fallen Log, Tiny Tunnel, High Berries, Lost Star (choose) |
-| 2. Moonlit Pond | Dog, Bird, Butterfly | Buried Lantern, Key Across the Pond, Sleeping Flowers, + choose |
-| 3. Dragon's Mountain | Dragon | Combined puzzle using everyone, the Great Lantern, ending |
+| 1 | The Lantern | optics: shadow and size |
+| 2 | Shadow Bridge | 2D shadow world, hand shadows and drawn lines as ground |
+| 3 | Big & Small | shadow size → creature size, boulder, seesaw lever |
+| 4 | The Pond | buoyancy, wind from the bird, a drawn sail |
+| 5 | Sleeping Garden | coloured light, water, growth chain, pulley |
+| 6 | Dragon's Mountain | fire → melt → steam → balloon lift → Great Lantern |
+| ∞ | Workshop + free play | build, draw creatures, play with friends |
 
-Teach levels introduce one new shape with a big glowing outline.
-Choice levels show cards of every friend you have and let you pick;
-the wrong friend tries and fails in a funny way and the paper hints.
+## Characters
+Quaternius Ultimate Animated Animals (CC0, glTF, 12+ animations each) restyled: plush
+shading, big eyes, white outline, squash and stretch. Hero characters may be upgraded
+to AI-generated HD models (Meshy / Tripo) supplied by the user. Rights must be clear.
 
-Stars per level (max 3): cleared · no hints and no wrong friend · fast.
+## Already done (v1)
+- [x] Hand shadows, shape rules, matcher, ghost-hand guide, hand menu
+- [x] 7 code-built creatures with pet brain, Forest levels 1–5 (to be reworked)
+- [x] Start page, storybook cover with push button, intro shadow-puppet show
+- [x] One friend on stage at a time, draw-call pass
 
-## Phases
-- [x] **0. Core**: hand shadows, shape rules, 7 plush creatures, pet brain, interactions
-- [x] **1. Level engine + Forest** (done Oct 30)
-  - shared progress state + save (stars, unlocked friends, current level)
-  - diorama builder: paper-cut trees, grass, flowers, props
-  - creature task scripts (walk, leap, reach, eat, bonk, cheer)
-  - story cards, hold-to-match ring, choice cards, stars
-  - Forest: 5 levels end to end
-  - Pond and Mountain have simple placeholder levels (find the star) until Phase 3/4
-- [ ] **2. First five minutes + comfort** (Nov 3 – 4)
-  - [x] ghost-hand guide for each shape (gold finger shows what to fix, mirrors for left-handers)
-  - [x] hand menu: look at your palm, poke Recenter / Restart / Skip (palm-up stays for pets)
-  - [x] draw calls cut ~35% by merging static meshes; real fps check needs a Quest
-  - [ ] deploy to Vercel for headset testing
-  - [x] start page in the browser (title, Play in VR / Continue, stars so far)
-  - [x] storybook cover in VR with a real push button (cap follows the finger, clicks, springs back)
-  - [x] one friend on the stage at a time; a new shadow sends the last friend home
-- [ ] **2b. Feel like a winner** (from the user's review of past winners: Tiny Golf,
-  Little Critters, the slime lab). Weave through phases 3 – 5:
-  - hands touch things for real: friends squash when poked, can be picked up and
-    carried, fall with gravity and bounce when dropped, react to where they are touched
-  - real science in the puzzles: shadow optics (hand closer to the lantern = bigger
-    shadow, so size is a puzzle tool), light and dark, a lantern you can move
-  - pushable, grabbable props in the diorama (levers, buttons, a lantern) instead of
-    only scripted animations
-  - polished app feel: a menu screen, settings, transitions, sound on every touch
-  - revisit character art so friends read as premium plush toys
-- [ ] **3. Moonlit Pond + Draw Mode** (Nov 5 – 10)
-- [ ] **4. Dragon's Mountain, ending, collection book, accessibility** (Nov 11 – 14)
-  - one-hand alternatives for two-hand shapes, strictness setting, left-handed
-- [ ] **5. Music, polish, video, submit** (Nov 15 – 17)
+## Schedule
+- [ ] **Nov 1 – 3** Shadow world on the paper (walk on hand shadows), size from optics, draw-with-light lines
+- [ ] **Nov 4 – 6** Havok physics, precise grab / throw, new restyled characters
+- [ ] **Nov 7 – 9** Character brain: reactions, personalities, voices, shadow language
+- [ ] **Nov 10 – 12** Chemistry engine, mechanisms, levels 3 – 6
+- [ ] **Nov 12 – 14** Workshop (build mode), on-device tuning, room features
+- [ ] **Nov 15 – 17** Music, polish, trailer, submit
+
+If behind, cut in this order: coloured lanterns → Workshop saving → draw-a-creature →
+level 5. Never cut: shadow world, size optics, physical friends, chemistry finale.
 
 ## Risks
-- Real-hand tuning needs a Quest by ~Nov 5.
-- Quest GPU budget: shadow map + mask pass + plush materials.
+- Real-hand feel needs a Quest by ~Nov 12.
+- Quest GPU budget: shadow map + mask pass + physics + outlines.
