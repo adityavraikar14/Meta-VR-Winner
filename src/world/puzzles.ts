@@ -2,20 +2,17 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
+import { decorateForest, decorateMountain, decoratePond } from './scenery.js';
 import {
   berries,
   berryTree,
   bush,
   carrot,
-  flower,
   goldStar,
-  grass,
   hollowLog,
   log,
   moundMark,
   mushroom,
-  paperPine,
-  paperTree,
   rootArch,
 } from './props.js';
 
@@ -73,9 +70,8 @@ export interface Puzzle {
 
 export interface World {
   name: string;
-  /** Colour of the stage floor. */
-  floor: number;
-  decorate(root: Group): void;
+  /** Builds the world's miniature landscape on the stage, its ground at `floor`. */
+  decorate(root: Group, floor: number): void;
 }
 
 const NAMES: Record<string, string> = {
@@ -102,52 +98,10 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 
 // ---------------------------------------------------------------- Worlds
 
-/** Scenery sits at the sides and low at the back, so it never hides the paper. */
-function decorateForest(root: Group): void {
-  const y = 0;
-  place(root, paperTree(0.19), -0.28, y, -0.02, 0.5);
-  place(root, paperPine(0.17), -0.24, y, -0.14, 0.35);
-  place(root, paperTree(0.17, 0x82b863, 0x5b9a4f), 0.28, y, -0.03, -0.5);
-  place(root, paperPine(0.19, 0x3a7652), 0.23, y, -0.15, -0.35);
-  for (let i = 0; i < 9; i++) {
-    const a = Math.PI * (1.1 + (i / 8) * 0.8);
-    place(root, grass(0.05, i % 2 ? 0x86bf5e : 0x74b052), Math.cos(a) * 0.235, y, Math.sin(a) * 0.235 * 0.9, -a - Math.PI / 2);
-  }
-  place(root, bush(0.05), -0.1, y, -0.21);
-  place(root, bush(0.045, 0x6aa95a), 0.09, y, -0.22);
-  const colors = [0xff8fb1, 0xffffff, 0xffd34d, 0xb48cff, 0xff8fb1];
-  [[-0.2, 0.1], [-0.17, 0.15], [0.19, 0.12], [0.21, 0.06], [0.0, -0.2]].forEach(([x, z], i) =>
-    place(root, flower(colors[i]), x, y, z, 0, 1.1));
-  place(root, mushroom(0.022).group, -0.2, y, 0.04);
-  place(root, mushroom(0.016, 0xf0a030).group, -0.185, y, 0.065);
-}
-
-function decoratePond(root: Group): void {
-  const y = 0;
-  place(root, paperTree(0.18, 0x6aa27a, 0x4a8060), -0.28, y, -0.03, 0.5);
-  place(root, paperPine(0.18, 0x356e5a), 0.26, y, -0.1, -0.45);
-  for (let i = 0; i < 7; i++) {
-    const x = -0.2 + i * 0.066;
-    place(root, grass(0.04, i % 2 ? 0x5f9f6a : 0x4f8f62), x, y, -0.215, 0, 1.4);
-  }
-  [[-0.21, 0.08], [0.2, 0.1], [0.22, 0.03]].forEach(([x, z], i) =>
-    place(root, flower(i === 1 ? 0xb4c8ff : 0xffffff), x, y, z));
-}
-
-function decorateMountain(root: Group): void {
-  const y = 0;
-  place(root, paperPine(0.2, 0x2f6150), -0.27, y, -0.05, 0.45);
-  place(root, paperPine(0.16, 0x3a7060), -0.21, y, -0.16, 0.3);
-  place(root, paperPine(0.19, 0x2f6150), 0.26, y, -0.08, -0.45);
-  place(root, bush(0.06, 0x8a8aa0), 0.0, y, -0.22);
-  place(root, bush(0.05, 0x9a96ad), -0.12, y, -0.21);
-  place(root, bush(0.05, 0x9a96ad), 0.13, y, -0.21);
-}
-
 export const WORLDS: World[] = [
-  { name: 'Whispering Forest', floor: 0x9cc77a, decorate: decorateForest },
-  { name: 'Moonlit Pond', floor: 0x9ec9c4, decorate: decoratePond },
-  { name: "Dragon's Mountain", floor: 0xcdbfb2, decorate: decorateMountain },
+  { name: 'Whispering Forest', decorate: decorateForest },
+  { name: 'Moonlit Pond', decorate: decoratePond },
+  { name: "Dragon's Mountain", decorate: decorateMountain },
 ];
 
 // --------------------------------------------------------------- Puzzles

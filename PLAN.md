@@ -89,6 +89,10 @@ on device: hop onto the real table, hide behind real objects.
 - [x] Chapter 1 Shadow Bridge, Chapter 2 drawn-ink ramp (2D shadow world)
 - [x] Rigged glTF animals (Beast): emerge from the paper, idle life, head tracking,
       poke / stroke / temper reactions, synthesized snort, nicker and hooves
+- [x] Photo-real environment (Poly Haven CC0): walnut theatre with velvet curtains and brass
+      lip, walnut plinth with brass inlay, rolling forest-floor ground, swaying grass,
+      scanned ferns / flowers / mossy rocks / stump, pond with rippling water and pebble
+      bank, warm studio HDRI lighting. Credits in CREDITS.md
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

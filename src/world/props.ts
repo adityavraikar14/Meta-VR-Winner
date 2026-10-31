@@ -66,71 +66,11 @@ export function paperTree(height: number, leaf = 0x6fae5b, shade = 0x4d8a45): Gr
   return g;
 }
 
-/** A layered paper pine. */
-export function paperPine(height: number, color = 0x3f7f5a): Group {
-  const g = new Group();
-  g.name = 'PaperPine';
-  const h = height;
-  g.add(cutout([rect(0, 0, h * 0.08, h * 0.25)], card(0x7a4e32), 0));
-  for (let i = 0; i < 3; i++) {
-    const s = new Shape();
-    const base = h * (0.18 + i * 0.24);
-    const w = h * (0.36 - i * 0.08);
-    s.moveTo(-w, base);
-    s.lineTo(w, base);
-    s.lineTo(0, base + h * 0.42);
-    s.closePath();
-    const tone = i === 1 ? 0x4b8c62 : color;
-    g.add(cutout([s], card(tone), i * 0.002));
-  }
-  return g;
-}
-
-/** A zig-zag tuft of paper grass. */
-export function grass(width: number, color = 0x86bf5e): Group {
-  const g = new Group();
-  g.name = 'Grass';
-  const s = new Shape();
-  const blades = 5;
-  s.moveTo(-width / 2, 0);
-  for (let i = 0; i < blades; i++) {
-    const x0 = -width / 2 + (width / blades) * i;
-    const peak = width * (0.45 + ((i * 37) % 10) / 25);
-    s.lineTo(x0 + width / blades / 2, peak);
-    s.lineTo(x0 + width / blades, 0);
-  }
-  s.closePath();
-  g.add(cutout([s], card(color)));
-  return g;
-}
-
 /** A small paper bush. */
 export function bush(size: number, color = 0x5d9e52): Group {
   const g = new Group();
   g.name = 'Bush';
   g.add(cutout([circle(0, size * 0.4, size * 0.4), circle(-size * 0.35, size * 0.28, size * 0.28), circle(size * 0.35, size * 0.3, size * 0.3)], card(color)));
-  return g;
-}
-
-/** A soft 3D flower on a stem. */
-export function flower(color: number): Group {
-  const g = new Group();
-  g.name = 'Flower';
-  const stem = new Mesh(new CylinderGeometry(0.0012, 0.0015, 0.03, 6), card(0x5b9a45));
-  stem.position.y = 0.015;
-  g.add(stem);
-  const petals = plush(color);
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    const p = new Mesh(new SphereGeometry(0.0045, 10, 8), petals);
-    p.scale.set(1, 0.5, 1);
-    p.position.set(Math.cos(a) * 0.005, 0.031, Math.sin(a) * 0.005);
-    g.add(p);
-  }
-  const middle = new Mesh(new SphereGeometry(0.0035, 10, 8), plush(0xffd34d));
-  middle.position.y = 0.033;
-  g.add(middle);
-  softShade(g);
   return g;
 }
 

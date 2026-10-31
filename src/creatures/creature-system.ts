@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  RingGeometry,
   type Entity,
   type Object3D,
   Quaternion,
@@ -22,6 +23,7 @@ import { flattenGroups, mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { Diorama } from '../world/diorama.js';
+import { preloadNature, surface } from '../world/nature.js';
 import { Beast, createBeast, preloadBeasts } from './beast.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
@@ -99,9 +101,8 @@ export class CreatureSystem extends createSystem({}) {
     const paper = stage.paper;
     if (!paper) throw new Error('ShadowStageSystem must be registered first');
 
-    const built = buildStage();
-    mergeStatic(built.root);
-    this.stageRoot = built.root;
+    preloadNature();
+    this.stageRoot = buildStage();
     this.stageRoot.position.copy(STAGE_OFFSET);
     paper.add(this.stageRoot);
 
@@ -116,7 +117,7 @@ export class CreatureSystem extends createSystem({}) {
     this.fx = new Effects();
     this.world.createTransformEntity(this.fx.root);
     this.handInput = new HandInput();
-    this.diorama = new Diorama(this.stageRoot, built.floor, STAGE_HEIGHT, this.fx);
+    this.diorama = new Diorama(this.stageRoot, STAGE_HEIGHT, this.fx);
     preloadBeasts();
 
     const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
@@ -284,7 +285,6 @@ export class CreatureSystem extends createSystem({}) {
   }
 }
 
-/** A round wooden stage with a warm glowing rim. Origin at its base. */
 /** Every part of a rig that animation moves, scales or hides. */
 function animatedParts(rig: CreatureRig): Set<Object3D> {
   return new Set<Object3D>([
@@ -294,32 +294,37 @@ function animatedParts(rig: CreatureRig): Set<Object3D> {
   ]);
 }
 
-function buildStage(): { root: Group; floor: MeshStandardMaterial } {
+/**
+ * A round walnut plinth with a brass inlay ring at the top edge. Origin at
+ * its base; the world's miniature landscape sits on top.
+ */
+function buildStage(): Group {
   const root = new Group();
   root.name = 'CreatureStage';
-  const wood = new MeshStandardMaterial({ color: 0x8b5a33, roughness: 0.65, metalness: 0 });
-  const top = new MeshStandardMaterial({ color: 0xf2dcb8, roughness: 0.9 });
-  const base = new Mesh(
-    new CylinderGeometry(STAGE_RADIUS, STAGE_RADIUS * 0.94, STAGE_HEIGHT, 48),
-    wood,
-  );
-  base.name = 'StageBase';
-  base.position.y = STAGE_HEIGHT / 2;
-  root.add(base);
-  const felt = new Mesh(new CircleGeometry(STAGE_RADIUS * 0.9, 48), top);
-  felt.name = 'StageTop';
-  felt.rotation.x = -Math.PI / 2;
-  felt.position.y = STAGE_HEIGHT + 0.0005;
-  root.add(felt);
-  const rim = new Mesh(
-    new TorusGeometry(STAGE_RADIUS * 0.99, 0.0035, 8, 64),
-    new MeshBasicMaterial({ color: 0xffc46b }),
-  );
-  rim.name = 'StageGlow';
+  const wood = surface('wood', 6, 0.35, 0xd8c4b4);
+  const side = new Mesh(new CylinderGeometry(STAGE_RADIUS, STAGE_RADIUS * 1.03, STAGE_HEIGHT, 96, 1, true), wood);
+  side.name = 'PlinthSide';
+  side.position.y = STAGE_HEIGHT / 2;
+  root.add(side);
+  const capWood = surface('wood', 1.2, 1.2, 0xd8c4b4);
+  const rim = new Mesh(new RingGeometry(STAGE_RADIUS * 0.94, STAGE_RADIUS, 96, 1), capWood);
+  rim.name = 'PlinthRim';
   rim.rotation.x = -Math.PI / 2;
   rim.position.y = STAGE_HEIGHT;
   root.add(rim);
-  return { root, floor: top };
+  const bottom = new Mesh(new CircleGeometry(STAGE_RADIUS * 1.03, 96), capWood);
+  bottom.name = 'PlinthBottom';
+  bottom.rotation.x = Math.PI / 2;
+  root.add(bottom);
+  const brass = new Mesh(
+    new TorusGeometry(STAGE_RADIUS * 0.955, 0.0018, 8, 128),
+    new MeshStandardMaterial({ color: 0xc89b52, metalness: 1, roughness: 0.3 }),
+  );
+  brass.name = 'BrassInlay';
+  brass.rotation.x = -Math.PI / 2;
+  brass.position.y = STAGE_HEIGHT + 0.0004;
+  root.add(brass);
+  return root;
 }
 
 function blobTexture(): CanvasTexture {

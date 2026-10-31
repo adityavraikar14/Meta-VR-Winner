@@ -1,4 +1,5 @@
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
+import { animateNature, forgetWater, nature } from './nature.js';
 import { playAwaken } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
 import type { Creature } from '../creatures/creature.js';
@@ -22,6 +23,8 @@ export class Diorama {
   private readonly decor = new Group();
   private readonly props = new Group();
   private worldIndex = -1;
+  /** Scenery asset version the current decoration was built with. */
+  private decorVersion = -1;
   private scene: PuzzleScene | null = null;
   private tweens: Tween[] = [];
   private spinners: Array<{ object: Object3D; speed: number }> = [];
@@ -32,8 +35,7 @@ export class Diorama {
 
   constructor(
     private readonly stageRoot: Group,
-    private readonly floorMaterial: MeshStandardMaterial,
-    floor: number,
+    private readonly floor: number,
     fx: Effects,
   ) {
     this.decor.name = 'WorldScenery';
@@ -56,13 +58,7 @@ export class Diorama {
   load(): void {
     const puzzle = PUZZLES[play.puzzleIndex];
     const world = puzzle ? puzzle.world : WORLDS.length - 1;
-    if (world !== this.worldIndex) {
-      this.worldIndex = world;
-      clear(this.decor);
-      WORLDS[world].decorate(this.decor);
-      mergeStatic(this.decor);
-      this.floorMaterial.color.setHex(WORLDS[world].floor);
-    }
+    if (world !== this.worldIndex) this.decorate(world);
     clear(this.props);
     this.tweens = [];
     this.spinners = [];
@@ -71,6 +67,14 @@ export class Diorama {
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
     mergeStatic(this.props);
+  }
+
+  private decorate(world: number): void {
+    this.worldIndex = world;
+    this.decorVersion = nature.version;
+    clear(this.decor);
+    WORLDS[world].decorate(this.decor, this.floor);
+    mergeStatic(this.decor);
   }
 
   /** True while a puzzle is waiting for a friend to try it. */
@@ -98,6 +102,9 @@ export class Diorama {
   }
 
   update(dt: number): void {
+    // The photo-real scenery arrived: swap the stand-in for it.
+    if (this.worldIndex >= 0 && nature.version !== this.decorVersion) this.decorate(this.worldIndex);
+    animateNature(dt);
     for (const spinner of this.spinners) spinner.object.rotation.y += spinner.speed * dt;
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tween = this.tweens[i];
@@ -109,16 +116,22 @@ export class Diorama {
   }
 }
 
-/** Remove and free everything under a group. Materials shared by props are freed once. */
+/**
+ * Remove and free everything under a group. Materials shared by props are
+ * freed once; scanned scenery and grass belong to caches and are kept.
+ */
 function clear(group: Group): void {
   const materials = new Set<Material>();
   group.traverse((o) => {
     const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
+    if (!mesh.isMesh || mesh.userData.shared) return;
     mesh.geometry.dispose();
     const m = mesh.material;
     for (const material of Array.isArray(m) ? m : [m]) materials.add(material);
   });
-  materials.forEach((m) => m.dispose());
+  materials.forEach((m) => {
+    forgetWater(m as MeshStandardMaterial);
+    m.dispose();
+  });
   group.clear();
 }
