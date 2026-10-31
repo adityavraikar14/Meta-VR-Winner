@@ -178,6 +178,18 @@ export class Arsenal {
   }
 
   /**
+   * Test shortcut: throws the held ball or spear along `direction` (aim assist
+   * still applies), for when hand motion can't be measured well, as with a webcam.
+   */
+  throwHeld(direction: Vector3): void {
+    const held = this.held;
+    if (!held || held.item === 'sword') return;
+    if (held.item === 'ball') held.age = Math.max(held.age, BALL_GROW);
+    this.dir.copy(direction).normalize().multiplyScalar(7);
+    this.launch(held, this.dir);
+  }
+
+  /**
    * True when a sphere at `point` hits the wall. The wall takes the hit: it
    * loses health, and shatters when it has none left.
    */

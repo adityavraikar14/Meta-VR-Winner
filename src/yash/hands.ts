@@ -105,6 +105,26 @@ export class HandState {
     this.lastVelocity.copy(this.velocity);
   }
 
+  /**
+   * Sanity check for hand data sources: fingers bend towards the palm, so the
+   * bend of slightly curled fingers should point the same way as `normal`.
+   * Returns about +1 when consistent, about −1 when the hand data is mirrored,
+   * near 0 when the fingers are too straight to tell.
+   */
+  palmCheck(): number {
+    let sum = 0;
+    const wrist = this.joint(WRIST, this.a);
+    for (const base of FINGER_BASES) {
+      const knuckle = this.joint(base + 1, this.b);
+      const along = this.c.copy(knuckle).sub(wrist).normalize();
+      const tip = this.joint(base + 4, this.d).sub(knuckle);
+      // The part of knuckle → tip that leaves the straight line is the bend.
+      tip.addScaledVector(along, -tip.dot(along));
+      sum += tip.dot(this.normal);
+    }
+    return Math.max(-1, Math.min(1, sum / 0.04));
+  }
+
   /** Forgets motion history, so a hand that reappears doesn't "teleport-throw". */
   lose(dt: number): void {
     this.tracked = false;

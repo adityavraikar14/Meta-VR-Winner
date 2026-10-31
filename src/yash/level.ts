@@ -26,6 +26,7 @@ import {
   GestureRecognizer,
   ITEM_HOLD,
   Item,
+  isOpen,
   ITEMS,
   Reading,
   SIGN_LABELS,
@@ -34,6 +35,7 @@ import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 import { MAX_HP, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
 import { HandSkeleton, SimHands } from './sim-hands.js';
+import { WebcamHands } from './webcam-hands.js';
 import { Bursts, Label, makeRing, setRing, TextPanel } from './visuals.js';
 
 /** WebXR Hand Input batch query, missing from the bundled XRFrame types. */
@@ -74,6 +76,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private arsenal!: Arsenal;
   /** Stand-in hands for the test panel; real tracked hands always win. */
   private sim = new SimHands();
+  /** Development only: real fingers from a webcam, ranked between tracked and simulated hands. */
+  private webcam = new WebcamHands();
   private skeletons!: Record<Side, HandSkeleton>;
 
   private ring!: Mesh;
@@ -130,7 +134,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
           command: (command) => this.debug(command),
           readout: () => this.readout(),
           activePose: () => (this.sim.active ? this.sim.pose : null),
+          webcam: this.webcam,
         }),
+        () => this.webcam.stop(),
       );
     }
   }
@@ -232,15 +238,21 @@ export class ArsenalLevelSystem extends createSystem({}) {
         seen[side] = true;
       }
     }
-    // Real hands take over from simulated ones the moment they show up.
+    // Headset-tracked hands win, then webcam hands, then simulated ones.
+    let drawn = false;
     if (seen.left || seen.right) this.sim.release();
-    else if (this.sim.active) {
+    else if (this.webcam.active) {
+      this.webcam.apply(dt, time, this.head, this.forward, this.hands, seen);
+      drawn = true;
+    } else if (this.sim.active) {
       this.sim.apply(dt, time, this.head, this.forward, this.hands);
       seen.left = seen.right = true;
+      drawn = true;
     }
     for (const side of SIDES) {
-      this.skeletons[side].root.visible = this.sim.active;
-      if (this.sim.active) this.skeletons[side].update(this.hands[side]);
+      const skeleton = this.skeletons[side];
+      skeleton.root.visible = drawn && seen[side];
+      if (skeleton.root.visible) skeleton.update(this.hands[side]);
       if (!seen[side]) {
         this.hands[side].lose(dt);
         this.jointSpaces[side] = null;
@@ -422,7 +434,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
         this.sim.setPose(command.pose);
         break;
       case 'move':
-        this.sim.startMove(command.move);
+        // Webcam or headset hands: Push throws the held item directly instead of moving fake hands.
+        if (command.move === 'push' && !this.sim.active && this.arsenal.held) this.arsenal.throwHeld(this.look);
+        else this.sim.startMove(command.move);
         break;
       case 'recipe':
         this.recognizer.reset();
@@ -445,6 +459,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
       case 'toggleReadout':
         this.readoutOn = !this.readoutOn;
         break;
+      case 'webcam':
+        if (command.cameraId) void this.webcam.start(command.cameraId);
+        else if (this.webcam.on) this.webcam.stop();
+        else void this.webcam.start();
+        this.sim.release();
+        break;
+      case 'swapHands':
+        this.webcam.swap = !this.webcam.swap;
+        break;
     }
   }
 
@@ -453,7 +476,13 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const lines: string[] = [];
     const r = this.recognizer;
     lines.push(
-      `view: ${this.inXR ? 'XR' : 'flat'} · hands: ${this.sim.active ? `simulated (${this.sim.pose}${this.sim.move ? ', ' + this.sim.move : ''})` : 'real/none'}`,
+      `view: ${this.inXR ? 'XR' : 'flat'} · hands: ${
+        this.webcam.active
+          ? `webcam (${this.webcam.visible()})`
+          : this.sim.active
+            ? `simulated (${this.sim.pose}${this.sim.move ? ', ' + this.sim.move : ''})`
+            : 'headset/none'
+      }`,
       `controllers L${this.controllers.left ? '✓' : '–'} R${this.controllers.right ? '✓' : '–'}`,
       `sign: ${this.reading.sign}${this.reading.hand ? ` (${this.reading.hand})` : ''}`,
       `phase: ${r.phase}${r.phase === 'armed' ? ` ${r.armedLeft.toFixed(1)}s` : ''} · hold ${Math.round(r.progress * 100)}%`,
@@ -470,8 +499,25 @@ export class ArsenalLevelSystem extends createSystem({}) {
         `   palm up${f(h.normal.dot(UP))} fwd${f(h.normal.dot(this.forward))} speed ${h.velocity.length().toFixed(1)}`,
       );
     }
-    if (this.hands.left.tracked && this.hands.right.tracked) {
-      lines.push(`gap ${this.hands.left.palm.distanceTo(this.hands.right.palm).toFixed(2)} m`);
+    const L = this.hands.left;
+    const R = this.hands.right;
+    if (L.tracked && R.tracked) {
+      // Arm sign breakdown: each part must pass (see gestures.ts).
+      this.tmp.copy(R.palm).sub(L.palm);
+      const gap = this.tmp.length();
+      this.tmp.divideScalar(gap || 1);
+      const ok = (pass: boolean) => (pass ? '✓' : '✗');
+      lines.push(
+        `arm: open L${ok(isOpen(L))} R${ok(isOpen(R))} · gap ${gap.toFixed(2)}${ok(gap > 0.06 && gap < 0.45)}`,
+        `     facing L${f(L.normal.dot(this.tmp))}${ok(L.normal.dot(this.tmp) > 0.4)} R${f(-R.normal.dot(this.tmp))}${ok(-R.normal.dot(this.tmp) > 0.4)} (need > 0.40)`,
+      );
+    }
+    if (L.tracked || R.tracked) {
+      const check = (h: HandState) => (h.tracked ? f(h.palmCheck()) : ' –');
+      lines.push(`palm side check L${check(L)} R${check(R)} (≈+1 good, ≈−1 inside out)`);
+    }
+    if (this.webcam.active) {
+      lines.push(`webcam: L/R ${this.webcam.swap ? 'swapped' : 'as labelled'}${this.webcam.autoSwaps ? ` (auto-fixed ${this.webcam.autoSwaps}×)` : ''}`);
     }
     const a = this.arsenal;
     lines.push(

@@ -7,6 +7,7 @@
  */
 import { Item, ITEM_LABELS, ITEMS, RECIPES, SIGN_LABELS } from './gestures.js';
 import type { SimMove, SimPose } from './sim-hands.js';
+import type { WebcamHands } from './webcam-hands.js';
 
 export type DebugCommand =
   | { type: 'pose'; pose: SimPose }
@@ -15,7 +16,9 @@ export type DebugCommand =
   | { type: 'handsOff' }
   | { type: 'clear' }
   | { type: 'recenter' }
-  | { type: 'toggleReadout' };
+  | { type: 'toggleReadout' }
+  | { type: 'webcam'; cameraId?: string }
+  | { type: 'swapHands' };
 
 export interface DebugApi {
   command(command: DebugCommand): void;
@@ -23,6 +26,8 @@ export interface DebugApi {
   readout(): string;
   /** The simulated pose shown as selected, or null when sim hands are off. */
   activePose(): SimPose | null;
+  /** Webcam hand tracking, for its status, preview and camera list. */
+  webcam: WebcamHands;
 }
 
 interface ButtonSpec {
@@ -45,6 +50,11 @@ const MOVE_BUTTONS: ButtonSpec[] = [
   { label: '👉 Push / throw', key: 't', command: { type: 'move', move: 'push' } },
   { label: '↘️ Swing', key: 'g', command: { type: 'move', move: 'swing' } },
   { label: '🚫 Hands off', key: '0', command: { type: 'handsOff' } },
+];
+
+const WEBCAM_BUTTONS: ButtonSpec[] = [
+  { label: '📷 Webcam on/off', key: 'y', command: { type: 'webcam' } },
+  { label: '⇄ Swap left/right', key: 'u', command: { type: 'swapHands' } },
 ];
 
 const UTILITY_BUTTONS: ButtonSpec[] = [
@@ -78,6 +88,11 @@ const STYLE = `
 #arsenal-debug .recipe button.b { padding: 3px 8px; }
 #arsenal-debug pre { margin: 8px 0 0; font: 11px/1.35 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
 #arsenal-debug[data-collapsed] .body { display: none; }
+#arsenal-debug .cam { display: none; margin-top: 6px; }
+#arsenal-debug .cam[data-on] { display: block; }
+#arsenal-debug .cam video { width: 100%; border-radius: 6px; transform: scaleX(-1); background: #000; }
+#arsenal-debug .cam select { width: 100%; margin-top: 4px; background: #16294a; color: #e6f3ff; border: 1px solid #3b6aa8; border-radius: 6px; padding: 4px; }
+#arsenal-debug .status { margin-top: 4px; color: #8fb6e0; }
 `;
 
 /** Mounts the panel; returns a function that removes it. */
@@ -144,6 +159,32 @@ export function mountDebugPanel(api: DebugApi): () => void {
   tip.textContent = 'Then: Push / throw launches a ball or spear, Swing cuts orbs with a sword or spear.';
   body.appendChild(tip);
 
+  // Webcam: real fingers from a camera, for testing without a headset.
+  section('Webcam hands (real fingers, no headset)', WEBCAM_BUTTONS);
+  const status = document.createElement('div');
+  status.className = 'status';
+  const cam = document.createElement('div');
+  cam.className = 'cam';
+  const picker = document.createElement('select');
+  picker.title = 'Camera (a phone used as a webcam shows up here too)';
+  picker.addEventListener('change', () => api.command({ type: 'webcam', cameraId: picker.value }));
+  cam.append(api.webcam.video, picker);
+  body.append(status, cam);
+  let listed = false;
+  const refreshCameras = async () => {
+    const cameras = await api.webcam.cameras();
+    const current = picker.value;
+    picker.replaceChildren(
+      ...cameras.map((c) => {
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = c.label;
+        return option;
+      }),
+    );
+    if (current) picker.value = current;
+  };
+
   section('Level', UTILITY_BUTTONS);
   const readout = document.createElement('pre');
   body.appendChild(readout);
@@ -162,6 +203,16 @@ export function mountDebugPanel(api: DebugApi): () => void {
     readout.textContent = api.readout();
     const active = api.activePose();
     for (const [pose, el] of poseButtons) el.toggleAttribute('data-on', pose === active);
+    const webcam = api.webcam;
+    cam.toggleAttribute('data-on', webcam.on);
+    status.textContent =
+      webcam.status === 'off'
+        ? 'Uses your webcam, or a phone set up as a webcam. Loads Google MediaPipe from the internet the first time.'
+        : `Camera: ${webcam.status}${webcam.active ? ` · hands seen ${webcam.visible()}` : ''}`;
+    if (webcam.active && !listed) {
+      listed = true;
+      void refreshCameras();
+    }
   }, 150);
 
   return () => {
