@@ -42,6 +42,10 @@ Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution
 | `public/audio/music-explore.mp3` | "Equatorial Complex" |
 | `public/audio/music-battle.mp3` | "Final Battle of the Dark Wizards" |
 | `public/audio/music-victory.mp3` | "Heroic Age" |
+| `public/audio/music-menu.mp3` | "Our Story Begins" |
+| `public/audio/music-river.mp3` | "Morning" |
+| `public/audio/music-mine.mp3` | "Tabuk" |
+| `public/audio/music-duel.mp3` | "Call to Adventure" |
 
 ## Textures and lighting
 

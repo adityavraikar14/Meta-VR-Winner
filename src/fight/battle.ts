@@ -20,6 +20,7 @@ import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import type { Extension } from '../hand-pose.js';
 import { ParticlePool } from '../machines/particles.js';
+import { useItem } from '../bag.js';
 import { play, saveProgress } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { ShadowDragon } from './dragon.js';
@@ -490,6 +491,11 @@ export class DragonBattle {
   }
 
   private wound(damage: number): void {
+    // A Sun Shard from your bag makes a full blow of light strike twice as hard.
+    if (damage >= 1 && useItem('shard')) {
+      damage *= 2;
+      this.burstAt(this.weakPoints()[1], 40, 0xfff2a0);
+    }
     this.dragonHealth -= damage;
     this.dragon.flinch();
     this.dragon3d?.flinch();
@@ -624,6 +630,13 @@ export class DragonBattle {
   }
 
   private hurtPlayer(at: Vector3): void {
+    if (useItem('ward')) {
+      // The Iron Ward from your bag takes the blow.
+      playClang(0.3, 0.06);
+      this.burstAt(at, 26, 0xc8d0dc);
+      this.flash('Your Iron Ward takes the blow!', 1.6);
+      return;
+    }
     this.health--;
     this.mistakes++;
     playBoom(0.12);

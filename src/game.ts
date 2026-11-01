@@ -22,6 +22,7 @@ import {
   setMusic,
   tickMusic,
 } from './audio.js';
+import { add as addResource, RESOURCE_ORDER } from './bag.js';
 import { devActions, devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -395,6 +396,14 @@ export class ShadowGameSystem extends createSystem({
       if (this.phase === 'title') this.menuAction({ do: 'arena' });
     };
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
+    // Dev: Q opens the Bag; Z fills it with three of everything.
+    devActions.q = () => {
+      if (this.phase === 'title') this.menu.open('bag');
+    };
+    devActions.z = () => {
+      for (const r of RESOURCE_ORDER) addResource(r, 3);
+      if (this.phase === 'title') this.menu.open('bag');
+    };
     // Dev: E opens the Credits page from the menu.
     devActions.e = () => {
       if (this.phase === 'title') this.menu.open('credits');
@@ -483,7 +492,10 @@ export class ShadowGameSystem extends createSystem({
     stage.playing = this.phase === 'matching' && !stage.menuOpen;
     // Music only in the headset; the Arena keeps Yash's own soundscape.
     const inHeadset = this.visibilityState.peek() === VisibilityState.Visible;
-    setMusic(!inHeadset || stage.arena ? null : stage.music ?? 'explore');
+    // The menu has its theme, each world its own, the duel a lively one; scenes can ask for battle music.
+    const worldMusic = this.puzzle?.id === 'duel' ? 'duel' : WORLDS[this.puzzle?.world ?? 0]?.music ?? 'explore';
+    const menuMusic = this.phase === 'title' || this.phase === 'table' || this.phase === 'growing' || this.phase === 'intro';
+    setMusic(!inHeadset || stage.arena ? null : stage.music ?? (menuMusic ? 'menu' : worldMusic));
     tickMusic(dt);
     switch (this.phase) {
       case 'table':
@@ -1386,19 +1398,22 @@ function wrapText(
   maxWidth: number,
   lineHeight: number,
 ): void {
-  const words = text.split(' ');
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > maxWidth && line) {
-      ctx.fillText(line, x, y);
-      line = word;
-      y += lineHeight;
-    } else {
-      line = next;
+  // A line break in the text starts a new paragraph.
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (ctx.measureText(next).width > maxWidth && line) {
+        ctx.fillText(line, x, y);
+        line = word;
+        y += lineHeight;
+      } else {
+        line = next;
+      }
     }
+    if (line) ctx.fillText(line, x, y);
+    y += lineHeight;
   }
-  if (line) ctx.fillText(line, x, y);
 }
 
 function makeCanvas(width: number, height: number): HTMLCanvasElement {

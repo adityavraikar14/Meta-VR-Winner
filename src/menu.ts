@@ -1,5 +1,6 @@
 import type { Object3D, Vector3 } from '@iwsdk/core';
-import { isMuted, playClick, playPrompt, setMuted } from './audio.js';
+import { isMuted, playClick, playPrompt, playTinkle, setMuted } from './audio.js';
+import { count, craft, items, needsText, RECIPES, RESOURCE_ORDER, RESOURCES } from './bag.js';
 import { play, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
@@ -10,7 +11,7 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
  * buttons in front of it: Home (play, chapters, settings), a chapter
  * picker with stars and locks, and settings.
  */
-export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits';
+export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles';
 
 /** What the menu asks the game to do. */
 export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'arena' };
@@ -99,7 +100,11 @@ export class MainMenu {
         ? this.chapters()
         : this.page === 'credits'
           ? this.credits()
-          : this.settings();
+          : this.page === 'bag'
+            ? this.bag()
+            : this.page === 'battles'
+              ? this.battles()
+              : this.settings();
     const xs = LAYOUTS[this.slots.length];
     const eye = this.parent.localToWorld(this.viewer.clone());
     this.buttons.forEach((button, i) => {
@@ -133,8 +138,8 @@ export class MainMenu {
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
       { label: fresh ? 'Play' : next ? 'Continue' : 'Replay', run: () => ({ do: 'play' }), primary: true },
-      { label: 'Duel', run: () => ({ do: 'duel' }) },
-      { label: 'Arena', run: () => ({ do: 'arena' }) },
+      { label: 'Bag', run: () => this.go('bag') },
+      { label: 'Battles', run: () => this.go('battles') },
       { label: 'Settings', run: () => this.go('settings') },
     ];
   }
@@ -206,6 +211,43 @@ export class MainMenu {
     ];
   }
 
+  private crafted = '';
+
+  /** What you have gathered, what you carry, and the recipes. */
+  private bag(): Slot[] {
+    const have = RESOURCE_ORDER.map((r) => `${RESOURCES[r].plural} ${count(r)}`).join('  ·  ');
+    const carrying = RECIPES.map((r) => `${items(r.item)} ${r.label}`).join('  ·  ');
+    const recipes = RECIPES.map((r) => `${r.label}: ${needsText(r)}`).join('  ·  ');
+    this.draw(this.crafted || 'Gather in the worlds, craft here', 'Your Bag', `${have}\nCarrying: ${carrying}`, recipes);
+    this.crafted = '';
+    return [
+      { label: 'Back', run: () => this.go('home'), primary: true },
+      ...RECIPES.map((recipe) => ({
+        label: recipe.label,
+        run: () => {
+          if (craft(recipe)) {
+            playTinkle();
+            this.crafted = `Made a ${recipe.name}: ${recipe.does}`;
+          } else {
+            playPrompt();
+            this.crafted = `${recipe.name} needs ${needsText(recipe)}`;
+          }
+          this.layout();
+          return null;
+        },
+      })),
+    ];
+  }
+
+  private battles(): Slot[] {
+    this.draw('Side games', 'Battles', 'Ink Duel: draw in the air and throw your drawings at a rival puppeteer.  ·  Arena: Yash\u2019s hand-sign fight against a sentinel.', 'Bring draughts, wards and sun shards from your bag');
+    return [
+      { label: 'Back', run: () => this.go('home'), primary: true },
+      { label: 'Duel', run: () => ({ do: 'duel' }) },
+      { label: 'Arena', run: () => ({ do: 'arena' }) },
+    ];
+  }
+
   private creditPage = 0;
 
   private credits(): Slot[] {
@@ -234,7 +276,7 @@ export class MainMenu {
 const CREDITS: Array<[string, string]> = [
   ['The Dragon and the Phoenix', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D (Sketchfab, CC BY 4.0)'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
-  ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Equatorial Complex · Final Battle of the Dark Wizards · Heroic Age'],
+  ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
   ['The World', 'Plants, rocks, textures and the daylight sky: Poly Haven (CC0) · Leaves: ambientCG (CC0)'],
   ['The Arena', 'The Arsenal, a hand-sign fight with sword, spear, power ball, wall and blaster, by Yash Ammanavar'],
   ['Made With', 'Meta Immersive Web SDK and three.js · Machines, forge, brewing, sounds and shadows made in code'],

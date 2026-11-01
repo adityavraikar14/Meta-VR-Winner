@@ -24,6 +24,8 @@ export const play = {
   stars: {} as Record<string, number>,
   /** Things made along the way (an axe, potions…), carried on the wrist. */
   items: [] as string[],
+  /** Resources gathered in the worlds (wood, stone, iron, herbs, crystal, embers). */
+  bag: {} as Record<string, number>,
 };
 
 const SAVE_KEY = 'shadowplay.progress.v1';
@@ -36,6 +38,7 @@ export function loadProgress(): void {
     if (Array.isArray(saved.unlocked)) play.unlocked = saved.unlocked;
     if (saved.stars && typeof saved.stars === 'object') play.stars = saved.stars;
     if (Array.isArray(saved.items)) play.items = saved.items;
+    if (saved.bag && typeof saved.bag === 'object') play.bag = saved.bag;
   } catch {
     // Storage blocked or corrupt: start a fresh story.
   }
@@ -45,7 +48,7 @@ export function saveProgress(): void {
   try {
     localStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items }),
+      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag }),
     );
   } catch {
     // Not saved; the story still plays.
@@ -57,6 +60,7 @@ export function resetProgress(): void {
   play.unlocked = [];
   play.stars = {};
   play.items = [];
+  play.bag = {};
   saveProgress();
 }
 

@@ -4,6 +4,7 @@ import { animateNature, forgetWater, nature } from './nature.js';
 import { playAwaken, setAmbience, tickAmbience } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
 import type { HandState } from '../creatures/hand-input.js';
+import { Pickups } from './pickups.js';
 import type { Creature } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import { mergeStatic } from '../merge.js';
@@ -38,6 +39,7 @@ export class Diorama {
   /** Scenery asset version the current decoration was built with. */
   private decorVersion = -1;
   private scene: PuzzleScene | null = null;
+  private pickups: Pickups | null = null;
   private tweens: Tween[] = [];
   private spinners: Array<{ object: Object3D; speed: number }> = [];
   private attempting = false;
@@ -137,6 +139,17 @@ export class Diorama {
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
     mergeStatic(this.props);
+    // Resources to gather, around the edges of the story's levels.
+    this.pickups = null;
+    if (puzzle && puzzle.id !== 'duel') {
+      const spot = new Vector3();
+      const blocked = (x: number, z: number) => {
+        this.stageRoot.localToWorld(spot.set(x, this.floor, z));
+        return this.blockers.some((b) => b.center.distanceTo(spot) < b.radius + 0.04);
+      };
+      this.pickups = new Pickups(world, this.floor, blocked);
+      this.props.add(this.pickups.group);
+    }
   }
 
   private decorate(world: number): void {
@@ -206,6 +219,7 @@ export class Diorama {
     stage.paper!.getWorldPosition(this.paperAt);
     this.room.position.y = -this.paperAt.y;
     this.scene?.update?.(dt, hands, head);
+    if (stage.playing) this.pickups?.update(dt, hands);
     for (const spinner of this.spinners) spinner.object.rotation.y += spinner.speed * dt;
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tween = this.tweens[i];

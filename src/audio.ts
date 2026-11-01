@@ -769,10 +769,14 @@ export function tickAmbience(dt: number): void {
  * cross-faded: a bright, mystical theme for the worlds, an epic one for the
  * dragon, a fanfare when it falls.
  */
-export type MusicTrack = 'explore' | 'battle' | 'victory';
+export type MusicTrack = 'menu' | 'explore' | 'river' | 'mine' | 'duel' | 'battle' | 'victory';
 
 const MUSIC: Record<MusicTrack, { file: string; volume: number; loop: boolean }> = {
+  menu: { file: 'audio/music-menu.mp3', volume: 0.3, loop: true },
   explore: { file: 'audio/music-explore.mp3', volume: 0.28, loop: true },
+  river: { file: 'audio/music-river.mp3', volume: 0.3, loop: true },
+  mine: { file: 'audio/music-mine.mp3', volume: 0.3, loop: true },
+  duel: { file: 'audio/music-duel.mp3', volume: 0.32, loop: true },
   battle: { file: 'audio/music-battle.mp3', volume: 0.4, loop: true },
   victory: { file: 'audio/music-victory.mp3', volume: 0.45, loop: false },
 };
