@@ -49,6 +49,8 @@ export const stage = {
   previewWorld: null as number | null,
   /** A scene asking for a music track this frame (the dragon fight); null: the world's theme. */
   music: null as 'battle' | 'victory' | null,
+  /** The title menu is up: the level's props step aside so the menu reads clearly. */
+  titleMenu: false,
   /** In Yash's Arena: the paper and the stage step aside. */
   arena: false,
   /** The level is being played right now (not the menu, the table or the story card). */

@@ -18,6 +18,7 @@ import {
   SRGBColorSpace,
   type Texture,
   Vector3,
+  Vector4,
 } from '@iwsdk/core';
 
 /**
@@ -411,6 +412,12 @@ function earthSide(spec: GroundSpec): Mesh {
 export const clock = { value: 0 };
 
 /**
+ * Fingertips the grass parts around: world positions, w = 1 while tracked.
+ * Set every frame from the hands.
+ */
+export const grassTouch = { value: Array.from({ length: 6 }, () => new Vector4(0, -10, 0, 0)) };
+
+/**
  * One blade, 1 unit tall: widest a third of the way up, narrowing to a
  * rounded tip, arching over. Colour runs from a shaded root to a sunlit tip.
  */
@@ -450,8 +457,28 @@ function grassMaterial(): MeshStandardMaterial {
   const material = new MeshStandardMaterial({ vertexColors: true, side: DoubleSide, roughness: 0.85, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = clock;
+    shader.uniforms.uTouch = grassTouch;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform vec4 uTouch[6];')
+      .replace(
+        '#include <project_vertex>',
+        `vec4 mvPosition = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+        mvPosition = instanceMatrix * mvPosition;
+        #endif
+        vec4 worldPos = modelMatrix * mvPosition;
+        // A fingertip close by parts the blades: tips bend away and down, roots stay.
+        for (int i = 0; i < 6; i++) {
+          vec2 away = worldPos.xz - uTouch[i].xz;
+          float reach = 1.0 - smoothstep(0.012, 0.055, length(away));
+          float height = 1.0 - smoothstep(0.0, 0.06, abs(worldPos.y - uTouch[i].y));
+          float bend = uTouch[i].w * reach * height * position.y * position.y;
+          worldPos.xz += normalize(away + vec2(1e-5)) * bend * 0.03;
+          worldPos.y -= bend * 0.012;
+        }
+        mvPosition = viewMatrix * worldPos;
+        gl_Position = projectionMatrix * mvPosition;`,
+      )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>

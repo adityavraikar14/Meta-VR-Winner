@@ -18,70 +18,166 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 18px;
+        gap: 16px;
         padding: 24px;
         box-sizing: border-box;
+        overflow: hidden;
         text-align: center;
         color: #ffe9c4;
         font-family: Georgia, 'Times New Roman', serif;
+        /* Twilight: deep blue overhead, plum, and amber light low on the horizon. */
         background:
-          radial-gradient(ellipse 60% 45% at 50% 38%, rgba(255, 196, 110, 0.35), transparent 70%),
-          radial-gradient(ellipse at 50% 120%, #3b2414, #120b06 70%);
-        transition: opacity 0.5s ease;
+          radial-gradient(ellipse 55% 42% at 50% 36%, rgba(255, 196, 110, 0.32), transparent 70%),
+          linear-gradient(180deg, #0d1230 0%, #2a1840 38%, #5a2a3a 66%, #c0652e 92%, #e89a3c 100%);
+        transition: opacity 0.6s ease;
       }
       #sp-splash[data-hidden] {
         opacity: 0;
         pointer-events: none;
       }
+      /* Stars twinkling over the scene. */
+      #sp-splash .stars,
+      #sp-splash .stars::after {
+        position: absolute;
+        inset: 0 0 35% 0;
+        background-image:
+          radial-gradient(1.6px 1.6px at 12% 18%, #fff, transparent),
+          radial-gradient(1.2px 1.2px at 27% 8%, #fff8e0, transparent),
+          radial-gradient(1.8px 1.8px at 41% 22%, #fff, transparent),
+          radial-gradient(1.1px 1.1px at 58% 11%, #ffe9c4, transparent),
+          radial-gradient(1.6px 1.6px at 73% 25%, #fff, transparent),
+          radial-gradient(1.2px 1.2px at 86% 9%, #fff8e0, transparent),
+          radial-gradient(1.4px 1.4px at 93% 30%, #fff, transparent),
+          radial-gradient(1px 1px at 6% 40%, #fff, transparent),
+          radial-gradient(1.3px 1.3px at 33% 44%, #ffe9c4, transparent),
+          radial-gradient(1px 1px at 66% 47%, #fff, transparent);
+        pointer-events: none;
+        animation: twinkle 5s ease-in-out infinite;
+      }
+      #sp-splash .stars::after {
+        content: '';
+        inset: 0;
+        transform: translate(3.5%, 6%);
+        animation-delay: -2.5s;
+      }
+      /* A silhouette horizon: jungle canopy on the left, the dragon's mountain on the right. */
+      #sp-splash .horizon {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 26vh;
+        pointer-events: none;
+      }
+      #sp-splash > :not(.stars):not(.horizon) {
+        position: relative;
+      }
       #sp-splash .lantern {
-        width: 96px;
-        height: 96px;
+        width: 104px;
+        height: 104px;
         border-radius: 50%;
-        background: radial-gradient(circle, #fff3c9 0%, #ffbd55 45%, rgba(255, 150, 40, 0) 72%);
+        background: radial-gradient(circle, #fff6d6 0%, #ffc463 42%, rgba(255, 150, 40, 0) 72%);
         animation: flicker 3s ease-in-out infinite;
+      }
+      #sp-splash .lantern::before {
+        content: '';
+        position: absolute;
+        inset: -70px;
+        border-radius: 50%;
+        background: repeating-conic-gradient(from 0deg, rgba(255, 214, 140, 0.16) 0deg 5deg, transparent 5deg 20deg);
+        -webkit-mask: radial-gradient(circle, #000 25%, transparent 70%);
+        mask: radial-gradient(circle, #000 25%, transparent 70%);
+        animation: rays 40s linear infinite;
       }
       #sp-splash .shadow {
         display: block;
-        margin: -8px auto 0;
-        filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+        margin: -10px auto 0;
+        filter: drop-shadow(0 0 6px rgba(255, 150, 60, 0.35));
         animation: glide 4.2s ease-in-out infinite;
       }
       @keyframes glide {
         0%, 100% { transform: translate(-6px, 0) rotate(-2deg); }
         50% { transform: translate(6px, -7px) rotate(2deg); }
       }
-      #sp-splash h1 {
-        margin: 0;
-        font-size: clamp(44px, 9vw, 84px);
-        letter-spacing: 0.02em;
-        color: #fff1d6;
-        text-shadow: 0 4px 24px rgba(255, 170, 60, 0.45);
-      }
       #sp-splash .kicker {
-        font-style: italic;
-        font-size: 18px;
-        color: #d9a96a;
+        display: flex;
+        align-items: center;
+        gap: 14px;
         margin: 0;
+        font-size: 15px;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: #f3c98a;
+      }
+      #sp-splash .kicker::before,
+      #sp-splash .kicker::after {
+        content: '';
+        width: 46px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #f3c98a, transparent);
+      }
+      #sp-splash h1 {
+        margin: -4px 0 0;
+        font-size: clamp(48px, 10vw, 96px);
+        letter-spacing: 0.03em;
+        background: linear-gradient(180deg, #fff7e2 10%, #ffd27a 55%, #e8963a 95%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        filter: drop-shadow(0 4px 22px rgba(255, 170, 60, 0.45));
       }
       #sp-splash .tagline {
         margin: 0;
         max-width: 30em;
         font-size: 19px;
         line-height: 1.45;
-        color: #f3dcb6;
+        color: #f7e3c2;
+        text-shadow: 0 1px 8px rgba(20, 8, 30, 0.6);
+      }
+      #sp-splash .chapters {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin: 2px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      #sp-splash .chapters li {
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 14px;
+        color: #ffe9c4;
+        background: rgba(30, 14, 40, 0.45);
+        border: 1px solid rgba(255, 210, 140, 0.35);
+        backdrop-filter: blur(4px);
+      }
+      #sp-splash .chapters li span {
+        color: #f3c98a;
+        margin-right: 6px;
+        font-size: 12px;
+        letter-spacing: 0.1em;
       }
       #sp-splash button {
-        margin-top: 10px;
-        min-width: 240px;
-        padding: 16px 36px;
+        margin-top: 8px;
+        min-width: 260px;
+        padding: 17px 40px;
         border: 0;
         border-radius: 999px;
         font: 700 22px Georgia, 'Times New Roman', serif;
+        letter-spacing: 0.02em;
         color: #2b1709;
-        background: linear-gradient(#ffd27a, #f29b2e);
-        box-shadow: 0 6px 0 #9a5a1c, 0 10px 30px rgba(255, 160, 50, 0.35);
+        background:
+          linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%) -200% 0 / 200% 100% no-repeat,
+          linear-gradient(#ffe08f, #f3a23a);
+        box-shadow: 0 6px 0 #9a5a1c, 0 12px 36px rgba(255, 160, 50, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
         cursor: pointer;
         transition: transform 0.08s ease, box-shadow 0.08s ease;
+        animation: shimmer 3.2s ease-in-out infinite;
+      }
+      #sp-splash button:hover {
+        transform: translateY(-1px);
       }
       #sp-splash button:active {
         transform: translateY(5px);
@@ -89,11 +185,12 @@
       }
       #sp-splash button:disabled {
         cursor: default;
-        filter: grayscale(0.6) brightness(0.8);
+        animation: none;
+        filter: grayscale(0.5) brightness(0.85);
       }
       #sp-splash .bar {
-        width: 240px;
-        height: 6px;
+        width: 260px;
+        height: 5px;
         border-radius: 3px;
         background: rgba(255, 233, 196, 0.15);
         overflow: hidden;
@@ -103,23 +200,30 @@
         height: 100%;
         width: 30%;
         border-radius: 3px;
-        background: #ffbd55;
+        background: linear-gradient(90deg, #ffd27a, #ff9a3a);
         animation: load 1.2s ease-in-out infinite;
       }
       #sp-splash .hints {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 10px 22px;
-        margin: 6px 0 0;
+        gap: 8px 10px;
+        margin: 4px 0 0;
         padding: 0;
         list-style: none;
-        font-size: 15px;
-        color: #c9a57a;
+        font-size: 14px;
+        color: #f0d7b0;
+      }
+      #sp-splash .hints li {
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: rgba(20, 8, 30, 0.35);
+        border: 1px solid rgba(255, 210, 140, 0.22);
       }
       #sp-splash .note {
-        font-size: 14px;
-        color: #a4825c;
+        font-size: 13px;
+        color: #f0d7b0;
+        opacity: 0.8;
         margin: 0;
       }
       @keyframes flicker {
@@ -127,21 +231,37 @@
         45% { transform: scale(1.06); opacity: 0.92; }
         60% { transform: scale(0.98); opacity: 1; }
       }
-      @keyframes hop {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
+      @keyframes rays {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes twinkle {
+        0%, 100% { opacity: 0.9; }
+        50% { opacity: 0.35; }
+      }
+      @keyframes shimmer {
+        0%, 55% { background-position: -200% 0, 0 0; }
+        100% { background-position: 200% 0, 0 0; }
       }
       @keyframes load {
         0% { transform: translateX(-100%); }
         100% { transform: translateX(340%); }
       }
       @media (prefers-reduced-motion: reduce) {
-        #sp-splash * { animation: none !important; }
+        #sp-splash *, #sp-splash *::before, #sp-splash *::after { animation: none !important; }
       }
     </style>
   </head>
   <body style="margin: 0; overflow: hidden; background: #120b06">
     <div id="sp-splash">
+      <div class="stars" aria-hidden="true"></div>
+      <svg class="horizon" aria-hidden="true" viewBox="0 0 1200 260" preserveAspectRatio="none">
+        <!-- Far hills, then jungle canopy (left), the mountain (right), all in silhouette. -->
+        <path d="M0 170 C150 120 260 150 380 130 C520 105 600 150 760 120 C900 95 1040 140 1200 110 L1200 260 L0 260 Z" fill="#3a1830" opacity="0.65" />
+        <path d="M0 200 C40 160 70 190 100 165 C130 140 160 185 195 160 C230 135 255 180 290 158 C320 140 350 182 385 168 C420 150 450 190 480 185 L520 260 L0 260 Z" fill="#1a0c18" />
+        <path d="M640 260 L840 70 L880 108 L905 84 L1100 260 Z" fill="#1a0c18" />
+        <path d="M835 76 L846 90 L860 80 L872 96 L880 108 L840 70 Z" fill="#ff9a3a" opacity="0.35" />
+        <path d="M0 230 C200 215 400 238 600 225 C800 212 1000 236 1200 222 L1200 260 L0 260 Z" fill="#0d0610" />
+      </svg>
       <div class="lantern" aria-hidden="true"></div>
       <svg class="shadow" aria-hidden="true" viewBox="0 0 120 56" width="132" height="62">
         <!-- The Shadow Dragon in flight, cut like a shadow puppet. -->
@@ -158,12 +278,18 @@
       <p class="kicker">Escape the Lantern</p>
       <h1>Shadowplay</h1>
       <p class="tagline">Your hands make the shadows. The shadows come alive.</p>
+      <ul class="chapters" aria-label="Chapters">
+        <li><span>I</span>The Jungle</li>
+        <li><span>II</span>The River</li>
+        <li><span>III</span>The Old Mine</li>
+        <li><span>IV</span>Dragon&#8217;s Mountain</li>
+      </ul>
       <div class="bar" id="sp-bar"><span></span></div>
       <button id="sp-play" disabled>Loading…</button>
       <ul class="hints">
         <li>✋ Hands only, no controllers</li>
         <li>🪑 Play seated</li>
-        <li>🕯️ About 10 minutes a chapter</li>
+        <li>🎒 Gather, craft, and fight a dragon</li>
       </ul>
       <p class="note" id="sp-note">Best on Meta Quest with hand tracking on.</p>
     </div>

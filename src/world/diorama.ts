@@ -1,6 +1,6 @@
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
-import { animateNature, forgetWater, nature } from './nature.js';
+import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
 import { playAwaken, setAmbience, tickAmbience } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
 import type { HandState } from '../creatures/hand-input.js';
@@ -81,7 +81,7 @@ export class Diorama {
   /** Show or hide the whole world (it stays hidden until the table is found). */
   setHidden(hidden: boolean): void {
     for (const group of [this.decor, this.screen, this.room]) group.visible = !hidden;
-    this.props.visible = !hidden && !this.previewing;
+    this.props.visible = !hidden && !this.previewing && !stage.titleMenu;
     // In the Arena the world stays around you on the floor; the table and screen step aside.
     if (stage.arena) this.room.visible = true;
   }
@@ -214,6 +214,15 @@ export class Diorama {
       this.grow(null);
     }
     animateNature(dt);
+    // The grass parts around your fingertips.
+    let t = 0;
+    for (const hand of hands) {
+      for (const tip of hand.tips) {
+        const slot = grassTouch.value[t++];
+        if (!slot) break;
+        slot.set(tip.x, tip.y, tip.z, hand.tracked ? 1 : 0);
+      }
+    }
     tickAmbience(dt);
     // The room's plants stand on the real floor (y = 0), wherever the screen is.
     stage.paper!.getWorldPosition(this.paperAt);

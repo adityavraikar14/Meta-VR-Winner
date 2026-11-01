@@ -490,6 +490,7 @@ export class ShadowGameSystem extends createSystem({
     this.shadowWorld.update(dt);
 
     stage.playing = this.phase === 'matching' && !stage.menuOpen;
+    stage.titleMenu = this.phase === 'title';
     // Music only in the headset; the Arena keeps Yash's own soundscape.
     const inHeadset = this.visibilityState.peek() === VisibilityState.Visible;
     // The menu has its theme, each world its own, the duel a lively one; scenes can ask for battle music.
@@ -1318,28 +1319,78 @@ export class ShadowGameSystem extends createSystem({
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(255, 246, 226, 0.95)';
-    roundRect(ctx, 8, 8, w - 16, h - 16, 36);
+    // An illuminated parchment card: warm paper, a soft shadow, a gilded double border.
+    ctx.save();
+    ctx.shadowColor = 'rgba(40, 20, 5, 0.45)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 6;
+    const paper = ctx.createLinearGradient(0, 0, 0, h);
+    paper.addColorStop(0, '#fffaf0');
+    paper.addColorStop(0.55, '#fbefd6');
+    paper.addColorStop(1, '#f1dfba');
+    ctx.fillStyle = paper;
+    roundRect(ctx, 14, 12, w - 28, h - 30, 38);
     ctx.fill();
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = '#8a5a33';
+    ctx.restore();
+    // A warm glow from the middle, like lamplight on paper.
+    const glow = ctx.createRadialGradient(w / 2, h * 0.42, 20, w / 2, h * 0.42, w * 0.55);
+    glow.addColorStop(0, 'rgba(255, 236, 190, 0.55)');
+    glow.addColorStop(1, 'rgba(255, 236, 190, 0)');
+    ctx.fillStyle = glow;
+    roundRect(ctx, 14, 12, w - 28, h - 30, 38);
+    ctx.fill();
+    const gold = ctx.createLinearGradient(0, 0, w, h);
+    gold.addColorStop(0, '#b8862e');
+    gold.addColorStop(0.5, '#f0cf7a');
+    gold.addColorStop(1, '#a8741f');
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 7;
+    roundRect(ctx, 14, 12, w - 28, h - 30, 38);
     ctx.stroke();
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, 30, 28, w - 60, h - 62, 28);
+    ctx.stroke();
+    // Corner flourishes.
+    ctx.fillStyle = '#c99a3c';
+    for (const [cx, cy] of [[52, 50], [w - 52, 50], [52, h - 66], [w - 52, h - 66]]) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 9);
+      ctx.lineTo(cx + 9, cy);
+      ctx.lineTo(cx, cy + 9);
+      ctx.lineTo(cx - 9, cy);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#9a6a3a';
-    ctx.font = 'italic 600 36px Georgia, "Times New Roman", serif';
-    ctx.fillText(kicker, w / 2, 70, w - 80);
+    // Kicker between two fine rules.
+    ctx.fillStyle = '#9a6a2a';
+    ctx.font = 'italic 600 34px Georgia, "Times New Roman", serif';
+    ctx.fillText(kicker, w / 2, 76, w - 220);
+    const kw = Math.min(w - 220, ctx.measureText(kicker).width);
+    ctx.strokeStyle = 'rgba(176, 132, 60, 0.7)';
+    ctx.lineWidth = 2;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(w / 2 + side * (kw / 2 + 18), 77);
+      ctx.lineTo(w / 2 + side * (kw / 2 + 90), 77);
+      ctx.stroke();
+    }
     const stars = /^[★☆]+$/.test(title);
-    ctx.fillStyle = stars ? '#f0a820' : '#3a2412';
-    ctx.font = stars ? '700 110px Georgia, serif' : '700 72px Georgia, "Times New Roman", serif';
-    ctx.fillText(title, w / 2, 160, w - 80);
+    ctx.save();
+    ctx.shadowColor = stars ? 'rgba(255, 190, 40, 0.8)' : 'rgba(200, 140, 40, 0.35)';
+    ctx.shadowBlur = stars ? 24 : 10;
+    ctx.fillStyle = stars ? '#f0a820' : '#3a2210';
+    ctx.font = stars ? '700 110px Georgia, serif' : '700 74px Georgia, "Times New Roman", serif';
+    ctx.fillText(title, w / 2, 160, w - 100);
+    ctx.restore();
     ctx.fillStyle = '#4a3020';
-    ctx.font = '500 38px Georgia, "Times New Roman", serif';
-    wrapText(ctx, body, w / 2, 270, w - 220, 50);
+    ctx.font = '500 36px Georgia, "Times New Roman", serif';
+    wrapText(ctx, body, w / 2, 262, w - 200, 48);
     if (footer) {
-      ctx.fillStyle = '#9a6a3a';
-      ctx.font = '600 34px Georgia, serif';
-      ctx.fillText(footer, w / 2, h - 60, w - 80);
+      ctx.fillStyle = '#9a6a2a';
+      ctx.font = 'italic 600 30px Georgia, serif';
+      ctx.fillText(footer, w / 2, h - 66, w - 120);
     }
     this.bannerTexture.needsUpdate = true;
   }
@@ -1350,14 +1401,26 @@ export class ShadowGameSystem extends createSystem({
     const canvas = this.captionCanvas;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(40, 22, 10, 0.82)';
-    roundRect(ctx, 4, 4, canvas.width - 8, canvas.height - 8, 40);
+    // Dark lacquered wood with a fine gold edge and a soft inner light.
+    const wood = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    wood.addColorStop(0, 'rgba(62, 36, 18, 0.92)');
+    wood.addColorStop(1, 'rgba(30, 16, 8, 0.92)');
+    ctx.fillStyle = wood;
+    roundRect(ctx, 6, 6, canvas.width - 12, canvas.height - 12, 44);
     ctx.fill();
-    ctx.fillStyle = '#ffe2a8';
-    ctx.font = '600 48px Georgia, "Times New Roman", serif';
+    ctx.strokeStyle = 'rgba(230, 186, 100, 0.85)';
+    ctx.lineWidth = 3;
+    roundRect(ctx, 10, 10, canvas.width - 20, canvas.height - 20, 40);
+    ctx.stroke();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2, canvas.width - 60);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 200, 110, 0.55)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffe9c0';
+    ctx.font = '600 46px Georgia, "Times New Roman", serif';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2, canvas.width - 80);
+    ctx.restore();
     this.captionTexture.needsUpdate = true;
   }
 }
