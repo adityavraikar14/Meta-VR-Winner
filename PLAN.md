@@ -148,7 +148,15 @@ on device: hop onto the real table, hide behind real objects.
       simmer is best and a hard boil weakens and boils dry; ladle it into two vials
 - [x] Wrist inventory: the palm menu shows what you carry (the axe, draughts) and a Drink
       button that heals a heart in the dragon fight
-- [ ] Next: polish pass on every chapter, on-Quest tuning (Nov 12), trailer
+- [x] Polish (Nov 1): shadow dragon on the start page; prologue and level texts rewritten
+      for the escape story (fox puppet, dragon's breath scatters the Great Lantern); a
+      background soundscape per world (insects and birds, running water and frogs,
+      dripping mine, distant thunder); smithy verified with real emulated hand motions
+      (pinch the stone, press the bellows, tongs, hammer swing); draw calls cut ~30–40%
+- [ ] On a Quest (Nov 12): profile frame time (jungle is heaviest: ~186 calls both eyes,
+      ~360k triangles per eye); tune pinch/throw/strike thresholds and palm shield on real
+      hands; then the trailer
+- [ ] If time: use the axe (chop the iron roots with a real swing); horse ride (world moves)
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving
