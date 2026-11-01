@@ -24,7 +24,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  */
 
 /** A tapered ribbon along a smooth centreline, as a closed outline. */
-function ribbon(points: Array<[number, number]>, widths: number[], samples = 28): Shape {
+export function ribbon(points: Array<[number, number]>, widths: number[], samples = 28): Shape {
   const curve = new CatmullRomCurve3(points.map(([x, y]) => new Vector3(x, y, 0)));
   const left: Vector2[] = [];
   const right: Vector2[] = [];
@@ -45,7 +45,7 @@ function ribbon(points: Array<[number, number]>, widths: number[], samples = 28)
 }
 
 /** A row of spikes standing up along a centreline (dorsal ridge, teeth). */
-function spikes(points: Array<[number, number]>, count: number, height: number, side: 1 | -1, lean = 0.3): Shape[] {
+export function spikes(points: Array<[number, number]>, count: number, height: number, side: 1 | -1, lean = 0.3): Shape[] {
   const curve = new CatmullRomCurve3(points.map(([x, y]) => new Vector3(x, y, 0)));
   const out: Shape[] = [];
   for (let i = 0; i < count; i++) {
@@ -65,7 +65,7 @@ function spikes(points: Array<[number, number]>, count: number, height: number, 
   return out;
 }
 
-function silhouette(shapes: Shape[], material: MeshBasicMaterial, z: number, order: number): Mesh {
+export function silhouette(shapes: Shape[], material: MeshBasicMaterial, z: number, order: number): Mesh {
   const geometry = mergeGeometries(shapes.map((s) => new ShapeGeometry(s, 10)))!;
   const mesh = new Mesh(geometry, material);
   mesh.position.z = z;
@@ -73,7 +73,7 @@ function silhouette(shapes: Shape[], material: MeshBasicMaterial, z: number, ord
   return mesh;
 }
 
-function glowTexture(inner: string, outer: string): CanvasTexture {
+export function glowTexture(inner: string, outer: string): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 64;
   canvas.height = 64;

@@ -8,7 +8,7 @@ import type { Creature } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import { mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
-import { type Kit, PUZZLES, type PuzzleScene, WORLDS } from './puzzles.js';
+import { type Kit, puzzleAt, PUZZLES, type PuzzleScene, WORLDS } from './puzzles.js';
 
 interface Tween {
   time: number;
@@ -117,12 +117,12 @@ export class Diorama {
 
   /** The world of the level in play (the last world in free play). */
   private levelWorld(): number {
-    const puzzle = PUZZLES[play.puzzleIndex];
+    const puzzle = puzzleAt(play.puzzleIndex);
     return puzzle ? puzzle.world : WORLDS.length - 1;
   }
 
   load(): void {
-    const puzzle = PUZZLES[play.puzzleIndex];
+    const puzzle = puzzleAt(play.puzzleIndex);
     const world = stage.previewWorld ?? this.levelWorld();
     if (world !== this.worldIndex) this.decorate(world);
     clear(this.props);

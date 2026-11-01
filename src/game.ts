@@ -59,7 +59,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { friendName, type Puzzle, PUZZLES, WORLDS } from './world/puzzles.js';
+import { DUEL_INDEX, friendName, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
 type Problem =
@@ -511,7 +511,8 @@ export class ShadowGameSystem extends createSystem({
         break;
       case 'cleared':
         if (this.phaseTime >= CLEAR_TIME) {
-          this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
+          if (this.puzzle?.id === 'duel') this.showTitle();
+          else this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
         }
         break;
     }
@@ -598,6 +599,9 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'chapter') {
       playAwaken();
       this.startPuzzle(action.index);
+    } else if (action.do === 'duel') {
+      playAwaken();
+      this.startPuzzle(DUEL_INDEX);
     } else if (this.fresh) {
       // The very first time: the shadow-puppet prologue, then level one.
       this.bannerShown = false;
@@ -677,11 +681,16 @@ export class ShadowGameSystem extends createSystem({
     this.table.hide();
     this.menu.close();
     this.puzzleIndex = index;
-    this.puzzle = PUZZLES[index] ?? null;
+    this.puzzle = puzzleAt(index);
+    const duel = index === DUEL_INDEX;
+    // The duel is a side game: it never moves the story's saved place.
+    if (!duel) {
+      play.puzzleIndex = this.puzzle ? index : -1;
+      saveProgress();
+    }
     play.puzzleIndex = this.puzzle ? index : -1;
     play.puzzleVersion++;
     play.outcome = null;
-    saveProgress();
 
     const puzzle = this.puzzle;
     if (!puzzle) {
@@ -717,8 +726,8 @@ export class ShadowGameSystem extends createSystem({
 
     if (puzzle) {
       const firstOfWorld = PUZZLES.findIndex((p) => p.world === puzzle.world) === index;
-      const kicker = `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
-      this.drawBanner(firstOfWorld ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
+      const kicker = puzzle.id === 'duel' ? 'Side game · vs the Rival' : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
+      this.drawBanner(firstOfWorld || puzzle.id === 'duel' ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
       this.setCaption(puzzle.ask);
     } else {
       this.drawBanner(

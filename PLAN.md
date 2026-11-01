@@ -133,8 +133,16 @@ on device: hop onto the real table, hide behind real objects.
       40 ms latency rewind and a least-squares release velocity; fireballs come out of the
       screen at you; an open palm reflects them (v' = v − 2(v·n)n) back at the dragon;
       hearts and a health bar; defeat dissolves the shadow; an ending banner
-- [ ] Next: Ink Fight vs computer; potion brewing and the wrist inventory; replace the
-      jungle chapter's cute characters and v1 toy props; chapter polish and on-Quest tuning
+- [x] Jungle chapter rework: the fox (rigged CC0, classic fox hand shadow) replaces the
+      plush rabbit and snail; "tiny" levels use shadow-size optics (a small fox fits under
+      the roots and into the log); real props: bark log with end grain and moss, knotted
+      roots, a leafy tree, glow caps, hollow trunk, ember shards
+- [x] Ink Duel vs the computer (menu: Duel): draw in the air, the stroke becomes a solid with
+      mass = ink used; grab and throw it under real gravity; damage = ½mv² shown on the
+      screen; hanging drawings are shields; a Reiniger-style Rival with a giant quill draws
+      and throws back (ballistic aim v = d/T + ½gT), raises ink shields, topples when beaten
+- [ ] Next: potion brewing and the wrist inventory (heal in the dragon fight); chapter
+      polish and on-Quest tuning; trailer
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

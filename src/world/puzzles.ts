@@ -4,6 +4,7 @@ import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { DragonBattle } from '../fight/battle.js';
+import { InkDuel } from '../fight/duel.js';
 import { Bridge } from '../machines/bridge.js';
 import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
@@ -525,6 +526,41 @@ const smithy: Puzzle = {
     };
   },
 };
+
+/** The Ink Duel lives outside the story, at this index. */
+export const DUEL_INDEX = 1000;
+
+export const DUEL: Puzzle = {
+  id: 'duel',
+  world: 0,
+  title: 'Ink Duel',
+  story: 'A rival shadow-puppeteer challenges you. Draw in the air, then throw your drawings!',
+  ask: 'Pinch and draw a shape in the air',
+  handsOn: true,
+  solved: 'What a duel!',
+  build(root, kit) {
+    const duel = new InkDuel(root);
+    root.add(duel.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'Draw and throw!' }),
+      update: (dt, hands, head) => {
+        duel.update(dt, hands, head);
+        task.caption = duel.caption;
+        task.done = duel.done;
+        task.mistakes = duel.mistakes;
+        DUEL.solved = duel.won ? 'You won the duel! Your ink flew true.' : 'The Rival won this time. Try again!';
+      },
+    };
+  },
+};
+
+/** The puzzle at a story index, the duel, or null (free play). */
+export function puzzleAt(index: number): Puzzle | null {
+  return index === DUEL_INDEX ? DUEL : PUZZLES[index] ?? null;
+}
 
 export const PUZZLES: Puzzle[] = [
   warmup,

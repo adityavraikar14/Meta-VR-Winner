@@ -13,7 +13,7 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
 export type MenuPage = 'home' | 'chapters' | 'settings';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' };
+export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -126,6 +126,7 @@ export class MainMenu {
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
       { label: fresh ? 'Play' : next ? 'Continue' : 'Replay', run: () => ({ do: 'play' }), primary: true },
+      { label: 'Duel', run: () => ({ do: 'duel' }) },
       { label: 'Settings', run: () => this.go('settings') },
     ];
   }

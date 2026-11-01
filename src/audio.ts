@@ -597,3 +597,12 @@ export function playThrow(): void {
   f.frequency.exponentialRampToValueAtTime(3000, now + 0.4);
   sweep(ctx, 'sine', 440, 1320, now, 0.4, 0.04);
 }
+
+/** A wet slap of ink. */
+export function playSplat(volume = 0.08): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, 0.18, 'lowpass', 900, 0.9, volume);
+  sweep(ctx, 'sine', 260, 80, now, 0.12, volume * 0.6);
+}
