@@ -28,6 +28,7 @@ import { playClang, playCrackle, playHiss, playIgnite, playTink, playWhoosh } fr
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { play } from '../progress.js';
+import { stage } from '../stage-state.js';
 import { crystals } from '../world/themes.js';
 import { BURNING, fireTarget, FORGE_MIN, glow, heatName, ROOM, stepHeat, WORKABLE } from './heat.js';
 import { band, halo, hardwood, iron, stone, timber } from './parts.js';
@@ -269,6 +270,8 @@ export class Forge {
   // ================================================================ Update
 
   update(dt: number, hands: readonly HandState[]): void {
+    // Hands only work the smithy once the level is under way.
+    if (!stage.playing) hands = [];
     this.stepTime += dt;
     this.noteTime -= dt;
     this.handleGrabs(hands);

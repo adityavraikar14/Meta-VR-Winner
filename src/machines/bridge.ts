@@ -195,6 +195,7 @@ export class Bridge {
       this.buttons.test.root.lookAt(eye);
     }
     this.modeTime += dt;
+    if (!stage.playing) hands = [];
     this.tips.length = 0;
     for (const hand of hands) if (hand.tracked) this.tips.push(...hand.tips);
     const building = this.mode === 'build';

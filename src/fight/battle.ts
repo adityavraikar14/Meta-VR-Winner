@@ -111,6 +111,7 @@ export class DragonBattle {
   private readonly shields: Mesh[] = [];
 
   // HUD on the screen.
+  private readonly hud = new Group();
   private readonly hearts: Mesh[] = [];
   private bar!: Mesh;
   private note = '';
@@ -146,6 +147,7 @@ export class DragonBattle {
       this.group.add(shield);
     }
 
+    this.paper.add(this.hud);
     this.buildHud();
     this.newSequence();
 
@@ -172,6 +174,12 @@ export class DragonBattle {
     this.group.worldToLocal(this.head.copy(head));
     this.record(hands);
 
+    // Behind the menu or the story card the dragon only breathes and waits.
+    this.hud.visible = stage.playing || this.mode === 'won';
+    if (!stage.playing && this.mode !== 'won') {
+      this.dragon.update(dt);
+      return;
+    }
     switch (this.mode) {
       case 'intro':
         this.caption = 'The Shadow Dragon guards the Great Lantern!';
@@ -579,17 +587,17 @@ export class DragonBattle {
       mesh.position.set(-0.45 + i * 0.04, 0.31, 0.012);
       mesh.renderOrder = 9;
       this.hearts.push(mesh);
-      this.paper.add(mesh);
+      this.hud.add(mesh);
     }
     // The dragon's strength, top centre.
     const frame = new Mesh(new BoxGeometry(0.3, 0.022, 0.001), new MeshBasicMaterial({ color: 0x2a1a10, transparent: true, opacity: 0.8, depthWrite: false }));
     frame.position.set(0, 0.315, 0.011);
     frame.renderOrder = 8;
-    this.paper.add(frame);
+    this.hud.add(frame);
     this.bar = new Mesh(new BoxGeometry(0.29, 0.014, 0.001).translate(0.145, 0, 0), new MeshBasicMaterial({ color: 0xe0602a, transparent: true, depthWrite: false }));
     this.bar.position.set(-0.145, 0.315, 0.0125);
     this.bar.renderOrder = 9;
-    this.paper.add(this.bar);
+    this.hud.add(this.bar);
     // Sign cards along the bottom.
     for (let i = 0; i < 3; i++) {
       const material = new MeshBasicMaterial({ transparent: true, depthWrite: false });
@@ -598,7 +606,7 @@ export class DragonBattle {
       mesh.position.set(-0.415 + i * 0.095, -0.12, 0.012);
       mesh.renderOrder = 9;
       this.signIcons.push({ mesh, material });
-      this.paper.add(mesh);
+      this.hud.add(mesh);
     }
   }
 

@@ -47,6 +47,8 @@ export const stage = {
   sceneryHidden: false,
   /** A world to show while the player browses chapters (null: the current level's world). */
   previewWorld: null as number | null,
+  /** The level is being played right now (not the menu, the table or the story card). */
+  playing: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */
   task: null as { caption: string; done: boolean; mistakes: number } | null,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */

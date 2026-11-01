@@ -464,6 +464,7 @@ export class ShadowGameSystem extends createSystem({
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
 
+    stage.playing = this.phase === 'matching' && !stage.menuOpen;
     switch (this.phase) {
       case 'table':
         this.updateTable(dt, pressed);
