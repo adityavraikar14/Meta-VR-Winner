@@ -6,9 +6,9 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
 } from '@iwsdk/core';
-import { playAwaken, playChirp, playPrompt, playRawr, playTinkle } from './audio.js';
+import { playAwaken, playChirp, playPrompt, playRoar, playTinkle } from './audio.js';
 import {
-  bird, deer, dragon, ease, ellipse, GROUND, grass, H, hand, INK, lantern, rabbit, star, W,
+  bird, deer, dragon, ease, ellipse, fox, GROUND, grass, H, hand, INK, lantern, star, W,
 } from './puppets.js';
 
 /** Redraws per second; the show is soft and slow, so this is plenty. */
@@ -31,7 +31,7 @@ const SKY = Array.from({ length: 14 }, (_, i) => ({
 
 const SCENES: Scene[] = [
   {
-    line: 'Once upon a time, a little lantern lit the storybook sky…',
+    line: 'You wake inside an old shadow theatre. One lantern burns; beyond it, only dark.',
     seconds: 5,
     sound: playTinkle,
     draw(ctx, t, k) {
@@ -46,22 +46,21 @@ const SCENES: Scene[] = [
     },
   },
   {
-    line: 'In its warm light, shadows came alive as friends.',
+    line: 'In its light, shadows wake and walk: a fox, a stag, a bird on the wing.',
     seconds: 5,
     sound: playChirp,
     draw(ctx, t, k) {
       lantern(ctx, W / 2, 80, 0.8, Math.sin(t * 1.4) * 0.08, 1);
-      const hop = Math.abs(Math.sin(t * 4));
-      rabbit(ctx, -80 + k * 560, GROUND - hop * 60, 0.9, hop * 0.2);
+      fox(ctx, -80 + k * 560, GROUND, 0.9, t * 9);
       bird(ctx, W + 60 - k * 700, 200 + Math.sin(t * 2) * 20, 1.1, t * 14);
       deer(ctx, 770, GROUND, 0.9);
       grass(ctx);
     },
   },
   {
-    line: 'Then a sleepy dragon sneezed… AH-CHOO! The stars tumbled down!',
+    line: 'Then the Shadow Dragon came. One breath, and the Great Lantern\u2019s light was scattered.',
     seconds: 5.5,
-    sound: playRawr,
+    sound: () => playRoar(0.1),
     draw(ctx, t, k) {
       const blown = ease((k - 0.55) * 4);
       const swing = Math.sin(t * 1.4) * 0.08 + blown * Math.sin(t * 20) * 0.25 * (1 - blown);
@@ -81,22 +80,14 @@ const SCENES: Scene[] = [
     },
   },
   {
-    line: 'Everything went dark, and the friends fell asleep in the paper.',
+    line: 'The dark closed in. The shadows sank into the paper, and the way out was sealed.',
     seconds: 5,
     sound: playPrompt,
     draw(ctx, t, k) {
       lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t) * 0.03, 0);
       ctx.globalAlpha = 1 - ease(k * 1.4) * 0.75;
-      rabbit(ctx, 300, GROUND, 0.9, 0.5);
+      fox(ctx, 300, GROUND, 0.9, 0);
       deer(ctx, 640, GROUND, 0.9);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = INK;
-      ctx.font = 'italic 700 40px Georgia, serif';
-      for (let i = 0; i < 3; i++) {
-        const z = (t * 0.6 + i / 3) % 1;
-        ctx.globalAlpha = Math.sin(z * Math.PI);
-        ctx.fillText('z', 360 + z * 60 + i * 6, 300 - z * 120);
-      }
       ctx.globalAlpha = 1;
       grass(ctx);
       ctx.fillStyle = `rgba(22, 12, 6, ${0.55 * ease(k * 2)})`;
@@ -104,7 +95,7 @@ const SCENES: Scene[] = [
     },
   },
   {
-    line: 'Only your hands can wake them. Will you help?',
+    line: 'Only your hands can wake them, and light the way out.',
     seconds: 5,
     sound: playAwaken,
     draw(ctx, t, k) {

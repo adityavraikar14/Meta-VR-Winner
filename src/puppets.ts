@@ -79,6 +79,48 @@ export function rabbit(ctx: CanvasRenderingContext2D, x: number, y: number, s: n
   ellipse(ctx, x - 20 * s, y - 6 * s, 18 * s, 8 * s);
 }
 
+/** A fox at a trot, facing right: pointed ears and snout, a long brush of a tail. */
+export function fox(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, stride = 0): void {
+  ctx.fillStyle = INK;
+  // Body, slung low.
+  ellipse(ctx, x, y - 40 * s, 40 * s, 14 * s, -0.04);
+  // The brush: thick, curving down and out behind.
+  ctx.beginPath();
+  ctx.moveTo(x - 30 * s, y - 48 * s);
+  ctx.bezierCurveTo(x - 70 * s, y - 56 * s, x - 100 * s, y - 40 * s, x - 112 * s, y - 22 * s);
+  ctx.bezierCurveTo(x - 90 * s, y - 26 * s, x - 62 * s, y - 28 * s, x - 34 * s, y - 34 * s);
+  ctx.fill();
+  // Neck and head with a long snout.
+  ctx.beginPath();
+  ctx.moveTo(x + 26 * s, y - 50 * s);
+  ctx.lineTo(x + 46 * s, y - 70 * s);
+  ctx.lineTo(x + 60 * s, y - 70 * s);
+  ctx.lineTo(x + 88 * s, y - 58 * s);
+  ctx.lineTo(x + 60 * s, y - 52 * s);
+  ctx.lineTo(x + 36 * s, y - 34 * s);
+  ctx.closePath();
+  ctx.fill();
+  // Ears.
+  for (const [bx, tip] of [[46, 50], [56, 61]]) {
+    ctx.beginPath();
+    ctx.moveTo(x + bx * s, y - 68 * s);
+    ctx.lineTo(x + tip * s, y - 92 * s);
+    ctx.lineTo(x + (bx + 10) * s, y - 68 * s);
+    ctx.fill();
+  }
+  // Slender legs, swinging.
+  ctx.lineWidth = 6 * s;
+  ctx.strokeStyle = INK;
+  ctx.lineCap = 'round';
+  for (const [lx, phase] of [[-26, 0], [-18, Math.PI], [24, Math.PI], [32, 0]]) {
+    const swing = Math.sin(stride + phase) * 10 * s;
+    ctx.beginPath();
+    ctx.moveTo(x + lx * s, y - 36 * s);
+    ctx.lineTo(x + lx * s + swing, y - 2 * s);
+    ctx.stroke();
+  }
+}
+
 export function bird(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, flap: number): void {
   ctx.fillStyle = INK;
   ellipse(ctx, x, y, 26 * s, 13 * s);

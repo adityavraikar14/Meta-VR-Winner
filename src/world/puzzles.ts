@@ -139,10 +139,10 @@ const warmup: Puzzle = {
   id: 'lantern',
   world: 0,
   title: 'The Lantern',
-  story: 'A little lantern glows behind you. Its light makes magic shadows.',
+  story: 'A lantern burns behind you. Its light is your way out, and your shadow answers to it.',
   ask: 'Raise your hand into the lantern light',
   warmup: true,
-  solved: "That's your shadow! Let's bring it to life.",
+  solved: "That's your shadow. Now let's wake it.",
   build(root, kit) {
     // A star waits on the stage, sleeping until the story begins.
     const star = goldStar(0.02);
@@ -156,7 +156,7 @@ const shadowBridge: Puzzle = {
   id: 'shadow-bridge',
   world: 0,
   title: 'The Shadow Bridge',
-  story: 'In the shadow world, your shadow is solid! A little shadow rabbit wants that star.',
+  story: 'On the screen, your hand\u2019s shadow is solid ground. A shadow hare needs a way across.',
   ask: 'Make a bridge with your hand’s shadow',
   solved: 'Across! Your shadow was the bridge.',
   walk: {
@@ -173,7 +173,7 @@ const highLedge: Puzzle = {
   id: 'high-ledge',
   world: 0,
   title: 'The High Ledge',
-  story: 'Pinch your fingers to pull a thread of shadow ink. Its shadow is solid too!',
+  story: 'Pinch your fingers to draw a thread of shadow ink. Its shadow is solid too.',
   ask: 'Draw a ramp up to the high ledge',
   solved: 'Up and over! Ink, light and shadow.',
   walk: {
@@ -281,10 +281,10 @@ const highBerries: Puzzle = {
   id: 'high-berries',
   world: 0,
   title: 'The High Berries',
-  story: 'Sweet berries hang from a branch, high up in the old tree.',
+  story: 'Berries hang high in the old tree, far out of reach of anything small.',
   ask: 'Who is tall enough to reach them?',
   teach: 'stag',
-  solved: 'Berries for everyone!',
+  solved: 'The Stag reached them with ease.',
   build(root, kit) {
     const f = kit.floor;
     const tree = leafyTree(0.24, 0.11);
