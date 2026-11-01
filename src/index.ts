@@ -12,7 +12,7 @@ import { ShadowGameSystem } from './game.js';
 import { HandMenuSystem } from './hand-menu.js';
 import { PanelSystem } from './panel.js';
 import { ShadowStageSystem } from './stage.js';
-import { ArsenalLevelSystem, arenaMode } from './yash/level.js';
+import { ArenaSystem } from './arena.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
@@ -24,8 +24,6 @@ World.create(
   world.registerSystem(CreatureSystem);
   world.registerSystem(HandMenuSystem);
   world.registerSystem(PanelSystem);
-  // Yash's Arsenal: a hand-sign fight, opened from the menu's Arena button.
-  arenaMode.embedded = true;
-  arenaMode.active = false;
-  world.registerSystem(ArsenalLevelSystem);
+  // Yash's Arsenal, as he wrote it, opened from the menu's Arena button.
+  world.registerSystem(ArenaSystem);
 });

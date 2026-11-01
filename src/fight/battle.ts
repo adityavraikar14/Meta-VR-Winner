@@ -23,6 +23,7 @@ import { ParticlePool } from '../machines/particles.js';
 import { play, saveProgress } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { ShadowDragon } from './dragon.js';
+import { Dragon3D, Phoenix, preloadDragon } from './dragon3d.js';
 
 /**
  * The last chapter: the Shadow Dragon guards the Great Lantern.
@@ -87,6 +88,12 @@ export class DragonBattle {
   private dragonHealth = DRAGON_HEALTH;
   private readonly paper = new Group();
   private readonly dragon = new ShadowDragon();
+  /** The 3D dragon, once its model has loaded; until then the shadow puppet stands in. */
+  private dragon3d: Dragon3D | null = null;
+  private phoenix: Phoenix | null = null;
+  /** Where the dragon hovers: out in front of the screen, below its middle. */
+  private readonly dragonHome = new Vector3();
+  private readonly phoenixFrom = new Vector3();
   private readonly sparks = new ParticlePool({ count: 220, additive: true, soft: false });
   private readonly glow = new ParticlePool({ count: 60, additive: true, soft: true });
 
@@ -130,6 +137,11 @@ export class DragonBattle {
     const toPaper = new Matrix4().copy(root.matrixWorld).invert().multiply(stage.paper!.matrixWorld);
     toPaper.decompose(this.paper.position, this.paper.quaternion, this.paper.scale);
     this.paper.add(this.dragon.root);
+    // Reaching the fight early (or on a slow connection): fetch the dragon now.
+    void preloadDragon();
+    const normal = new Vector3(0, 0, 1).applyQuaternion(this.paper.quaternion);
+    this.dragonHome.copy(this.paper.position).addScaledVector(normal, 0.24);
+    this.dragonHome.y -= 0.26;
     this.group.add(this.paper, this.sparks.points, this.glow.points);
 
     // Orb of light: a white-hot core and a turning ring.
@@ -177,7 +189,19 @@ export class DragonBattle {
 
     // Behind the menu or the story card the dragon only breathes and waits.
     this.hud.visible = stage.playing || this.mode === 'won';
-    this.dragon.root.visible = stage.playing || this.mode === 'won';
+    if (!this.dragon3d) {
+      this.dragon3d = Dragon3D.create();
+      if (this.dragon3d) {
+        this.dragon3d.root.position.copy(this.dragonHome);
+        this.group.add(this.dragon3d.root);
+      }
+    }
+    const shown = stage.playing || this.mode === 'won';
+    this.dragon.root.visible = shown && !this.dragon3d;
+    if (this.dragon3d) {
+      this.dragon3d.root.visible = shown;
+      this.dragon3d.update(dt, this.head);
+    }
     if (!stage.playing && this.mode !== 'won') {
       this.dragon.update(dt);
       return;
@@ -204,6 +228,18 @@ export class DragonBattle {
         break;
       case 'won':
         this.dragon.defeat = Math.min(1, this.modeTime / 2.5);
+        if (this.dragon3d) {
+          this.dragon3d.defeat = Math.min(1, this.modeTime / 2.2);
+          // From the ashes, the Great Lantern's spirit: the phoenix.
+          if (!this.phoenix && this.modeTime > 1.2) {
+            this.phoenix = Phoenix.create();
+            if (this.phoenix) {
+              this.dragon3d.heartAt(this.phoenixFrom);
+              this.group.add(this.phoenix.root);
+            }
+          }
+          this.phoenix?.update(dt, this.phoenixFrom, this.head);
+        }
         this.caption = 'Light breaks the shadow! The Great Lantern is free.';
         if (Math.random() < dt * 30) this.burstOnPaper(this.v.set((Math.random() - 0.5) * 0.7, (Math.random() - 0.4) * 0.5, 0.01), 4, 0xfff2c0);
         if (this.modeTime > 3.4) this.done = true;
@@ -385,8 +421,9 @@ export class DragonBattle {
     this.orb.position.copy(flying.pos);
     if (Math.random() < dt * 60) this.sparks.emit(flying.pos, this.w.set(0, 0, 0), { life: 0.35, size: [0.012, 0.002], from: 0xd8f0ff, to: 0x3060ff });
     const onPaper = this.paper.worldToLocal(this.group.localToWorld(this.w.copy(flying.pos)));
-    if (onPaper.z <= 0.012) {
-      this.strike(onPaper, 1, 0xd8f0ff);
+    const hit3d = this.dragon3d ? this.hit3d(flying.pos, 1) : false;
+    if (hit3d || onPaper.z <= 0.012) {
+      if (!hit3d) this.strike(onPaper, 1, 0xd8f0ff);
       this.flying = null;
       this.orb.visible = false;
       this.newSequence();
@@ -402,9 +439,7 @@ export class DragonBattle {
     const dir = vel.clone().normalize();
     let best: Vector3 | null = null;
     let bestAngle = 0.27;
-    for (const point of [this.dragon.headAt(new Vector3()), this.dragon.heartAt(new Vector3())]) {
-      const world = this.paper.localToWorld(point);
-      const local = this.group.worldToLocal(world);
+    for (const local of this.weakPoints()) {
       const angle = dir.angleTo(local.clone().sub(pos));
       if (angle < bestAngle) {
         bestAngle = angle;
@@ -412,6 +447,26 @@ export class DragonBattle {
       }
     }
     return best;
+  }
+
+  /** Head and heart, in this group's space. */
+  private weakPoints(): Vector3[] {
+    if (this.dragon3d) return [this.dragon3d.headAt(new Vector3()), this.dragon3d.heartAt(new Vector3())];
+    return [this.dragon.headAt(new Vector3()), this.dragon.heartAt(new Vector3())].map((p) =>
+      this.group.worldToLocal(this.paper.localToWorld(p)),
+    );
+  }
+
+  /** Light or reflected fire meeting the 3D dragon: true if it struck (and is used up). */
+  private hit3d(pos: Vector3, power: number): boolean {
+    const dragon = this.dragon3d!;
+    const [head, heart] = this.weakPoints();
+    const weak = pos.distanceTo(head) < 0.09 || pos.distanceTo(heart) < 0.1;
+    const body = pos.distanceTo(heart) < dragon.radius;
+    if (!weak && !body) return false;
+    this.burstAt(pos, 30, power >= 1 ? 0xd8f0ff : 0xffc060);
+    if (this.mode === 'fight') this.wound(weak ? power : power * 0.4);
+    return true;
   }
 
   /** Light (or a reflected fireball) reaches the screen: does it hit the dragon? */
@@ -430,8 +485,13 @@ export class DragonBattle {
       this.flash('Missed! Aim for the head or the glowing heart');
       return;
     }
+    this.wound(damage);
+  }
+
+  private wound(damage: number): void {
     this.dragonHealth -= damage;
     this.dragon.flinch();
+    this.dragon3d?.flinch();
     playBoom(0.08 + 0.05 * damage);
     if (this.dragonHealth <= 0.01) {
       this.setMode('won');
@@ -452,14 +512,17 @@ export class DragonBattle {
     if (this.breathTime > 0) {
       this.breathTime += dt;
       this.dragon.windup = Math.min(1, this.breathTime / BREATH_TIME);
+      if (this.dragon3d) this.dragon3d.windup = this.dragon.windup;
       if (this.breathTime >= BREATH_TIME) {
         this.breathTime = 0;
         this.dragon.windup = 0;
+        if (this.dragon3d) this.dragon3d.windup = 0;
         this.breathe();
       }
       return;
     }
     this.dragon.windup = Math.max(0, this.dragon.windup - dt * 3);
+    if (this.dragon3d) this.dragon3d.windup = this.dragon.windup;
     this.nextBreath -= dt;
     if (this.nextBreath <= 0) {
       this.breathTime = 0.001;
@@ -470,8 +533,9 @@ export class DragonBattle {
 
   /** Fire leaves the mouth, aimed at the player's head. */
   private breathe(): void {
-    const mouth = this.dragon.mouthAt(new Vector3());
-    const pos = this.group.worldToLocal(this.paper.localToWorld(mouth));
+    const pos = this.dragon3d
+      ? this.dragon3d.mouthAt(new Vector3())
+      : this.group.worldToLocal(this.paper.localToWorld(this.dragon.mouthAt(new Vector3())));
     const vel = this.head.clone().sub(pos);
     // Not too sharp a shot: a little off the eyes, so a palm can meet it.
     vel.x += (Math.random() - 0.5) * 0.08;
@@ -526,6 +590,8 @@ export class DragonBattle {
           gone = true;
           this.hurtPlayer(f.pos);
         }
+      } else if (this.dragon3d) {
+        if (this.hit3d(f.pos, 0.5)) gone = true;
       } else {
         const onPaper = this.paper.worldToLocal(this.group.localToWorld(this.v.copy(f.pos)));
         if (onPaper.z <= 0.012) {
@@ -658,7 +724,7 @@ export class DragonBattle {
   private devThrow(): void {
     if (this.orbHand < 0) this.gather(1);
     this.orbCharge = 1;
-    const target = this.group.worldToLocal(this.paper.localToWorld(this.dragon.headAt(new Vector3())));
+    const target = this.weakPoints()[0];
     this.orb.position.copy(this.head).add(new Vector3(0.1, -0.25, -0.3));
     this.release(target.sub(this.orb.position).setLength(2.2).divideScalar(1.8));
   }

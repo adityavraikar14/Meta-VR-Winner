@@ -275,7 +275,7 @@ export class Label {
 
   constructor(
     private height: number,
-    private font = 'bold 56px Georgia, "Segoe UI Emoji", serif',
+    private font = 'bold 56px system-ui, "Segoe UI Emoji", sans-serif',
   ) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = 512;
@@ -289,8 +289,7 @@ export class Label {
     this.sprite.scale.set(height * 4, height, 1);
   }
 
-  // Shadowplay's caption look: cream serif on dark wood.
-  set(text: string, color = '#ffe2a8', background = 'rgba(40, 22, 10, 0.85)'): void {
+  set(text: string, color = '#ffffff', background = 'rgba(10, 14, 30, 0.72)'): void {
     if (text === this.text) return;
     this.text = text;
     const g = this.canvas.getContext('2d');

@@ -18,10 +18,10 @@ export class PanelSystem extends createSystem({}) {
     const panel = this.world.getSceneObject<UIKitMLAsset>('welcome-panel');
     if (panel) panel.visible = false;
 
-    const splash = document.getElementById('splash');
-    const button = document.getElementById('splash-play') as HTMLButtonElement | null;
-    const bar = document.getElementById('splash-bar');
-    const note = document.getElementById('splash-note');
+    const splash = document.getElementById('sp-splash');
+    const button = document.getElementById('sp-play') as HTMLButtonElement | null;
+    const bar = document.getElementById('sp-bar');
+    const note = document.getElementById('sp-note');
     if (!splash || !button) return;
     if (bar) bar.hidden = true;
 

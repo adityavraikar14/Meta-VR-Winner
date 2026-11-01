@@ -10,6 +10,10 @@ ship, no attribution required. We credit them anyway.
 | `public/gltf/horse.glb` | [Horse](https://poly.pizza/m/qvTrSG9pZF) via Poly Pizza | Quaternius | CC0 |
 | `public/gltf/stag.glb` | [Stag](https://poly.pizza/m/tQdzbZ1Cmw) via Poly Pizza | Quaternius | CC0 |
 | `public/gltf/fox.glb` | [Fox](https://poly.pizza/m/Bc97C66HKi) via Poly Pizza | Quaternius | CC0 |
+| `public/gltf/dragon.glb` | [European Dragon](https://sketchfab.com/models/82f393a2e6c048ad80c171ce3b3a7b87) | Regina Cachoa | CC BY 4.0 |
+| `public/gltf/phoenix.glb` | [phoenix bird](https://sketchfab.com/models/844ba0cf144a413ea92c779f18912042) | NORBERTO-3D | CC BY 4.0 |
+| `public/gltf/elk.glb` | [Realistic Animated Elk 3D Model](https://sketchfab.com/models/787834f9caa2474d9f1814b807c072d7) | WildMesh 3D | CC BY 4.0 |
+| `public/gltf/fox-hd.glb` | [Fox](https://sketchfab.com/models/39f97fe58f0b47ce80b6e02814001dd7) | pxltiger | CC BY 4.0 |
 | `public/gltf/nature/fern.glb` | [Fern 02](https://polyhaven.com/a/fern_02) | Poly Haven | CC0 |
 | `public/gltf/nature/rocks.glb` | [Rock Moss Set 01](https://polyhaven.com/a/rock_moss_set_01) | Poly Haven | CC0 |
 | `public/gltf/nature/stump.glb` | [Tree Stump 01](https://polyhaven.com/a/tree_stump_01) | Poly Haven | CC0 |

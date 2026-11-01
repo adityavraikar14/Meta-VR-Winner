@@ -10,7 +10,7 @@
     <link rel="icon" href="data:," />
     <title>Shadowplay</title>
     <style>
-      #splash {
+      #sp-splash {
         position: fixed;
         inset: 0;
         z-index: 10;
@@ -29,18 +29,18 @@
           radial-gradient(ellipse at 50% 120%, #3b2414, #120b06 70%);
         transition: opacity 0.5s ease;
       }
-      #splash[data-hidden] {
+      #sp-splash[data-hidden] {
         opacity: 0;
         pointer-events: none;
       }
-      #splash .lantern {
+      #sp-splash .lantern {
         width: 96px;
         height: 96px;
         border-radius: 50%;
         background: radial-gradient(circle, #fff3c9 0%, #ffbd55 45%, rgba(255, 150, 40, 0) 72%);
         animation: flicker 3s ease-in-out infinite;
       }
-      #splash .shadow {
+      #sp-splash .shadow {
         display: block;
         margin: -8px auto 0;
         filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
@@ -50,27 +50,27 @@
         0%, 100% { transform: translate(-6px, 0) rotate(-2deg); }
         50% { transform: translate(6px, -7px) rotate(2deg); }
       }
-      #splash h1 {
+      #sp-splash h1 {
         margin: 0;
         font-size: clamp(44px, 9vw, 84px);
         letter-spacing: 0.02em;
         color: #fff1d6;
         text-shadow: 0 4px 24px rgba(255, 170, 60, 0.45);
       }
-      #splash .kicker {
+      #sp-splash .kicker {
         font-style: italic;
         font-size: 18px;
         color: #d9a96a;
         margin: 0;
       }
-      #splash .tagline {
+      #sp-splash .tagline {
         margin: 0;
         max-width: 30em;
         font-size: 19px;
         line-height: 1.45;
         color: #f3dcb6;
       }
-      #splash button {
+      #sp-splash button {
         margin-top: 10px;
         min-width: 240px;
         padding: 16px 36px;
@@ -83,22 +83,22 @@
         cursor: pointer;
         transition: transform 0.08s ease, box-shadow 0.08s ease;
       }
-      #splash button:active {
+      #sp-splash button:active {
         transform: translateY(5px);
         box-shadow: 0 1px 0 #9a5a1c, 0 4px 14px rgba(255, 160, 50, 0.3);
       }
-      #splash button:disabled {
+      #sp-splash button:disabled {
         cursor: default;
         filter: grayscale(0.6) brightness(0.8);
       }
-      #splash .bar {
+      #sp-splash .bar {
         width: 240px;
         height: 6px;
         border-radius: 3px;
         background: rgba(255, 233, 196, 0.15);
         overflow: hidden;
       }
-      #splash .bar span {
+      #sp-splash .bar span {
         display: block;
         height: 100%;
         width: 30%;
@@ -106,7 +106,7 @@
         background: #ffbd55;
         animation: load 1.2s ease-in-out infinite;
       }
-      #splash .hints {
+      #sp-splash .hints {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
@@ -117,7 +117,7 @@
         font-size: 15px;
         color: #c9a57a;
       }
-      #splash .note {
+      #sp-splash .note {
         font-size: 14px;
         color: #a4825c;
         margin: 0;
@@ -136,12 +136,12 @@
         100% { transform: translateX(340%); }
       }
       @media (prefers-reduced-motion: reduce) {
-        #splash * { animation: none !important; }
+        #sp-splash * { animation: none !important; }
       }
     </style>
   </head>
   <body style="margin: 0; overflow: hidden; background: #120b06">
-    <div id="splash">
+    <div id="sp-splash">
       <div class="lantern" aria-hidden="true"></div>
       <svg class="shadow" aria-hidden="true" viewBox="0 0 120 56" width="132" height="62">
         <!-- The Shadow Dragon in flight, cut like a shadow puppet. -->
@@ -158,14 +158,14 @@
       <p class="kicker">Escape the Lantern</p>
       <h1>Shadowplay</h1>
       <p class="tagline">Your hands make the shadows. The shadows come alive.</p>
-      <div class="bar" id="splash-bar"><span></span></div>
-      <button id="splash-play" disabled>Loading…</button>
+      <div class="bar" id="sp-bar"><span></span></div>
+      <button id="sp-play" disabled>Loading…</button>
       <ul class="hints">
         <li>✋ Hands only, no controllers</li>
         <li>🪑 Play seated</li>
         <li>🕯️ About 10 minutes a chapter</li>
       </ul>
-      <p class="note" id="splash-note">Best on Meta Quest with hand tracking on.</p>
+      <p class="note" id="sp-note">Best on Meta Quest with hand tracking on.</p>
     </div>
     <div id="scene-container"></div>
     <script type="module" src="/src/index.ts"></script>

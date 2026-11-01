@@ -40,12 +40,32 @@ export interface BeastSpec {
   temper: string;
   /** Pitch of its call (1 = horse). */
   voice: number;
+  /** The model's own clip names for the ones this code asks for (Idle, Walk, Gallop…). */
+  clips?: Record<string, string>;
+  /** Textured HD model: keep its colours as they are. */
+  hd?: boolean;
 }
 
 export const BEASTS: Record<string, BeastSpec> = {
   horse: { file: 'gltf/horse.glb', height: 0.15, walk: 0.5, gallop: 2.0, temper: 'Attack_Kick', voice: 1 },
-  stag: { file: 'gltf/stag.glb', height: 0.17, walk: 0.45, gallop: 1.9, temper: 'Attack_Headbutt', voice: 0.7 },
-  fox: { file: 'gltf/fox.glb', height: 0.085, walk: 0.8, gallop: 2.6, temper: 'Attack', voice: 1.7 },
+  // A realistic elk (WildMesh 3D, CC-BY) plays the stag.
+  stag: {
+    file: 'gltf/elk.glb', height: 0.17, walk: 0.45, gallop: 1.9, temper: 'Attack_Headbutt', voice: 0.7, hd: true,
+    clips: {
+      Idle: 'Stand_Breathing_01', Walk: 'Walk', Gallop: 'Run', Gallop_Jump: 'JumpStand', Jump_toIdle: 'Stand_Breathing_01',
+      Eating: 'Stand_Eating_01', Idle_2: 'Take 001', Idle_Headlow: 'Stand_Eating_01', Idle_2_HeadLow: 'Stand_Eating_01',
+      Idle_HitReact_Left: 'Hit_Stand_L01', Idle_HitReact_Right: 'Hit_Stand_L01', Attack_Headbutt: 'JumpStand', Attack_Kick: 'JumpStand', Attack: 'JumpStand',
+    },
+  },
+  // A fox with thirty clips (pxltiger, CC-BY); in-place clips, since the code moves it.
+  fox: {
+    file: 'gltf/fox-hd.glb', height: 0.085, walk: 0.8, gallop: 2.6, temper: 'Attack', voice: 1.7, hd: true,
+    clips: {
+      Idle: 'Fox_Idle', Walk: 'Fox_Walk_InPlace', Gallop: 'Fox_Run_InPlace', Gallop_Jump: 'Fox_Jump_Pivot_InPlace', Jump_toIdle: 'Fox_Idle',
+      Eating: 'Fox_Sit2_Idle', Idle_2: 'Fox_Sit_Idle_Break', Idle_Headlow: 'Fox_Sit_Yes', Idle_2_HeadLow: 'Fox_Sit_Yes',
+      Idle_HitReact_Left: 'Fox_Falling_Left', Idle_HitReact_Right: 'Fox_Falling', Attack: 'Fox_Attack_Paws', Attack_Headbutt: 'Fox_Attack_Paws', Attack_Kick: 'Fox_Attack_Tail',
+    },
+  },
 };
 
 /** The animal packs name a few clips differently; try these when a name is missing. */
@@ -240,10 +260,13 @@ export class Beast {
     const standard = source as MeshStandardMaterial;
     if (!standard.isMeshStandardMaterial) return source;
     const material = standard.clone();
-    const hsl = { h: 0, s: 0, l: 0 };
-    material.color.getHSL(hsl);
-    material.color.setHSL(hsl.h, hsl.s * 0.82, hsl.l * 0.92);
-    material.roughness = 0.82;
+    if (!this.spec.hd) {
+      // Flat-coloured low-poly packs: soften to a matte finish.
+      const hsl = { h: 0, s: 0, l: 0 };
+      material.color.getHSL(hsl);
+      material.color.setHSL(hsl.h, hsl.s * 0.82, hsl.l * 0.92);
+      material.roughness = 0.82;
+    }
     material.metalness = 0;
     this.tints.push({ material, color: material.color.clone() });
     return material;
@@ -683,6 +706,11 @@ export class Beast {
   // ------------------------------------------------------------ Animation
 
   private action(name: string): AnimationAction | undefined {
+    const own = this.spec.clips?.[name];
+    if (own) {
+      const mapped = this.actions.get(own);
+      if (mapped) return mapped;
+    }
     const direct = this.actions.get(name);
     if (direct) return direct;
     for (const alias of CLIP_ALIASES[name] ?? []) {
