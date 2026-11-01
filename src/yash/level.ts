@@ -60,6 +60,13 @@ const READOUT_REFRESH = 0.2;
 const HURT_TIME = 0.45;
 const UP = new Vector3(0, 1, 0);
 
+/**
+ * Embedding switch for the main Shadowplay game. On its own page (yash.html)
+ * the Arsenal runs as before. Embedded, it skips its own splash page and
+ * dev panel (the main page has its own) and sleeps until `active` is set.
+ */
+export const arenaMode = { embedded: false, active: true, tutorial: false };
+
 export class ArsenalLevelSystem extends createSystem({}) {
   private root!: Group;
   private hands: Record<Side, HandState> = {
@@ -98,6 +105,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
 
   private inXR = false;
   private placed = false;
+  private wasActive = false;
   private noHandsFor = 0;
   private head = new Vector3();
   private headQuat = new Quaternion();
@@ -128,9 +136,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
       this.root.add(this.skeletons[side].root);
     }
     this.buildHud();
-    this.wireSplash();
+    if (!arenaMode.embedded) this.wireSplash();
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && !arenaMode.embedded) {
       this.headsetReadout = new TextPanel(0.34, 15);
       this.root.add(this.headsetReadout.sprite);
       this.cleanupFuncs.push(
@@ -146,6 +154,23 @@ export class ArsenalLevelSystem extends createSystem({}) {
   }
 
   update(delta: number, time: number): void {
+    this.root.visible = arenaMode.active;
+    if (!arenaMode.active) {
+      this.wasActive = false;
+      return;
+    }
+    if (!this.wasActive) {
+      // Opened from the main menu: a clean slate, the sentinel in front of the player.
+      this.wasActive = true;
+      if (arenaMode.tutorial) {
+        this.startTutorial();
+      } else {
+        this.arsenal.clear();
+        this.recognizer.reset();
+        this.opponent.reset();
+        this.placed = false;
+      }
+    }
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     const dt = Math.min(delta, 0.05);
     this.readHead();

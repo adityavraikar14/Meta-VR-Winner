@@ -25,6 +25,8 @@ const INDEX_TIP = 9;
 const FACING = 0.7;
 const OPEN_HOLD = 0.35;
 const CLOSE_DELAY = 0.6;
+/** In the Arena a palm up is a fighting sign; the menu waits longer. */
+const ARENA_OPEN_HOLD = 1.3;
 /** Menu floats this far above the palm, nudged towards the eyes. */
 const ABOVE_PALM = 0.13;
 const TOWARDS_EYES = 0.03;
@@ -147,10 +149,11 @@ export class HandMenuSystem extends createSystem({}) {
       const asking = facing[i] && !facing[1 - i];
       this.holdTime[i] = asking ? this.holdTime[i] + dt : 0;
     }
+    const openHold = stage.arena ? ARENA_OPEN_HOLD : OPEN_HOLD;
 
     if (this.spent && !facing[0] && !facing[1]) this.spent = false;
     if (this.owner < 0) {
-      const hand = this.spent ? -1 : this.holdTime.findIndex((t) => t >= OPEN_HOLD);
+      const hand = this.spent ? -1 : this.holdTime.findIndex((t) => t >= openHold);
       if (hand >= 0) this.open(hand);
     } else {
       this.awayTime = facing[this.owner] ? 0 : this.awayTime + dt;

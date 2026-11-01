@@ -15,7 +15,8 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: process.env.NODE_ENV !== 'production',
     target: 'esnext',
-    rollupOptions: { input: './index.html' },
+    // The game, and Yash's Arsenal level on its own page.
+    rollupOptions: { input: { main: './index.html', arsenal: './yash.html' } },
   },
   esbuild: { target: 'esnext' },
   // @drawcall/uikitml otherwise pulls a second three/@pmndrs/uikit graph

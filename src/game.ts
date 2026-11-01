@@ -15,7 +15,7 @@ import {
   VisibilityState,
 } from '@iwsdk/core';
 import { playAwaken, playClick, playGrow, playPrompt } from './audio.js';
-import { devInfo, installDevTools } from './dev-tools.js';
+import { devActions, devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
   createExtension,
@@ -59,9 +59,10 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
+import { arenaMode } from './yash/level.js';
 import { DUEL_INDEX, friendName, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
-type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
+type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
   | Finger
   | 'direction'
@@ -113,6 +114,8 @@ const OOPS_TIME = 3.2;
 const WARMUP_HOLD = 1.2;
 /** Solve within this many seconds of choosing for the speed star. */
 const FAST_TIME = 20;
+/** Remembers that the Arena's tutorial has been shown once. */
+const ARENA_SEEN = 'shadowplay.arenaSeen';
 /** Hands-on jobs take longer; finishing under this earns the speed star. */
 const HANDS_ON_FAST = 150;
 const CARD_SIZE = 0.11;
@@ -383,6 +386,11 @@ export class ShadowGameSystem extends createSystem({
       this.bannerShown = true;
     });
     this.table = new TableFinder(paper);
+    // Dev: Y opens the Arena from the menu, as its button does.
+    devActions.y = () => {
+      if (this.phase === 'title') this.menuAction({ do: 'arena' });
+    };
+    devInfo.arena = () => ({ active: arenaMode.active, phase: this.phase });
     devInfo.table = () => ({
       height: stage.tableHeight,
       progress: Number(this.table.reading.progress.toFixed(2)),
@@ -576,6 +584,7 @@ export class ShadowGameSystem extends createSystem({
 
   /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
+    this.leaveArena();
     const resume = resumeIndex();
     this.puzzleIndex = resume;
     this.puzzle = null;
@@ -591,6 +600,32 @@ export class ShadowGameSystem extends createSystem({
     this.setPhase('title');
   }
 
+  /** Yash's Arena takes over: the paper and the stage step aside until the wrist menu's Menu. */
+  private enterArena(): void {
+    playAwaken();
+    stage.arena = true;
+    stage.sceneryHidden = true;
+    stage.paper!.visible = false;
+    let seen = false;
+    try {
+      seen = localStorage.getItem(ARENA_SEEN) === '1';
+      localStorage.setItem(ARENA_SEEN, '1');
+    } catch {
+      // No storage: show the tutorial every time.
+    }
+    arenaMode.tutorial = !seen;
+    arenaMode.active = true;
+    this.setPhase('arena');
+  }
+
+  private leaveArena(): void {
+    if (!stage.arena) return;
+    stage.arena = false;
+    arenaMode.active = false;
+    stage.sceneryHidden = false;
+    stage.paper!.visible = true;
+  }
+
   private menuAction(action: MenuAction): void {
     this.menu.close();
     if (action.do === 'table') {
@@ -602,6 +637,8 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'duel') {
       playAwaken();
       this.startPuzzle(DUEL_INDEX);
+    } else if (action.do === 'arena') {
+      this.enterArena();
     } else if (this.fresh) {
       // The very first time: the shadow-puppet prologue, then level one.
       this.bannerShown = false;
@@ -676,6 +713,7 @@ export class ShadowGameSystem extends createSystem({
   }
 
   private startPuzzle(index: number): void {
+    this.leaveArena();
     // Jumping straight into a level (dev keys) skips the table: show the world as it is.
     stage.sceneryHidden = false;
     this.table.hide();

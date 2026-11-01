@@ -13,7 +13,7 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
 export type MenuPage = 'home' | 'chapters' | 'settings';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' };
+export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'arena' };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -32,6 +32,7 @@ const BUTTON_SCALE = 0.8;
 const LAYOUTS: Record<number, number[]> = {
   3: [-0.17, 0, 0.17],
   4: [-0.25, -0.083, 0.083, 0.25],
+  5: [-0.3, -0.15, 0, 0.15, 0.3],
 };
 
 export class MainMenu {
@@ -46,7 +47,7 @@ export class MainMenu {
     private readonly viewer: Vector3,
     private readonly draw: Draw,
   ) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       const button = new PushButton(parent, '');
       button.show(false);
       this.buttons.push(button);
@@ -127,6 +128,7 @@ export class MainMenu {
       { label: 'Chapters', run: () => this.go('chapters') },
       { label: fresh ? 'Play' : next ? 'Continue' : 'Replay', run: () => ({ do: 'play' }), primary: true },
       { label: 'Duel', run: () => ({ do: 'duel' }) },
+      { label: 'Arena', run: () => ({ do: 'arena' }) },
       { label: 'Settings', run: () => this.go('settings') },
     ];
   }

@@ -177,6 +177,7 @@ export class DragonBattle {
 
     // Behind the menu or the story card the dragon only breathes and waits.
     this.hud.visible = stage.playing || this.mode === 'won';
+    this.dragon.root.visible = stage.playing || this.mode === 'won';
     if (!stage.playing && this.mode !== 'won') {
       this.dragon.update(dt);
       return;

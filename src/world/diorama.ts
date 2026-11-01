@@ -80,6 +80,8 @@ export class Diorama {
   setHidden(hidden: boolean): void {
     for (const group of [this.decor, this.screen, this.room]) group.visible = !hidden;
     this.props.visible = !hidden && !this.previewing;
+    // In the Arena the world stays around you on the floor; the table and screen step aside.
+    if (stage.arena) this.room.visible = true;
   }
 
   /**

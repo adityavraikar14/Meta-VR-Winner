@@ -172,7 +172,9 @@ export class InkDuel {
     this.modeTime += dt;
     this.noteTime -= dt;
     this.group.worldToLocal(this.head.copy(head));
-    if (!stage.playing && this.mode !== 'won' && this.mode !== 'lost') {
+    const live = stage.playing || this.mode === 'won' || this.mode === 'lost';
+    this.paper.visible = live;
+    if (!live) {
       this.rival.update(dt);
       return;
     }

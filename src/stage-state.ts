@@ -47,6 +47,8 @@ export const stage = {
   sceneryHidden: false,
   /** A world to show while the player browses chapters (null: the current level's world). */
   previewWorld: null as number | null,
+  /** In Yash's Arena: the paper and the stage step aside. */
+  arena: false,
   /** The level is being played right now (not the menu, the table or the story card). */
   playing: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */
