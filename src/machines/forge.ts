@@ -264,7 +264,8 @@ export class Forge {
   }
 
   get state(): string {
-    return `${this.step} coal=${Math.round(this.coal)} air=${this.air.toFixed(2)} bar=${Math.round(this.barHeat)}@${this.bar.place} shaped=${this.shaped.toFixed(2)} hard=${this.hardened}`;
+    const face = this.hammer.place === 'held' ? ` face=${this.hammerFace.toArray().map((n) => n.toFixed(3)).join(',')}` : '';
+    return `${this.step} coal=${Math.round(this.coal)} air=${this.air.toFixed(2)} bar=${Math.round(this.barHeat)}@${this.bar.place} shaped=${this.shaped.toFixed(2)} hard=${this.hardened} hammer=${this.hammer.place}${face}`;
   }
 
   // ================================================================ Update
@@ -295,7 +296,8 @@ export class Forge {
     const where = this.bar.place;
     if (where === 'fire') this.barHeat = stepHeat(this.barHeat, dt, this.coal, 1);
     else if (where === 'water') this.barHeat = stepHeat(this.barHeat, dt, ROOM, 3);
-    else if (where === 'anvil') this.barHeat = stepHeat(this.barHeat, dt, ROOM, 0.25);
+    // The anvil draws some heat out through the small contact patch: a few blows per heat.
+    else if (where === 'anvil') this.barHeat = stepHeat(this.barHeat, dt, ROOM, 0.1);
     else this.barHeat = stepHeat(this.barHeat, dt, ROOM, 0);
     if (where === 'water' && this.barHeat > 110 && Math.random() < dt * (this.barHeat / 60)) this.puffSteam(1);
 
