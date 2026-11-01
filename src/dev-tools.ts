@@ -10,11 +10,15 @@
  *   N      next level
  *   R      reset story progress to the first level
  *   I      print game state and score
+ *   K      print game state now, without waiting for new shadows
  *   A      call every creature in turn (only the last one stays)
+ *   H / J  call the horse / the stag
  */
 
 /** Extra debug readouts other systems add to the `I` info dump. */
 export const devInfo: Record<string, () => unknown> = {};
+/** Extra keys a scene can claim while it is on stage (dev builds only). */
+export const devActions: Record<string, () => void> = {};
 
 export interface DevApi {
   capture(): string;
@@ -22,6 +26,11 @@ export interface DevApi {
   next(): void;
   reset(): void;
   spawnAll(): void;
+  spawn(kind: string): void;
+  /** Bring a friend to life as if its shadow had just matched, at this body size. */
+  summon(kind: string, size: number): void;
+  /** Jump to the first level of the next chapter. */
+  nextChapter(): void;
   info(): unknown;
 }
 
@@ -107,6 +116,11 @@ export function installDevTools(api: DevApi): void {
       console.log(`SHADOWPLAY pose ${event.shiftKey ? 'left' : 'right'}=${hand.poseId}`);
       return;
     }
+    const action = devActions[event.key.toLowerCase()];
+    if (action) {
+      action();
+      return;
+    }
     switch (event.key.toLowerCase()) {
       case 'p':
         if (hands) {
@@ -143,9 +157,26 @@ export function installDevTools(api: DevApi): void {
       case 'a':
         api.spawnAll();
         break;
-      case 'i': {
+      case 'h':
+        api.spawn('horse');
+        break;
+      case 'j':
+        api.spawn('stag');
+        break;
+      case 'b':
+        api.summon('horse', 1.35);
+        break;
+      case 'v':
+        api.summon('horse', 0.95);
+        break;
+      case 'g':
+        api.nextChapter();
+        break;
+      case 'i':
+      case 'k': {
         const pose = hands?.right.poseId ?? '?';
-        await waitForMasks(api, 3);
+        // K reports straight away; I first waits for the shadow to catch up.
+        if (event.key.toLowerCase() === 'i') await waitForMasks(api, 3);
         const extra = Object.fromEntries(Object.entries(devInfo).map(([k, f]) => [k, f()]));
         console.log(`SHADOWPLAY info ${pose} ${JSON.stringify({ ...(api.info() as object), ...extra })}`);
         break;

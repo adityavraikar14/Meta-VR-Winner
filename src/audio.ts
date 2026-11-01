@@ -2,7 +2,32 @@
 
 let context: AudioContext | null = null;
 
+const MUTE_KEY = 'shadowplay.muted';
+let muted = (() => {
+  try {
+    return localStorage.getItem(MUTE_KEY) === '1';
+  } catch {
+    return false;
+  }
+})();
+
+export function isMuted(): boolean {
+  return muted;
+}
+
+/** Silence every sound (remembered between sessions). */
+export function setMuted(value: boolean): void {
+  if (value) setPurr(0);
+  muted = value;
+  try {
+    localStorage.setItem(MUTE_KEY, value ? '1' : '0');
+  } catch {
+    // Not remembered; the setting still applies now.
+  }
+}
+
 function audio(): AudioContext | null {
+  if (muted) return null;
   if (context === null) {
     try {
       context = new AudioContext();
@@ -288,4 +313,208 @@ export function playInk(): void {
   gain.gain.value = 0.05;
   source.connect(filter).connect(gain).connect(ctx.destination);
   source.start();
+}
+
+/** A burst of shaped noise through one filter: breath, hooves, scrapes. */
+function noise(ctx: AudioContext, start: number, duration: number, type: BiquadFilterType, frequency: number, q: number, volume: number): BiquadFilterNode {
+  const length = Math.floor(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = frequency;
+  filter.Q.value = q;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(volume, start + duration * 0.15);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  source.connect(filter).connect(gain).connect(ctx.destination);
+  source.start(start);
+  return filter;
+}
+
+/** A horse's snort: a fluttering burst of breath through the nostrils. */
+export function playSnort(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const filter = noise(ctx, now, 0.38, 'bandpass', 700, 0.9, volume);
+  // The lips flutter: wobble the breath's colour.
+  const flutter = ctx.createOscillator();
+  const depth = ctx.createGain();
+  flutter.frequency.value = 32;
+  depth.gain.value = 260;
+  flutter.connect(depth).connect(filter.frequency);
+  flutter.start(now);
+  flutter.stop(now + 0.4);
+}
+
+/** A soft, low nicker: a throaty call that steps down in pitch. */
+export function playNicker(pitch = 1, volume = 1): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const tremolo = ctx.createOscillator();
+  const depth = ctx.createGain();
+  const lowpass = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(210 * pitch, now);
+  osc.frequency.exponentialRampToValueAtTime(130 * pitch, now + 0.55);
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = 900 * pitch;
+  // The nicker's rapid pulses.
+  tremolo.frequency.value = 14;
+  depth.gain.value = 0.5;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.045 * volume, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+  tremolo.connect(depth).connect(gain.gain);
+  osc.connect(lowpass).connect(gain).connect(ctx.destination);
+  osc.start(now);
+  tremolo.start(now);
+  osc.stop(now + 0.62);
+  tremolo.stop(now + 0.62);
+  noise(ctx, now, 0.25, 'bandpass', 900, 0.8, 0.02 * volume);
+}
+
+/** One hoof on wood: a dull knock with a little scuff. */
+export function playHoof(volume = 0.03): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 180 + Math.random() * 30, 70, now, 0.07, volume);
+  noise(ctx, now, 0.05, 'highpass', 2500, 0.7, volume * 0.4);
+}
+
+/** The jungle springing up: a rising rustle of leaves under a warm swelling chord. */
+export function playGrow(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const rustle = noise(ctx, now, 1.8, 'bandpass', 900, 0.6, 0.05);
+  rustle.frequency.setValueAtTime(500, now);
+  rustle.frequency.exponentialRampToValueAtTime(3200, now + 1.6);
+  [196, 293.66, 392, 587.33].forEach((f, i) => tone(ctx, f, now + 0.25 + i * 0.16, 2.2, 0.035));
+}
+
+/** The ratchet's pawl dropping off one tooth: a small dry tick of iron on iron. */
+export function playPawl(volume = 0.03): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, 0.035, 'bandpass', 4200 + Math.random() * 600, 3, volume);
+  tone(ctx, 2600 + Math.random() * 200, now, 0.05, volume * 0.25);
+}
+
+/** Loaded timber turning on its pegs: a short stick-slip groan. Louder under more load. */
+export function playCreak(load = 0.5): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const duration = 0.18 + Math.random() * 0.22;
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(38 + Math.random() * 30, now);
+  osc.frequency.linearRampToValueAtTime(55 + Math.random() * 40, now + duration);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 700 + Math.random() * 900;
+  filter.Q.value = 4;
+  const gain = ctx.createGain();
+  const volume = 0.012 + 0.03 * Math.min(1, load);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + duration * 0.3);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.05);
+}
+
+/** The load trying to run back, caught by the pawl: a heavy wooden clunk. */
+export function playClunk(volume = 0.06): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 140, 55, now, 0.16, volume);
+  noise(ctx, now, 0.08, 'lowpass', 900, 0.8, volume * 0.6);
+}
+
+/** A drop of water falling back into the well. */
+export function playDrip(volume = 0.025): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 700 + Math.random() * 300, 1900 + Math.random() * 500, now, 0.06, volume);
+}
+
+/**
+ * Hammer on hot iron over the anvil: a bright ring built from an anvil's
+ * inharmonic partials, damped when the iron is soft and hot.
+ */
+export function playClang(hot = 1, volume = 0.07): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = 820 + Math.random() * 60;
+  // Struck steel bar partials (free-free beam): 1, 2.76, 5.40, 8.93.
+  [1, 2.76, 5.4, 8.93].forEach((ratio, i) => {
+    const ring = 0.5 * (1 - hot * 0.6) / (1 + i * 0.6) + 0.08;
+    tone(ctx, base * ratio, now, ring, volume / (1 + i * 1.4));
+  });
+  noise(ctx, now, 0.05, 'bandpass', 2500, 1.2, volume * 0.7);
+  sweep(ctx, 'sine', 160, 60, now, 0.12, volume * 0.8 * hot);
+}
+
+/** A blow on iron too cold to move: a hard, high tink that rings on. */
+export function playTink(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = 1500 + Math.random() * 100;
+  [1, 2.76, 5.4].forEach((ratio, i) => tone(ctx, base * ratio, now, 1.1 / (1 + i), volume / (1 + i)));
+}
+
+/** Air pushed through the bellows' nozzle. */
+export function playWhoosh(strength = 0.5): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const filter = noise(ctx, now, 0.45, 'bandpass', 500, 0.8, 0.02 + 0.05 * Math.min(1, strength));
+  filter.frequency.setValueAtTime(350, now);
+  filter.frequency.exponentialRampToValueAtTime(1100, now + 0.3);
+}
+
+/** Red-hot steel plunged into water: a violent hiss that dies to a simmer. */
+export function playHiss(volume = 0.08, seconds = 1.6): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, seconds, 'highpass', 3000, 0.7, volume);
+  noise(ctx, now, seconds * 0.6, 'bandpass', 900, 1.5, volume * 0.5);
+}
+
+/** A pop and crackle from the burning charcoal. */
+export function playCrackle(volume = 0.02): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (let i = 0; i < 3; i++) {
+    noise(ctx, now + Math.random() * 0.15, 0.015 + Math.random() * 0.02, 'highpass', 1800 + Math.random() * 2000, 0.8, volume * Math.random());
+  }
+}
+
+/** The forge catching light: a soft whump and a rush of flame. */
+export function playIgnite(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 90, 45, now, 0.5, 0.09);
+  const roar = noise(ctx, now, 1.4, 'lowpass', 600, 0.7, 0.07);
+  roar.frequency.setValueAtTime(300, now);
+  roar.frequency.exponentialRampToValueAtTime(1600, now + 0.6);
 }

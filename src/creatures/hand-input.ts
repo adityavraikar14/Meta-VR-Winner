@@ -27,6 +27,7 @@ export interface HandState {
   pinch: Vector3;
   pinchVelocity: Vector3;
   palm: Vector3;
+  wrist: Vector3;
   /** Unit vector out of the palm. */
   palmNormal: Vector3;
   tips: Vector3[];
@@ -46,6 +47,7 @@ function createHand(): HandState {
     pinch: new Vector3(),
     pinchVelocity: new Vector3(),
     palm: new Vector3(),
+    wrist: new Vector3(),
     palmNormal: new Vector3(0, -1, 0),
     tips: TOUCH_TIPS.map(() => new Vector3()),
     tipSpeeds: TOUCH_TIPS.map(() => 0),
@@ -102,6 +104,7 @@ export class HandInput {
       // Palm normal from the wrist and the index/pinky knuckles; the cross
       // product points out of the palm for a right hand, so flip the left.
       this.joint(joints, WRIST, this.a);
+      hand.wrist.copy(this.a);
       this.joint(joints, INDEX_KNUCKLE, this.b).sub(this.a);
       this.joint(joints, PINKY_KNUCKLE, this.c).sub(this.a);
       hand.palmNormal.crossVectors(this.b, this.c).normalize();

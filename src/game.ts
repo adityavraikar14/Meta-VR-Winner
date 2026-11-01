@@ -14,7 +14,7 @@ import {
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
-import { playAwaken, playClick, playPrompt } from './audio.js';
+import { playAwaken, playClick, playGrow, playPrompt } from './audio.js';
 import { devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -47,8 +47,10 @@ import {
   normalizeMask,
 } from './matcher.js';
 import { IntroShow } from './intro.js';
+import { MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
+import { TableFinder } from './table.js';
 import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
   MASK_HEIGHT,
@@ -59,7 +61,7 @@ import {
 } from './stage-state.js';
 import { friendName, type Puzzle, PUZZLES, WORLDS } from './world/puzzles.js';
 
-type Phase = 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
+type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared';
 type Problem =
   | Finger
   | 'direction'
@@ -71,11 +73,38 @@ type Problem =
   | null;
 
 const OUTLINE_SIZE = 0.4;
+/**
+ * Shadow size (metres on the paper) that makes a normal-sized friend. Real
+ * optics sets the shadow: magnification = lantern-to-paper ÷ lantern-to-hand,
+ * so a hand near the lantern casts a big shadow and a big friend.
+ */
+const SHADOW_FOR_NORMAL = 0.38;
+const BODY_SIZES: [number, number] = [0.7, 1.45];
+
+function bodySizeFromShadow(shadow: number): number {
+  return Math.min(BODY_SIZES[1], Math.max(BODY_SIZES[0], shadow / SHADOW_FOR_NORMAL));
+}
+
+/** Height or width of a shadow on the paper, whichever is larger, in metres. */
+function shadowSpan(b: MaskBounds): number {
+  const bw = ((b.maxX - b.minX + 1) / MASK_WIDTH) * PAPER_WIDTH;
+  const bh = ((b.maxY - b.minY + 1) / MASK_HEIGHT) * PAPER_HEIGHT;
+  return Math.max(bw, bh);
+}
+
+function sizeWord(size: number): string {
+  if (size >= 1.32) return 'A huge ';
+  if (size >= 1.12) return 'A big ';
+  if (size <= 0.85) return 'A little ';
+  return 'The ';
+}
 const SHADOW_OPACITY = 0.88;
 const AWAKEN_SHIVER = 0.45;
 const AWAKEN_DURATION = 1.8;
 /** Seconds the story card stays up before play starts. */
 const STORY_TIME = 4.5;
+/** Seconds the jungle takes to grow before the title appears. */
+const GROW_TIME = 2.6;
 /** Seconds the stars card stays up after a level. */
 const CLEAR_TIME = 5;
 /** Seconds to read why the wrong friend could not help. */
@@ -84,6 +113,8 @@ const OOPS_TIME = 3.2;
 const WARMUP_HOLD = 1.2;
 /** Solve within this many seconds of choosing for the speed star. */
 const FAST_TIME = 20;
+/** Hands-on jobs take longer; finishing under this earns the speed star. */
+const HANDS_ON_FAST = 150;
 const CARD_SIZE = 0.11;
 const CARD_GAP = 0.125;
 /** Cards line the top of the paper; the bottom is hidden behind the stage. */
@@ -189,6 +220,13 @@ export class ShadowGameSystem extends createSystem({
   private playButton!: PushButton;
   private buttonEntity!: Entity;
   private intro!: IntroShow;
+  private table!: TableFinder;
+  private menu!: MainMenu;
+  /** Index of the menu button the mouse clicked this frame, or -1. */
+  private menuClick = -1;
+  /** Enter / Space pressed this frame with no other button to take it. */
+  private enterPressed = false;
+  private headAt = new Vector3();
   private shadowWorld!: ShadowWorld;
   private introLine: string | null = null;
   /** A brand-new story: Play shows the opening show first. */
@@ -205,6 +243,8 @@ export class ShadowGameSystem extends createSystem({
   private creatureX = 0;
   private creatureY = 0;
   private creatureSize = OUTLINE_SIZE;
+  /** Body size of the friend about to be born, from its shadow's size. */
+  private bodySize = 1;
   private welcomed = false;
 
   init(): void {
@@ -291,7 +331,8 @@ export class ShadowGameSystem extends createSystem({
       new MeshBasicMaterial({ map: this.captionTexture, transparent: true }),
     );
     captionMesh.name = 'Caption';
-    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.075, 0.002);
+    // In front of every world's frame, so no beam or crossbar can cover it.
+    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.115, 0.075);
     paper.add(captionMesh);
 
     this.ghost = new GhostHand(paper);
@@ -337,7 +378,18 @@ export class ShadowGameSystem extends createSystem({
     };
 
     loadProgress();
-    this.showTitle();
+    this.menu = new MainMenu(paper, VIEWER, (kicker, title, body, footer) => {
+      this.drawBanner(kicker, title, body, footer);
+      this.bannerShown = true;
+    });
+    this.table = new TableFinder(paper);
+    devInfo.table = () => ({
+      height: stage.tableHeight,
+      progress: Number(this.table.reading.progress.toFixed(2)),
+      close: this.table.reading.close,
+      hidden: stage.sceneryHidden,
+    });
+    this.showTable();
 
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
@@ -351,6 +403,24 @@ export class ShadowGameSystem extends createSystem({
         LEVELS.forEach((level, i) =>
           stage.spawns.push({ kind: level.id, x: -0.36 + i * 0.12, y: -0.12 }),
         ),
+      spawn: (kind: string, size = 1) => stage.spawns.push({ kind, x: 0, y: -0.12, size }),
+      summon: (kind: string, size: number) => {
+        const index = this.candidates.findIndex((level) => level.id === kind);
+        if (this.phase !== 'matching' || index < 0) return;
+        // A square shadow of the size that makes this body, centred on the paper.
+        const cells = Math.round(((size * SHADOW_FOR_NORMAL) / PAPER_WIDTH) * MASK_WIDTH);
+        const b = this.candidateBounds[index];
+        b.minX = Math.round(MASK_WIDTH / 2 - cells / 2);
+        b.maxX = b.minX + cells - 1;
+        b.minY = Math.round(MASK_HEIGHT / 2 - cells / 2);
+        b.maxY = b.minY + cells - 1;
+        this.awaken(this.candidates[index], index);
+      },
+      nextChapter: () => {
+        const world = PUZZLES[this.puzzleIndex]?.world ?? -1;
+        const next = PUZZLES.findIndex((p) => p.world > world);
+        if (next >= 0) this.startPuzzle(next);
+      },
       info: () => {
         const describe = (i: number) => {
           if (!stage.tracked[i]) return null;
@@ -389,25 +459,24 @@ export class ShadowGameSystem extends createSystem({
     const pressed = this.playButton.update(dt, this.liveTips, this.rayClick);
     this.rayClick = false;
     if (pressed) playClick();
+    if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
 
     switch (this.phase) {
-      case 'title':
-        if (pressed && this.fresh) {
-          this.bannerShown = false;
-          this.playButton.setText('Skip');
-          this.intro.start();
-          this.setPhase('intro');
-        } else if (pressed) {
-          playAwaken();
-          this.playButton.show(false);
-          this.startPuzzle(this.puzzleIndex);
-        } else if (this.phaseTime > 6) {
-          this.setCaption('Push the glowing button, or point and pinch');
-        }
+      case 'table':
+        this.updateTable(dt, pressed);
         break;
+      case 'growing':
+        if (this.phaseTime >= GROW_TIME) this.showTitle();
+        break;
+      case 'title': {
+        const action = this.menu.update(dt, this.liveTips, this.menuClick, this.enterPressed);
+        if (action) this.menuAction(action);
+        else if (this.phaseTime > 8) this.setCaption('Push a button with your fingertip, or point and pinch');
+        break;
+      }
       case 'intro':
         if (pressed || this.introLine === null) {
           this.intro.stop();
@@ -427,6 +496,7 @@ export class ShadowGameSystem extends createSystem({
           this.setCaption('Paused · poke a button, or lower your hand');
         } else if (this.puzzle?.warmup) this.updateWarmup(dt);
         else if (this.puzzle?.walk) this.updateWalk(dt);
+        else if (this.puzzle?.handsOn) this.updateHandsOn(dt);
         else this.updateMatching(dt);
         break;
       case 'awakening':
@@ -451,6 +521,8 @@ export class ShadowGameSystem extends createSystem({
     const fade = this.phase === 'matching' && this.best >= 0 ? this.warmth(this.smooth[this.best]) : 0;
     this.ghost.update(dt, fade);
 
+    this.menuClick = -1;
+    this.enterPressed = false;
     const target = this.bannerShown ? 1 : 0;
     this.bannerMaterial.opacity += (target - this.bannerMaterial.opacity) * Math.min(1, dt * 5);
     this.banner.visible = this.bannerMaterial.opacity > 0.01;
@@ -458,34 +530,84 @@ export class ShadowGameSystem extends createSystem({
 
   // ------------------------------------------------------------ Story flow
 
-  /** The book's cover: a title card and a big button to start or continue. */
+  /**
+   * Before anything else: find the player's real table. The world stays
+   * hidden until a hand lies flat on it, then grows out from under the palm.
+   */
+  private showTable(): void {
+    if (stage.tableHeight !== null) {
+      this.showTitle();
+      return;
+    }
+    this.table.reset();
+    stage.sceneryHidden = true;
+    this.bannerShown = false;
+    this.playButton.setText('Skip');
+    this.playButton.show(true);
+    this.setCaption('Lay one hand flat on your table');
+    this.setPhase('table');
+  }
+
+  private updateTable(dt: number, skip: boolean): void {
+    this.player.head.getWorldPosition(this.headAt);
+    const reading = this.table.update(dt, stage.joints, stage.tracked, (v) => this.player.localToWorld(v), this.headAt.y);
+    if (reading.height !== null || skip) {
+      if (reading.height !== null) stage.tableHeight = reading.height;
+      stage.sceneryHidden = false;
+      stage.grow = { from: reading.height !== null ? reading.point.clone() : null };
+      this.table.hide();
+      this.playButton.show(false);
+      playGrow();
+      const world = WORLDS[PUZZLES[resumeIndex()]?.world ?? WORLDS.length - 1];
+      this.setCaption(world.grows);
+      this.setPhase('growing');
+      return;
+    }
+    if (reading.close) {
+      this.setCaption(`Hold still…  ${Math.round(reading.progress * 100)}%`);
+    } else if (this.phaseTime > 9) {
+      this.setCaption('No table nearby? Push Skip');
+    } else {
+      this.setCaption('Lay one hand flat on your table');
+    }
+  }
+
+  /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
-    const resume = play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex;
+    const resume = resumeIndex();
     this.puzzleIndex = resume;
     this.puzzle = null;
     this.candidates = [];
     this.raw = [];
     this.smooth = [];
     this.best = -1;
-    const fresh = resume === 0 && totalStars() === 0;
-    this.fresh = fresh;
-    const next = PUZZLES[resume];
-    const footer = fresh
-      ? 'Push the button to open the book'
-      : next
-        ? `Next: ${next.title}  ·  ${totalStars()} ★`
-        : `Every chapter read  ·  ${totalStars()} ★`;
-    this.drawBanner(
-      'A hand-shadow storybook',
-      'Shadowplay',
-      'Your hands make the shadows. The shadows come alive.',
-      footer,
-    );
-    this.bannerShown = true;
-    this.playButton.setText(fresh ? 'Play' : 'Continue');
-    this.playButton.show(true);
-    this.setCaption(fresh ? 'Welcome! Push the button to begin' : 'Welcome back! Push the button to continue');
+    this.fresh = resume === 0 && totalStars() === 0;
+    this.intro.stop();
+    this.playButton.show(false);
+    this.menu.open('home');
+    this.setCaption(this.fresh ? 'Welcome! Push Play to begin' : 'Welcome back!');
     this.setPhase('title');
+  }
+
+  private menuAction(action: MenuAction): void {
+    this.menu.close();
+    if (action.do === 'table') {
+      stage.tableHeight = null;
+      this.showTable();
+    } else if (action.do === 'chapter') {
+      playAwaken();
+      this.startPuzzle(action.index);
+    } else if (this.fresh) {
+      // The very first time: the shadow-puppet prologue, then level one.
+      this.bannerShown = false;
+      this.playButton.setText('Skip');
+      this.playButton.show(true);
+      this.intro.start();
+      this.setPhase('intro');
+    } else {
+      playAwaken();
+      this.startPuzzle(this.puzzleIndex < PUZZLES.length ? this.puzzleIndex : 0);
+    }
   }
 
   /**
@@ -497,16 +619,21 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
-      if (!this.playButton.visible) return;
+      if (!this.playButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       const camera = this.renderer.xr.isPresenting ? this.renderer.xr.getCamera() : this.camera;
       raycaster.setFromCamera(ndc, camera);
-      if (raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
+      if (this.playButton.visible && raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
+      this.menu.roots.forEach((root, i) => {
+        if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
+      });
     };
     const onKey = (event: KeyboardEvent) => {
-      if ((event.key === 'Enter' || event.key === ' ') && this.playButton.visible) this.rayClick = true;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (this.playButton.visible) this.rayClick = true;
+      else this.enterPressed = true;
     };
     // Capture on the window: the emulator layers its own controls over the canvas.
     window.addEventListener('pointerdown', onPointer, true);
@@ -544,6 +671,10 @@ export class ShadowGameSystem extends createSystem({
   }
 
   private startPuzzle(index: number): void {
+    // Jumping straight into a level (dev keys) skips the table: show the world as it is.
+    stage.sceneryHidden = false;
+    this.table.hide();
+    this.menu.close();
     this.puzzleIndex = index;
     this.puzzle = PUZZLES[index] ?? null;
     play.puzzleIndex = this.puzzle ? index : -1;
@@ -554,7 +685,7 @@ export class ShadowGameSystem extends createSystem({
     const puzzle = this.puzzle;
     if (!puzzle) {
       this.candidates = [...LEVELS];
-    } else if (puzzle.warmup || puzzle.walk) {
+    } else if (puzzle.warmup || puzzle.walk || puzzle.handsOn) {
       this.candidates = [];
     } else if (puzzle.teach) {
       this.candidates = [levelFor(puzzle.teach)];
@@ -600,8 +731,12 @@ export class ShadowGameSystem extends createSystem({
   /** Restart and Skip from the hand menu. */
   private handleCommand(): void {
     const command = stage.command;
-    if (command !== 'restart' && command !== 'skip') return;
+    if (command !== 'restart' && command !== 'skip' && command !== 'menu') return;
     stage.command = null;
+    if (command === 'menu') {
+      this.showTitle();
+      return;
+    }
     if (command === 'restart') this.startPuzzle(this.puzzleIndex);
     else if (this.puzzle) this.skip();
   }
@@ -716,6 +851,24 @@ export class ShadowGameSystem extends createSystem({
     this.setCaption(text);
   }
 
+  /** Hands-on work (the forge): the scene says what to do next and when it is done. */
+  private updateHandsOn(dt: number): void {
+    this.matchTime += dt;
+    const task = stage.task;
+    if (task?.done) {
+      if (!this.walkCleared) {
+        this.walkCleared = true;
+        this.walkClearAt = this.phaseTime + 1.5;
+      }
+      if (this.phaseTime >= this.walkClearAt) {
+        playAwaken();
+        this.clearPuzzle();
+        return;
+      }
+    }
+    this.setCaption(task?.caption || this.puzzle!.ask);
+  }
+
   private updateMatching(dt: number): void {
     this.matchTime += dt;
     this.judgeCandidates(dt);
@@ -777,6 +930,14 @@ export class ShadowGameSystem extends createSystem({
     } else if (anyPair && problem === 'twoHands' && !teaching) {
       text = 'Pick a friend: make their shadow';
     }
+    // A job that needs a big friend: read out the size this shadow would make.
+    const need = this.puzzle?.needSize;
+    if (need && level && best >= 0 && this.candidateShadow[best] && score > 0.45 && !this.needsRelease) {
+      const size = bodySizeFromShadow(shadowSpan(this.candidateBounds[best]));
+      text = size >= need
+        ? `${level.name} size ×${size.toFixed(2)}: strong enough! Hold the shape`
+        : `${level.name} size ×${size.toFixed(2)} (needs ×${need.toFixed(2)}): bring your hand closer to the lantern`;
+    }
     if (DEV) text += `  ·  ${Math.round(score * 100)}%`;
 
     // The ghost hand: always on while teaching; when choosing, it steps in
@@ -827,6 +988,8 @@ export class ShadowGameSystem extends createSystem({
       ? 3
       : puzzle.walk
         ? 1 + (this.shadowWorld.falls === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0)
+        : puzzle.handsOn
+          ? 1 + ((stage.task?.mistakes ?? 0) === 0 ? 1 : 0) + (this.matchTime < HANDS_ON_FAST ? 1 : 0)
         : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
     play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
     // Resume from the next level if the player leaves now.
@@ -957,9 +1120,8 @@ export class ShadowGameSystem extends createSystem({
   private awaken(level: Level, index: number): void {
     this.chosen = level;
     const b = this.candidateBounds[index];
-    const bw = ((b.maxX - b.minX + 1) / MASK_WIDTH) * PAPER_WIDTH;
-    const bh = ((b.maxY - b.minY + 1) / MASK_HEIGHT) * PAPER_HEIGHT;
-    this.creatureSize = Math.max(bw, bh);
+    this.creatureSize = shadowSpan(b);
+    this.bodySize = bodySizeFromShadow(this.creatureSize);
     this.creatureX = (((b.minX + b.maxX + 1) / 2) / MASK_WIDTH - 0.5) * PAPER_WIDTH;
     this.creatureY = (((b.minY + b.maxY + 1) / 2) / MASK_HEIGHT - 0.5) * PAPER_HEIGHT;
     drawSilhouette(this.creatureCanvas, decodeCells(level.outline), 3, 1);
@@ -974,7 +1136,7 @@ export class ShadowGameSystem extends createSystem({
     this.ring.visible = false;
     this.ghost.show(null);
     this.needsRelease = true;
-    this.setCaption(`The ${level.name} is free!`);
+    this.setCaption(`${sizeWord(this.bodySize)}${level.name} is free!`);
     this.setPhase('awakening');
     playAwaken();
   }
@@ -1026,6 +1188,7 @@ export class ShadowGameSystem extends createSystem({
         x: this.creature.position.x,
         y: this.creature.position.y,
         attempt,
+        size: this.bodySize,
       });
       if (shadowMaterial) shadowMaterial.opacity = SHADOW_OPACITY;
       if (attempt) {

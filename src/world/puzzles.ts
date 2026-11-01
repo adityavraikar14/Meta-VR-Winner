@@ -2,20 +2,22 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
+import type { HandState } from '../creatures/hand-input.js';
+import { Bridge } from '../machines/bridge.js';
+import { Forge } from '../machines/forge.js';
+import { HorseWhim, whimFootprint } from '../machines/whim.js';
+import { stage } from '../stage-state.js';
+import { decorateJungle, decorateMine, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
 import {
   berries,
   berryTree,
   bush,
   carrot,
-  flower,
   goldStar,
-  grass,
   hollowLog,
   log,
   moundMark,
   mushroom,
-  paperPine,
-  paperTree,
   rootArch,
 } from './props.js';
 
@@ -48,7 +50,10 @@ export interface Attempt {
 export interface PuzzleScene {
   /** Stage-local spot where a newly made friend lands. */
   start: Vector3;
-  attempt(kind: string): Attempt;
+  /** A friend of this kind and body size (1 = normal) tries the puzzle. */
+  attempt(kind: string, size: number): Attempt;
+  /** Machines that keep running between attempts, and hands-on work. */
+  update?(dt: number, hands: readonly HandState[]): void;
 }
 
 export interface Puzzle {
@@ -66,6 +71,10 @@ export interface Puzzle {
   warmup?: boolean;
   /** A shadow-world level on the paper: help a tiny shadow friend across. */
   walk?: WalkLevel;
+  /** The job needs a friend at least this big (1 = normal); its size is read out while matching. */
+  needSize?: number;
+  /** Done with your own hands, not a friend: the scene reports progress in `stage.task`. */
+  handsOn?: boolean;
   /** Caption once solved. */
   solved: string;
   build(root: Group, kit: Kit): PuzzleScene;
@@ -73,16 +82,17 @@ export interface Puzzle {
 
 export interface World {
   name: string;
-  /** Colour of the stage floor. */
-  floor: number;
-  decorate(root: Group): void;
+  /** Caption while this world grows into the room. */
+  grows: string;
+  /** Builds the world: its earth on the stage, the screen's frame, and the plants in your room. */
+  decorate(roots: SceneryRoots): void;
 }
 
 const NAMES: Record<string, string> = {
   rabbit: 'Rabbit',
   snail: 'Snail',
-  deer: 'Deer',
-  dog: 'Dog',
+  stag: 'Stag',
+  horse: 'Horse',
   bird: 'Bird',
   butterfly: 'Butterfly',
   dragon: 'Dragon',
@@ -102,52 +112,11 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 
 // ---------------------------------------------------------------- Worlds
 
-/** Scenery sits at the sides and low at the back, so it never hides the paper. */
-function decorateForest(root: Group): void {
-  const y = 0;
-  place(root, paperTree(0.19), -0.28, y, -0.02, 0.5);
-  place(root, paperPine(0.17), -0.24, y, -0.14, 0.35);
-  place(root, paperTree(0.17, 0x82b863, 0x5b9a4f), 0.28, y, -0.03, -0.5);
-  place(root, paperPine(0.19, 0x3a7652), 0.23, y, -0.15, -0.35);
-  for (let i = 0; i < 9; i++) {
-    const a = Math.PI * (1.1 + (i / 8) * 0.8);
-    place(root, grass(0.05, i % 2 ? 0x86bf5e : 0x74b052), Math.cos(a) * 0.235, y, Math.sin(a) * 0.235 * 0.9, -a - Math.PI / 2);
-  }
-  place(root, bush(0.05), -0.1, y, -0.21);
-  place(root, bush(0.045, 0x6aa95a), 0.09, y, -0.22);
-  const colors = [0xff8fb1, 0xffffff, 0xffd34d, 0xb48cff, 0xff8fb1];
-  [[-0.2, 0.1], [-0.17, 0.15], [0.19, 0.12], [0.21, 0.06], [0.0, -0.2]].forEach(([x, z], i) =>
-    place(root, flower(colors[i]), x, y, z, 0, 1.1));
-  place(root, mushroom(0.022).group, -0.2, y, 0.04);
-  place(root, mushroom(0.016, 0xf0a030).group, -0.185, y, 0.065);
-}
-
-function decoratePond(root: Group): void {
-  const y = 0;
-  place(root, paperTree(0.18, 0x6aa27a, 0x4a8060), -0.28, y, -0.03, 0.5);
-  place(root, paperPine(0.18, 0x356e5a), 0.26, y, -0.1, -0.45);
-  for (let i = 0; i < 7; i++) {
-    const x = -0.2 + i * 0.066;
-    place(root, grass(0.04, i % 2 ? 0x5f9f6a : 0x4f8f62), x, y, -0.215, 0, 1.4);
-  }
-  [[-0.21, 0.08], [0.2, 0.1], [0.22, 0.03]].forEach(([x, z], i) =>
-    place(root, flower(i === 1 ? 0xb4c8ff : 0xffffff), x, y, z));
-}
-
-function decorateMountain(root: Group): void {
-  const y = 0;
-  place(root, paperPine(0.2, 0x2f6150), -0.27, y, -0.05, 0.45);
-  place(root, paperPine(0.16, 0x3a7060), -0.21, y, -0.16, 0.3);
-  place(root, paperPine(0.19, 0x2f6150), 0.26, y, -0.08, -0.45);
-  place(root, bush(0.06, 0x8a8aa0), 0.0, y, -0.22);
-  place(root, bush(0.05, 0x9a96ad), -0.12, y, -0.21);
-  place(root, bush(0.05, 0x9a96ad), 0.13, y, -0.21);
-}
-
 export const WORLDS: World[] = [
-  { name: 'Whispering Forest', floor: 0x9cc77a, decorate: decorateForest },
-  { name: 'Moonlit Pond', floor: 0x9ec9c4, decorate: decoratePond },
-  { name: "Dragon's Mountain", floor: 0xcdbfb2, decorate: decorateMountain },
+  { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle },
+  { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver },
+  { name: 'The Old Mine', grows: 'The old mine opens around you…', decorate: decorateMine },
+  { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain },
 ];
 
 // --------------------------------------------------------------- Puzzles
@@ -312,7 +281,7 @@ const highBerries: Puzzle = {
   title: 'The High Berries',
   story: 'Sweet berries hang from a branch, high up in the old tree.',
   ask: 'Who is tall enough to reach them?',
-  teach: 'deer',
+  teach: 'stag',
   solved: 'Berries for everyone!',
   build(root, kit) {
     const f = kit.floor;
@@ -408,10 +377,125 @@ const lostStar: Puzzle = {
             ],
           };
         }
-        const line = kind === 'deer'
+        const line = kind === 'stag'
           ? 'The Deer is far too tall for the log!'
           : `The ${friendName(kind)} is too big to fit inside!`;
         return bumpAndShrug(kit, along(-0.13), mouth, line);
+      },
+    };
+  },
+};
+
+/** The size of horse that can just wind up the full bucket. */
+export const WELL_NEED = 1.18;
+/** Stage-local spots for the whim and its well; the river's scenery keeps clear of them. */
+export const WHIM_AT = new Vector3(0.34, 0, -0.06);
+/** The well's z follows the drum: the rope runs straight back to it. */
+export const WELL_AT = new Vector3(-0.06, 0, -0.356);
+
+const oldWell: Puzzle = {
+  id: 'old-well',
+  world: 1,
+  title: 'The Old Well',
+  story: 'The Lantern Stone fell down the old well. Its bucket is far too heavy to wind up by hand.',
+  ask: 'Who is strong enough to turn the horse whim?',
+  teach: 'horse',
+  needSize: WELL_NEED,
+  solved: 'The Horse wound it up! The Lantern Stone is ours.',
+  build(root, kit) {
+    const f = kit.floor;
+    const whim = new HorseWhim(f, WHIM_AT, WELL_AT, WELL_NEED);
+    root.add(whim.group);
+    for (const [x, z, r] of whimFootprint(WHIM_AT, WELL_AT)) kit.block(x, z, r);
+    return {
+      start: new Vector3(-0.08, f, 0.12),
+      update: (dt) => whim.update(dt),
+      attempt: (kind, size) => {
+        if (kind !== 'horse') {
+          return bumpAndShrug(kit, kit.at(0.04, f, 0.1), kit.at(WHIM_AT.x, f + 0.1, WHIM_AT.z), `The ${friendName(kind)} can't push the whim round. It needs a horse.`);
+        }
+        const strong = size >= WELL_NEED;
+        const { at, ahead } = whim.harnessSpot(size);
+        return {
+          solved: strong,
+          line: strong
+            ? undefined
+            : 'Too heavy for that horse. Hold your hand closer to the lantern: a bigger shadow makes a bigger, stronger horse.',
+          steps: [
+            { do: 'walk', to: kit.at(at.x, f, at.z) },
+            { do: 'pose', pose: 'look', time: 0.8, look: kit.at(ahead.x, f + 0.06, ahead.z) },
+            { do: 'harness', rig: whim },
+            ...(strong
+              ? [
+                  {
+                    do: 'call' as const,
+                    run: () => {
+                      whim.freeStone(kit.tween, new Vector3(0, f + 0.32, -0.46), () => {
+                        kit.fx.burst(kit.at(0, f + 0.32, -0.46), 24, 0.3);
+                        kit.chime();
+                      });
+                    },
+                  },
+                  { do: 'pose' as const, pose: 'cheer' as const, time: 2.4 },
+                ]
+              : [{ do: 'pose' as const, pose: 'shrug' as const, time: 1.3 }]),
+          ],
+        };
+      },
+    };
+  },
+};
+
+const brokenBridge: Puzzle = {
+  id: 'broken-bridge',
+  world: 1,
+  title: 'The Broken Bridge',
+  story: 'The flood took the old bridge. The ore cart must cross the river to reach the mine.',
+  ask: 'Build a bridge of timbers across the river',
+  handsOn: true,
+  solved: 'Your bridge held! Triangles carry the load.',
+  build(root, kit) {
+    const bridge = new Bridge(kit.floor, BRIDGE_AT);
+    root.add(bridge.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        bridge.update(dt, hands);
+        task.caption = bridge.caption;
+        task.done = bridge.done;
+        task.mistakes = bridge.mistakes;
+      },
+    };
+  },
+};
+
+/** Stage-local spot for the bridge, clear of the river world's pond. */
+const BRIDGE_AT = new Vector3(0.12, 0, -0.02);
+
+const smithy: Puzzle = {
+  id: 'smithy',
+  world: 2,
+  title: 'The Smithy',
+  story: 'Roots hard as iron bar the mine. An old smithy stands cold: forge an axe to cut through.',
+  ask: 'Light the forge with the Lantern Stone',
+  handsOn: true,
+  solved: 'You forged an axe: hard steel, a keen edge.',
+  build(root, kit) {
+    const forge = new Forge(kit.floor);
+    root.add(forge.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        forge.update(dt, hands);
+        task.caption = forge.caption;
+        task.done = forge.done;
+        task.mistakes = forge.mistakes;
       },
     };
   },
@@ -448,8 +532,8 @@ function findStar(
           solved: true,
           steps: [
             { do: 'walk', to: kit.at(0.0, f, 0.01) },
-            { do: 'pose', pose: teach === 'dog' ? 'sniff' : 'look', time: 0.9, look: kit.at(0.06, f, 0) },
-            { do: 'pose', pose: teach === 'dog' ? 'dig' : 'reach', time: 1.1, look: kit.at(0.06, f, 0) },
+            { do: 'pose', pose: teach === 'horse' ? 'sniff' : 'look', time: 0.9, look: kit.at(0.06, f, 0) },
+            { do: 'pose', pose: teach === 'horse' ? 'dig' : 'reach', time: 1.1, look: kit.at(0.06, f, 0) },
             {
               do: 'call',
               run: () => {
@@ -475,8 +559,8 @@ export const PUZZLES: Puzzle[] = [
   tinyTunnel,
   highBerries,
   lostStar,
-  findStar('buried-lantern', 1, 'dog', 'The Buried Lantern', 'Something shiny is buried by the pond.', 'Who has the best nose?', 'Dig, dig, dig! The Dog found it!'),
-  findStar('pond-song', 1, 'bird', 'The Silent Pond', 'The pond is too quiet. It needs a song.', 'Who can sing the pond awake?', 'The Bird sang, and a star woke up!'),
-  findStar('night-flowers', 1, 'butterfly', 'The Night Flowers', 'The flowers closed up for the night.', 'Who can wake the flowers gently?', 'The flowers opened for the Butterfly!'),
-  findStar('great-lantern', 2, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),
+  oldWell,
+  brokenBridge,
+  smithy,
+  findStar('great-lantern', 3, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),
 ];

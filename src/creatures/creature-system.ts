@@ -2,17 +2,14 @@ import {
   CanvasTexture,
   CircleGeometry,
   createSystem,
-  CylinderGeometry,
   DirectionalLight,
   Group,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   type Entity,
   type Object3D,
   Quaternion,
   SRGBColorSpace,
-  TorusGeometry,
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
@@ -22,6 +19,8 @@ import { flattenGroups, mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { Diorama } from '../world/diorama.js';
+import { preloadNature } from '../world/nature.js';
+import { Beast, createBeast, preloadBeasts } from './beast.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
@@ -42,23 +41,29 @@ const STAGE_HEIGHT = 0.016;
  * looking down, and within easy reach of a seated player.
  */
 const STAGE_OFFSET = new Vector3(0, -0.22, 0.5);
+/** How far the earth may move from its default height to sit on a real table. */
+const TABLE_RANGE: [number, number] = [-0.5, -0.1];
 /** One friend on the stage at a time: calling another sends the last one home. */
 const MAX_CREATURES = 1;
 /** Display scale per kind, so big creatures do not crowd the stage. */
-const SCALES: Record<string, number> = { dragon: 0.95, deer: 1.05, dog: 1.15 };
+const SCALES: Record<string, number> = { dragon: 0.95, stag: 1.05, horse: 1.15 };
 
+/** Plush pets; the horse and stag use these only until their glTF models load. */
 const MODELS: Record<string, () => CreatureRig> = {
   rabbit: createRabbit,
   bird: createBird,
   snail: createSnail,
-  deer: createDeer,
-  dog: createDog,
+  stag: createDeer,
+  horse: createDog,
   butterfly: createButterfly,
   dragon: createDragon,
 };
 
+/** A friend on the stage: a plush pet or a rigged animal. */
+type Friend = Creature | Beast;
+
 interface Living {
-  creature: Creature;
+  creature: Friend;
   blob: Mesh;
   /** ECS entities that keep the creature and its blob in the scene. */
   entities: Entity[];
@@ -94,9 +99,8 @@ export class CreatureSystem extends createSystem({}) {
     const paper = stage.paper;
     if (!paper) throw new Error('ShadowStageSystem must be registered first');
 
-    const built = buildStage();
-    mergeStatic(built.root);
-    this.stageRoot = built.root;
+    preloadNature();
+    this.stageRoot = buildStage();
     this.stageRoot.position.copy(STAGE_OFFSET);
     paper.add(this.stageRoot);
 
@@ -111,15 +115,16 @@ export class CreatureSystem extends createSystem({}) {
     this.fx = new Effects();
     this.world.createTransformEntity(this.fx.root);
     this.handInput = new HandInput();
-    this.diorama = new Diorama(this.stageRoot, built.floor, STAGE_HEIGHT, this.fx);
+    this.diorama = new Diorama(this.stageRoot, STAGE_HEIGHT, this.fx);
+    preloadBeasts();
 
     const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
     devInfo.creatures = () =>
       this.creatures.map(({ creature }) => ({
+        kind: creature.kind,
         state: creature.state,
-        doing: creature.behavior,
+        doing: creature instanceof Beast ? `${creature.mood} ${creature.clip}` : creature.behavior,
         task: creature.taskLabel,
-        energy: Number(creature.brain.energy.toFixed(2)),
         at: round(creature.position),
         happy: Number(creature.happiness.toFixed(2)),
         petting: creature.petting,
@@ -162,12 +167,18 @@ export class CreatureSystem extends createSystem({}) {
       while (this.creatures.length > 0) this.remove(0);
       this.diorama.load();
     }
-    this.diorama.update(dt);
+    this.followTable();
+    this.diorama.setHidden(stage.sceneryHidden);
+    if (stage.grow) {
+      this.diorama.grow(stage.grow.from);
+      stage.grow = null;
+    }
+    this.diorama.update(dt, this.handInput.hands);
     this.ground.blockers = this.diorama.blockers;
 
     while (stage.spawns.length > 0) {
       const request = stage.spawns.shift()!;
-      this.spawn(request.kind, request.x, request.y, request.attempt ?? false);
+      this.spawn(request.kind, request.x, request.y, request.attempt ?? false, request.size ?? 1);
     }
 
     let purr = 0;
@@ -194,25 +205,40 @@ export class CreatureSystem extends createSystem({}) {
       if (onStage) {
         blob.position.set(creature.position.x, this.ground.center.y + 0.001, creature.position.z);
         const fade = Math.max(0, 1 - lift / 0.3);
-        blob.scale.setScalar(0.045 * creature.scale * (0.6 + 0.4 * fade));
+        const size = creature instanceof Beast ? creature.footprint : 0.045 * creature.scale;
+        blob.scale.setScalar(size * (0.6 + 0.4 * fade));
       }
     }
     setPurr(purr);
     this.fx.update(dt);
   }
 
-  private spawn(kind: string, x: number, y: number, attempt: boolean): void {
-    const make = MODELS[kind] ?? createRabbit;
+  /**
+   * Keep the earth's surface on the player's real table: the screen stays at
+   * eye height, the earth (and the screen's poles) move down or up to the table.
+   */
+  private followTable(): void {
+    let y = STAGE_OFFSET.y;
+    if (stage.tableHeight !== null) {
+      stage.paper!.getWorldPosition(this.landing);
+      y = stage.tableHeight - this.landing.y - STAGE_HEIGHT;
+      y = Math.min(TABLE_RANGE[1], Math.max(TABLE_RANGE[0], y));
+    }
+    if (Math.abs(this.stageRoot.position.y - y) < 0.002) return;
+    this.stageRoot.position.y = y;
+    this.stageRoot.updateMatrixWorld(true);
+    while (this.creatures.length > 0) this.remove(0);
+    this.diorama.relayout();
+  }
+
+  private spawn(kind: string, x: number, y: number, attempt: boolean, size: number): void {
     // A new shadow replaces the friend already out, so the stage stays one-on-one.
-    const twin = this.creatures.findIndex((living) => living.creature.rig.kind === kind);
+    const twin = this.creatures.findIndex((living) => living.creature.kind === kind);
     if (twin >= 0) this.remove(twin);
     else if (this.creatures.length >= MAX_CREATURES) this.remove(0);
     const paper = stage.paper!;
-    const rig = make();
-    flattenGroups(rig.root, animatedParts(rig));
-    mergeStatic(rig.root);
-    const creature = new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
-    const body = this.world.createTransformEntity(rig.root);
+    const creature = createBeast(kind, this.fx, size) ?? this.createPet(kind);
+    const body = this.world.createTransformEntity(creature.root);
     const blob = new Mesh(this.blobGeometry, this.blobMaterial);
     blob.name = 'CreatureContactShadow';
     blob.renderOrder = 1;
@@ -221,12 +247,26 @@ export class CreatureSystem extends createSystem({}) {
     // Start on the paper surface where the shadow creature stood, slightly
     // lowered so its feet sit at the bottom of the shadow.
     paper.updateWorldMatrix(true, false);
-    this.spawnPoint.set(x, y - rig.height * 0.4, 0.01).applyMatrix4(paper.matrixWorld);
+    this.spawnPoint.set(x, y - creature.height * 0.4, 0.01).applyMatrix4(paper.matrixWorld);
     paper.getWorldQuaternion(this.paperRotation);
     creature.emergeFrom(this.spawnPoint, this.paperRotation);
     this.creatures.push({ creature, blob, entities: [body, shadow], attempt });
-    this.ground.creatures = this.creatures.map((living) => living.creature);
+    this.syncGround();
     playTransform();
+  }
+
+  private createPet(kind: string): Creature {
+    const rig = (MODELS[kind] ?? createRabbit)();
+    flattenGroups(rig.root, animatedParts(rig));
+    mergeStatic(rig.root);
+    return new Creature(rig, this.fx, SCALES[kind] ?? 1.25);
+  }
+
+  /** Plush pets look for each other on the stage; beasts keep to themselves. */
+  private syncGround(): void {
+    this.ground.creatures = this.creatures
+      .map((living) => living.creature)
+      .filter((friend): friend is Creature => friend instanceof Creature);
   }
 
   /** A creature vanishes in a puff of sparkles. */
@@ -235,14 +275,18 @@ export class CreatureSystem extends createSystem({}) {
     this.fx.burst(gone.creature.position, 16, 0.3);
     // Detaching the Object3D alone is not enough: the entity keeps it in the scene.
     for (const entity of gone.entities) entity.dispose({ disposeResources: false });
-    gone.creature.rig.root.removeFromParent();
     gone.blob.removeFromParent();
-    disposeRig(gone.creature.rig);
-    this.ground.creatures = this.creatures.map((living) => living.creature);
+    if (gone.creature instanceof Beast) {
+      gone.creature.dispose();
+    } else {
+      gone.creature.rig.root.removeFromParent();
+      disposeRig(gone.creature.rig);
+    }
+    this.syncGround();
   }
 
   /** A free spot on the stage, away from the creatures already there. */
-  private pickLanding(self: Creature): Vector3 {
+  private pickLanding(self: Friend): Vector3 {
     let best = 0;
     for (let attempt = 0; attempt < 12; attempt++) {
       const angle = Math.random() * Math.PI * 2;
@@ -263,7 +307,6 @@ export class CreatureSystem extends createSystem({}) {
   }
 }
 
-/** A round wooden stage with a warm glowing rim. Origin at its base. */
 /** Every part of a rig that animation moves, scales or hides. */
 function animatedParts(rig: CreatureRig): Set<Object3D> {
   return new Set<Object3D>([
@@ -273,32 +316,11 @@ function animatedParts(rig: CreatureRig): Set<Object3D> {
   ]);
 }
 
-function buildStage(): { root: Group; floor: MeshStandardMaterial } {
+/** Where the world's earth and its friends sit, in front of the screen. */
+function buildStage(): Group {
   const root = new Group();
   root.name = 'CreatureStage';
-  const wood = new MeshStandardMaterial({ color: 0x8b5a33, roughness: 0.65, metalness: 0 });
-  const top = new MeshStandardMaterial({ color: 0xf2dcb8, roughness: 0.9 });
-  const base = new Mesh(
-    new CylinderGeometry(STAGE_RADIUS, STAGE_RADIUS * 0.94, STAGE_HEIGHT, 48),
-    wood,
-  );
-  base.name = 'StageBase';
-  base.position.y = STAGE_HEIGHT / 2;
-  root.add(base);
-  const felt = new Mesh(new CircleGeometry(STAGE_RADIUS * 0.9, 48), top);
-  felt.name = 'StageTop';
-  felt.rotation.x = -Math.PI / 2;
-  felt.position.y = STAGE_HEIGHT + 0.0005;
-  root.add(felt);
-  const rim = new Mesh(
-    new TorusGeometry(STAGE_RADIUS * 0.99, 0.0035, 8, 64),
-    new MeshBasicMaterial({ color: 0xffc46b }),
-  );
-  rim.name = 'StageGlow';
-  rim.rotation.x = -Math.PI / 2;
-  rim.position.y = STAGE_HEIGHT;
-  root.add(rim);
-  return { root, floor: top };
+  return root;
 }
 
 function blobTexture(): CanvasTexture {

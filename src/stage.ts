@@ -243,19 +243,6 @@ export class ShadowStageSystem extends createSystem({}) {
     paperMesh.name = 'PaperSurface';
     this.paper.add(paperMesh);
 
-    const frameMaterial = new MeshBasicMaterial({ color: 0x3b2414 });
-    const bar = 0.025;
-    const frameParts: Array<[number, number, number, number]> = [
-      [0, PAPER_HEIGHT / 2 + bar / 2, PAPER_WIDTH + bar * 2, bar],
-      [0, -PAPER_HEIGHT / 2 - bar / 2, PAPER_WIDTH + bar * 2, bar],
-      [-PAPER_WIDTH / 2 - bar / 2, 0, bar, PAPER_HEIGHT],
-      [PAPER_WIDTH / 2 + bar / 2, 0, bar, PAPER_HEIGHT],
-    ];
-    for (const [x, y, w, h] of frameParts) {
-      const part = new Mesh(new PlaneGeometry(w, h), frameMaterial);
-      part.position.set(x, y, 0.001);
-      this.paper.add(part);
-    }
 
     const shadowMaterial = new ShadowMaterial({
       color: 0x140b05,

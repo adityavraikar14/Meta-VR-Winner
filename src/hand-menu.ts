@@ -43,6 +43,7 @@ const BUTTONS: Array<{ command: MenuCommand; label: string }> = [
   { command: 'recenter', label: 'Recenter' },
   { command: 'restart', label: 'Restart' },
   { command: 'skip', label: 'Skip' },
+  { command: 'menu', label: 'Menu' },
 ];
 
 interface Button {
@@ -314,6 +315,10 @@ function drawButton(canvas: HTMLCanvasElement, command: MenuCommand, label: stri
       ctx.closePath();
       ctx.fill();
       ctx.fillRect(cx + 17, cy - 18, 7, 36);
+      break;
+    case 'menu':
+      // Three bars.
+      for (const dy of [-14, 0, 14]) ctx.fillRect(cx - 22, cy + dy - 3.5, 44, 7);
       break;
   }
 

@@ -1,4 +1,4 @@
-import type { Entity, Group, ShadowMaterial } from '@iwsdk/core';
+import type { Entity, Group, ShadowMaterial, Vector3 } from '@iwsdk/core';
 
 /** Paper screen size in meters. */
 export const PAPER_WIDTH = 1.0;
@@ -35,11 +35,22 @@ export const stage = {
    * consumed by the creature system. x/y are paper-local meters. `attempt`
    * sends the creature to try the puzzle on stage.
    */
-  spawns: [] as Array<{ kind: string; x: number; y: number; attempt?: boolean }>,
+  /** Friends to bring to life; `size` is body size from the shadow (1 = normal). */
+  spawns: [] as Array<{ kind: string; x: number; y: number; attempt?: boolean; size?: number }>,
   /** A hand-menu choice waiting to be handled by the stage or the game. */
   command: null as MenuCommand | null,
   /** The hand menu is open: the game pauses judging so the menu hand is not scored. */
   menuOpen: false,
+  /** World height of the player's real table, once they have laid a hand on it. */
+  tableHeight: null as number | null,
+  /** The world is not here yet: the player hasn't shown us their table. */
+  sceneryHidden: false,
+  /** A world to show while the player browses chapters (null: the current level's world). */
+  previewWorld: null as number | null,
+  /** A hands-on level's progress: what to do next, and whether it is finished. */
+  task: null as { caption: string; done: boolean; mistakes: number } | null,
+  /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
+  grow: null as { from: Vector3 | null } | null,
 };
 
-export type MenuCommand = 'recenter' | 'restart' | 'skip';
+export type MenuCommand = 'recenter' | 'restart' | 'skip' | 'menu';
