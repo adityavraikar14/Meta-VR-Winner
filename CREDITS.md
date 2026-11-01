@@ -32,6 +32,17 @@ ship, no attribution required. We credit them anyway.
 Poly Haven models were repacked for Quest: unused variants removed and
 textures reduced to 512–1024 px.
 
+## Music
+
+Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0
+(http://creativecommons.org/licenses/by/4.0/), re-encoded at 96 kbps:
+
+| File | Track |
+|---|---|
+| `public/audio/music-explore.mp3` | "Equatorial Complex" |
+| `public/audio/music-battle.mp3` | "Final Battle of the Dark Wizards" |
+| `public/audio/music-victory.mp3` | "Heroic Age" |
+
 ## Textures and lighting
 
 | File | Source | License |

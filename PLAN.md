@@ -153,6 +153,10 @@ on device: hop onto the real table, hide behind real objects.
       background soundscape per world (insects and birds, running water and frogs,
       dripping mine, distant thunder); smithy verified with real emulated hand motions
       (pinch the stone, press the bellows, tongs, hammer swing); draw calls cut ~30–40%
+- [x] Nov 2: Yash's Arsenal merged and hosted as the Arena (his code unchanged); HD models
+      (3D dragon boss, phoenix ending, realistic elk, fox); daylight lighting, soft grass,
+      colourful flowers, a proper bridge; a soundtrack (Kevin MacLeod, CC BY) that
+      cross-fades between exploring, the dragon battle and victory; an in-game Credits page
 - [ ] On a Quest (Nov 12): profile frame time (jungle is heaviest: ~186 calls both eyes,
       ~360k triangles per eye); tune pinch/throw/strike thresholds and palm shield on real
       hands; then the trailer

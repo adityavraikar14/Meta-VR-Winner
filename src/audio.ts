@@ -760,3 +760,49 @@ export function tickAmbience(dt: number): void {
       break;
   }
 }
+
+
+// ------------------------------------------------------------------- Music
+
+/**
+ * The soundtrack (Kevin MacLeod, incompetech.com, CC BY 4.0), streamed and
+ * cross-faded: a bright, mystical theme for the worlds, an epic one for the
+ * dragon, a fanfare when it falls.
+ */
+export type MusicTrack = 'explore' | 'battle' | 'victory';
+
+const MUSIC: Record<MusicTrack, { file: string; volume: number; loop: boolean }> = {
+  explore: { file: 'audio/music-explore.mp3', volume: 0.28, loop: true },
+  battle: { file: 'audio/music-battle.mp3', volume: 0.4, loop: true },
+  victory: { file: 'audio/music-victory.mp3', volume: 0.45, loop: false },
+};
+
+const players: Partial<Record<MusicTrack, HTMLAudioElement>> = {};
+let wantedMusic: MusicTrack | null = null;
+
+/** Which track should be playing (null: none). Fades happen in `tickMusic`. */
+export function setMusic(track: MusicTrack | null): void {
+  if (track === wantedMusic) return;
+  wantedMusic = track;
+  // A fanfare starts from its beginning each time.
+  const player = track ? players[track] : undefined;
+  if (player && !MUSIC[track!].loop) player.currentTime = 0;
+}
+
+export function tickMusic(dt: number): void {
+  if (wantedMusic && !players[wantedMusic]) {
+    const spec = MUSIC[wantedMusic];
+    const player = new Audio(`${import.meta.env.BASE_URL}${spec.file}`);
+    player.loop = spec.loop;
+    player.preload = 'auto';
+    player.volume = 0;
+    players[wantedMusic] = player;
+  }
+  for (const [name, player] of Object.entries(players) as Array<[MusicTrack, HTMLAudioElement]>) {
+    const target = name === wantedMusic && !muted ? MUSIC[name].volume : 0;
+    const step = dt / (target > player.volume ? 1.5 : 1.2);
+    player.volume = Math.max(0, Math.min(1, player.volume + Math.sign(target - player.volume) * Math.min(Math.abs(target - player.volume), step)));
+    if (target > 0 && player.paused && !player.ended) void player.play().catch(() => undefined);
+    if (player.volume <= 0.001 && !player.paused) player.pause();
+  }
+}

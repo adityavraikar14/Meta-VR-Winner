@@ -47,6 +47,8 @@ export const stage = {
   sceneryHidden: false,
   /** A world to show while the player browses chapters (null: the current level's world). */
   previewWorld: null as number | null,
+  /** A scene asking for a music track this frame (the dragon fight); null: the world's theme. */
+  music: null as 'battle' | 'victory' | null,
   /** In Yash's Arena: the paper and the stage step aside. */
   arena: false,
   /** The level is being played right now (not the menu, the table or the story card). */

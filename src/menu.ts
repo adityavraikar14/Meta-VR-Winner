@@ -10,7 +10,7 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
  * buttons in front of it: Home (play, chapters, settings), a chapter
  * picker with stars and locks, and settings.
  */
-export type MenuPage = 'home' | 'chapters' | 'settings';
+export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits';
 
 /** What the menu asks the game to do. */
 export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'arena' };
@@ -93,7 +93,13 @@ export class MainMenu {
   }
 
   private layout(): void {
-    this.slots = this.page === 'home' ? this.home() : this.page === 'chapters' ? this.chapters() : this.settings();
+    this.slots = this.page === 'home'
+      ? this.home()
+      : this.page === 'chapters'
+        ? this.chapters()
+        : this.page === 'credits'
+          ? this.credits()
+          : this.settings();
     const xs = LAYOUTS[this.slots.length];
     const eye = this.parent.localToWorld(this.viewer.clone());
     this.buttons.forEach((button, i) => {
@@ -189,6 +195,7 @@ export class MainMenu {
         },
       },
       { label: 'Table', run: () => ({ do: 'table' }) },
+      { label: 'Credits', run: () => this.go('credits') },
       {
         label: 'Recenter',
         run: () => {
@@ -199,11 +206,39 @@ export class MainMenu {
     ];
   }
 
+  private creditPage = 0;
+
+  private credits(): Slot[] {
+    const n = CREDITS.length;
+    const [title, body] = CREDITS[this.creditPage];
+    this.draw(`Credits · ${this.creditPage + 1} of ${n}`, title, body, '');
+    const step = (d: number) => () => {
+      this.creditPage = (this.creditPage + d + n) % n;
+      this.layout();
+      return null;
+    };
+    return [
+      { label: 'Back', run: () => this.go('settings'), primary: true },
+      { label: 'Prev', run: step(-1) },
+      { label: 'Next', run: step(1) },
+    ];
+  }
+
   private go(page: MenuPage): null {
     this.open(page);
     return null;
   }
 }
+
+/** Who made what (full list with links in CREDITS.md). */
+const CREDITS: Array<[string, string]> = [
+  ['The Dragon and the Phoenix', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D (Sketchfab, CC BY 4.0)'],
+  ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
+  ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Equatorial Complex · Final Battle of the Dark Wizards · Heroic Age'],
+  ['The World', 'Plants, rocks, textures and the daylight sky: Poly Haven (CC0) · Leaves: ambientCG (CC0)'],
+  ['The Arena', 'The Arsenal, a hand-sign fight with sword, spear, power ball, wall and blaster, by Yash Ammanavar'],
+  ['Made With', 'Meta Immersive Web SDK and three.js · Machines, forge, brewing, sounds and shadows made in code'],
+]
 
 /** Where the story picks up: the saved level, or the end once everything is played. */
 export function resumeIndex(): number {

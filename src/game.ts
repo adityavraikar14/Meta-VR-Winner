@@ -14,7 +14,14 @@ import {
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
-import { playAwaken, playClick, playGrow, playPrompt } from './audio.js';
+import {
+  playAwaken,
+  playClick,
+  playGrow,
+  playPrompt,
+  setMusic,
+  tickMusic,
+} from './audio.js';
 import { devActions, devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -388,6 +395,10 @@ export class ShadowGameSystem extends createSystem({
       if (this.phase === 'title') this.menuAction({ do: 'arena' });
     };
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
+    // Dev: E opens the Credits page from the menu.
+    devActions.e = () => {
+      if (this.phase === 'title') this.menu.open('credits');
+    };
     devInfo.table = () => ({
       height: stage.tableHeight,
       progress: Number(this.table.reading.progress.toFixed(2)),
@@ -470,6 +481,10 @@ export class ShadowGameSystem extends createSystem({
     this.shadowWorld.update(dt);
 
     stage.playing = this.phase === 'matching' && !stage.menuOpen;
+    // Music only in the headset; the Arena keeps Yash's own soundscape.
+    const inHeadset = this.visibilityState.peek() === VisibilityState.Visible;
+    setMusic(!inHeadset || stage.arena ? null : stage.music ?? 'explore');
+    tickMusic(dt);
     switch (this.phase) {
       case 'table':
         this.updateTable(dt, pressed);

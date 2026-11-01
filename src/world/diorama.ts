@@ -133,6 +133,7 @@ export class Diorama {
     this.attempting = false;
     this.blockers = [];
     stage.task = null;
+    stage.music = null;
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
     mergeStatic(this.props);
