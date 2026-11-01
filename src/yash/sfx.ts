@@ -79,6 +79,10 @@ export const sfx = {
     tone(523, 0.18, { type: 'triangle', gain: 0.18 });
     tone(784, 0.3, { type: 'triangle', gain: 0.18, delay: 0.09 });
   },
+  success(): void {
+    tone(660, 0.15, { type: 'triangle', gain: 0.16 });
+    tone(990, 0.3, { type: 'triangle', gain: 0.16, delay: 0.1 });
+  },
   fizzle(): void {
     tone(400, 0.35, { type: 'sine', gain: 0.1, to: 160 });
   },

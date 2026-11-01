@@ -135,6 +135,12 @@ export interface Anchor {
 
 export type AnchorFn = (side: Side, out: Anchor) => Anchor;
 
+/** Things the player did with an item, for the tutorial to watch for. */
+export type ArsenalEvent =
+  | { type: 'swing'; item: 'sword' | 'spear' }
+  | { type: 'launch'; item: 'ball' | 'spear' }
+  | { type: 'blocked' };
+
 interface Held {
   item: Exclude<Item, 'wall'>;
   side: Side;
@@ -196,6 +202,8 @@ export class Arsenal {
   private shotEnd = new Vector3();
   /** Shots fired since the level started. */
   shots = 0;
+  /** Called on swings, throws and blocks; the tutorial listens here. */
+  onEvent: ((event: ArsenalEvent) => void) | null = null;
 
   constructor(
     private root: Group,
@@ -275,6 +283,7 @@ export class Arsenal {
     if (!this.inWall(point, radius)) return false;
     this.wallHp--;
     this.wallFlash = WALL_FLASH;
+    this.onEvent?.({ type: 'blocked' });
     if (this.wallHp <= 0) {
       this.wallLeft = 0;
       this.wall.root.visible = false;
@@ -474,6 +483,7 @@ export class Arsenal {
     held.hasLastTip = true;
 
     if (tipSpeed > CUT_SPEED) {
+      if (held.item === 'sword' || held.item === 'spear') this.onEvent?.({ type: 'swing', item: held.item });
       const cut = this.foe.cutOrbs(this.tip, 0.06) + this.foe.cutOrbs(this.mid, 0.06);
       if (cut > 0) sfx.slice();
       if (held.cooldown === 0 && (this.foe.touches(this.tip, 0.04) || this.foe.touches(this.mid, 0.04))) {
@@ -514,6 +524,7 @@ export class Arsenal {
     if (item === 'ball') held.object.scale.setScalar(1);
     this.held = null;
     sfx.throw();
+    this.onEvent?.({ type: 'launch', item });
   }
 
   private updateProjectiles(dt: number): void {

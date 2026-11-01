@@ -295,7 +295,7 @@ export class Label {
     const g = this.canvas.getContext('2d');
     if (!g) return;
     g.font = this.font;
-    const width = Math.min(1024, Math.max(256, Math.ceil(g.measureText(text).width + 64)));
+    const width = Math.min(2048, Math.max(256, Math.ceil(g.measureText(text).width + 64)));
     if (this.canvas.width !== width) {
       this.canvas.width = width;
       this.texture.dispose();

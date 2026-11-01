@@ -58,6 +58,18 @@
         box-shadow: 0 6px 0 #2a6aa8, 0 10px 30px rgba(90, 180, 255, 0.35);
         cursor: pointer;
       }
+      #splash .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px;
+      }
+      #splash button.secondary {
+        min-width: 180px;
+        color: #dff3ff;
+        background: linear-gradient(#24476e, #17304f);
+        box-shadow: 0 6px 0 #0d1f36, 0 10px 30px rgba(90, 180, 255, 0.2);
+      }
       #splash button:disabled {
         cursor: default;
         filter: grayscale(0.6) brightness(0.8);
@@ -79,7 +91,10 @@
     <div id="splash">
       <h1>Arsenal</h1>
       <p>Hold an invisible ball to arm, then make a sign to summon your weapon.</p>
-      <button id="splash-play" disabled>Loading…</button>
+      <div class="actions">
+        <button id="splash-play" disabled>Loading…</button>
+        <button id="splash-tutorial" class="secondary" disabled>🎓 Tutorial</button>
+      </div>
       <p id="splash-note" hidden></p>
       <ul>
         <li>🤲 → ✊ sword</li>

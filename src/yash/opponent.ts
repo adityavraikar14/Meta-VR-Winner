@@ -61,6 +61,8 @@ export class Opponent implements Foe {
   /** Orbs that reached the player since the level started. */
   hitsTaken = 0;
   defeats = 0;
+  /** While calm (during the tutorial) it never attacks on its own; see fireNow. */
+  calm = false;
 
   private rig: FoeRig;
   private orbs: Orb[] = [];
@@ -142,6 +144,14 @@ export class Opponent implements Foe {
     return cut;
   }
 
+  /** Winds up and fires one orb now, even while calm. */
+  fireNow(): void {
+    if (!this.alive || this.mood === 'telegraph') return;
+    this.mood = 'telegraph';
+    this.timer = TELEGRAPH;
+    sfx.telegraph();
+  }
+
   raycast(origin: Vector3, direction: Vector3, assist: number): RayHit | null {
     let best = Infinity;
     let orb = false;
@@ -180,7 +190,9 @@ export class Opponent implements Foe {
       if (this.timer <= 0) this.reset();
     } else {
       this.timer -= dt;
-      if (this.mood === 'rest' && this.timer <= 0) {
+      if (this.mood === 'rest' && this.calm) {
+        this.timer = REST;
+      } else if (this.mood === 'rest' && this.timer <= 0) {
         this.mood = 'telegraph';
         this.timer = TELEGRAPH;
         sfx.telegraph();

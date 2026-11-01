@@ -35,6 +35,7 @@ import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 import { MAX_HP, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
 import { HandSkeleton, SimHands } from './sim-hands.js';
+import { Tutorial } from './tutorial.js';
 import { WebcamHands } from './webcam-hands.js';
 import { Bursts, Label, makeRing, setRing, TextPanel } from './visuals.js';
 
@@ -54,7 +55,7 @@ const KEEP_THROUGH_LOSS = 0.5;
 /** The in-headset readout floats this far ahead, left and down from the eyes (inside a comfortable view). */
 const READOUT_AHEAD = 0.8;
 const READOUT_LEFT = 0.36;
-const READOUT_DOWN = 0.05;
+const READOUT_DOWN = 0.2;
 const READOUT_REFRESH = 0.2;
 const HURT_TIME = 0.45;
 const UP = new Vector3(0, 1, 0);
@@ -79,6 +80,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
   /** Development only: real fingers from a webcam, ranked between tracked and simulated hands. */
   private webcam = new WebcamHands();
   private skeletons!: Record<Side, HandSkeleton>;
+  private tutorial = new Tutorial();
 
   private ring!: Mesh;
   private ringMaterial!: MeshBasicMaterial;
@@ -118,6 +120,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
       this.hurtLeft = HURT_TIME;
     });
     this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
+    this.arsenal.onEvent = (event) => this.tutorial.notify(event);
+    this.root.add(this.tutorial.root);
     this.skeletons = { left: new HandSkeleton(0xffd9b8), right: new HandSkeleton(0xffd9b8) };
     for (const side of SIDES) {
       this.skeletons[side].root.visible = false;
@@ -162,6 +166,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
     this.handleEvents();
 
+    this.opponent.calm = this.tutorial.calm;
+    this.tutorial.update(dt, time, this.head, this.forward, () => this.opponent.fireNow());
     this.arsenal.update(dt, this.forward, this.head);
     this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
     this.bursts.update(dt);
@@ -262,6 +268,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
 
   private handleEvents(): void {
     for (const event of this.events) {
+      this.tutorial.notify(event);
       if (event.type === 'armed') {
         sfx.armed();
         this.bursts.spawn(this.ring.position, 0x9fe8ff, 0.25);
@@ -384,6 +391,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private wireSplash(): void {
     const splash = document.getElementById('splash');
     const button = document.getElementById('splash-play') as HTMLButtonElement | null;
+    const tutorialButton = document.getElementById('splash-tutorial') as HTMLButtonElement | null;
     const note = document.getElementById('splash-note');
     if (!splash || !button) return;
     const noHeadset = () => {
@@ -409,15 +417,24 @@ export class ArsenalLevelSystem extends createSystem({}) {
         else {
           button.disabled = false;
           button.textContent = 'Enter the Arsenal';
+          if (tutorialButton) tutorialButton.disabled = false;
         }
       });
     const launch = () => {
       sfx.unlock();
+      if (this.tutorial.active) this.tutorial.stop();
+      this.world.launchXR();
+    };
+    const launchTutorial = () => {
+      sfx.unlock();
+      this.startTutorial();
       this.world.launchXR();
     };
     button.addEventListener('click', launch);
+    tutorialButton?.addEventListener('click', launchTutorial);
     this.cleanupFuncs.push(
       () => button.removeEventListener('click', launch),
+      () => tutorialButton?.removeEventListener('click', launchTutorial),
       this.world.visibilityState.subscribe((state) => {
         // Put the sentinel in front of wherever the player is when the view changes.
         this.placed = false;
@@ -425,6 +442,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
         else splash.setAttribute('data-hidden', '');
       }),
     );
+  }
+
+  /** Starts the tutorial from a clean slate: nothing held, the sentinel full and in front. */
+  private startTutorial(): void {
+    this.arsenal.clear();
+    this.recognizer.reset();
+    this.opponent.reset();
+    this.placed = false;
+    this.tutorial.start();
   }
 
   private debug(command: DebugCommand): void {
@@ -469,6 +495,13 @@ export class ArsenalLevelSystem extends createSystem({}) {
       case 'swapHands':
         this.webcam.swap = !this.webcam.swap;
         break;
+      case 'tutorial':
+        if (this.tutorial.active) this.tutorial.stop();
+        else this.startTutorial();
+        break;
+      case 'skipStep':
+        this.tutorial.skip();
+        break;
     }
   }
 
@@ -476,6 +509,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const f = (n: number) => (n >= 0 ? ' ' : '') + n.toFixed(2);
     const lines: string[] = [];
     const r = this.recognizer;
+    if (this.tutorial.active) {
+      lines.push(`tutorial: step ${Math.min(this.tutorial.index + 1, this.tutorial.stepCount)}/${this.tutorial.stepCount}`);
+    }
     lines.push(
       `view: ${this.inXR ? 'XR' : 'flat'} · hands: ${
         this.webcam.active

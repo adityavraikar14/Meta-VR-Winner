@@ -18,7 +18,9 @@ export type DebugCommand =
   | { type: 'recenter' }
   | { type: 'toggleReadout' }
   | { type: 'webcam'; cameraId?: string }
-  | { type: 'swapHands' };
+  | { type: 'swapHands' }
+  | { type: 'tutorial' }
+  | { type: 'skipStep' };
 
 export interface DebugApi {
   command(command: DebugCommand): void;
@@ -57,6 +59,11 @@ const MOVE_BUTTONS: ButtonSpec[] = [
 const WEBCAM_BUTTONS: ButtonSpec[] = [
   { label: '📷 Webcam on/off', key: 'y', command: { type: 'webcam' } },
   { label: '⇄ Swap left/right', key: 'u', command: { type: 'swapHands' } },
+];
+
+const TUTORIAL_BUTTONS: ButtonSpec[] = [
+  { label: '🎓 Tutorial start/stop', key: 'j', command: { type: 'tutorial' } },
+  { label: '⏭ Skip step', key: 'k', command: { type: 'skipStep' } },
 ];
 
 const UTILITY_BUTTONS: ButtonSpec[] = [
@@ -137,6 +144,7 @@ export function mountDebugPanel(api: DebugApi): () => void {
     body.append(h, grid);
   };
 
+  section('Tutorial', TUTORIAL_BUTTONS);
   section('Hand signs (held until changed)', SIGN_BUTTONS);
   section('Moves', MOVE_BUTTONS);
 
