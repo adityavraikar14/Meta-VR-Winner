@@ -59,9 +59,28 @@ const FIRE_SPEED = 0.75;
 const HEAD_RADIUS = 0.16;
 const SHIELD_REACH = 0.1;
 const BREATH_TIME = 1.2;
+/** Until then the dragon waits for its 3D model rather than showing a flat puppet. */
+const PUPPET_AFTER = 25;
+/** A dive: swoop in, hang there jaws open, then snap and pull back. */
+const DIVE_IN = 1.1;
+const DIVE_HOLD = 1.6;
+const DIVE_OUT = 1.0;
+const BLADE_LENGTH = 0.32;
+const FIST_HOLD = 0.4;
 const UP_AXIS = new Vector3(0, 1, 0);
 
 type Mode = 'intro' | 'fight' | 'lost' | 'won';
+
+interface Blade {
+  root: Group;
+  /** Seconds the fist has been held (sword appears at FIST_HOLD), or open. */
+  fist: number;
+  open: number;
+  shown: number;
+  tip: Vector3;
+  lastTip: Vector3;
+  cooldown: number;
+}
 
 interface Fireball {
   sprite: Sprite;
@@ -117,6 +136,11 @@ export class DragonBattle {
   private readonly fireballs: Fireball[] = [];
   private readonly fireMaterial: SpriteMaterial;
   private breathTime = 0;
+  /** Seconds into a dive (0: hovering). */
+  private diveTime = 0;
+  private biteDone = false;
+  /** Swords of light, one per hand: its blade grows from a held fist. */
+  private readonly blades: Blade[] = [];
   private twin = false;
   private nextBreath = 3;
   private readonly shields: Mesh[] = [];
@@ -174,6 +198,9 @@ export class DragonBattle {
     };
     devActions[']'] = () => this.devThrow();
     devActions[';'] = () => this.breathe();
+    devActions["'"] = () => {
+      if (this.dragon3d && this.diveTime === 0) this.diveTime = 0.001;
+    };
   }
 
   get state(): string {
@@ -201,7 +228,8 @@ export class DragonBattle {
       }
     }
     const shown = stage.playing || this.mode === 'won';
-    this.dragon.root.visible = shown && !this.dragon3d;
+    // The flat puppet only stands in if the 3D dragon never arrives (a very slow connection).
+    this.dragon.root.visible = shown && !this.dragon3d && this.time > PUPPET_AFTER;
     if (this.dragon3d) {
       this.dragon3d.root.visible = shown;
       this.dragon3d.update(dt, this.head);
@@ -216,13 +244,20 @@ export class DragonBattle {
     }
     switch (this.mode) {
       case 'intro':
-        this.caption = 'The Shadow Dragon guards the Great Lantern!';
+        if (!this.dragon3d && this.time < PUPPET_AFTER) {
+          this.caption = 'Something huge stirs behind the screen…';
+          this.modeTime = 0;
+          break;
+        }
+        this.caption = 'The Shadow Dragon bursts out! It guards the Great Lantern';
         if (this.modeTime > 0.4 && this.modeTime - dt <= 0.4) playRoar();
         if (this.modeTime > 3.2) this.setMode('fight');
         break;
       case 'fight':
         this.signs(dt, hands);
         this.charge(dt, hands);
+        this.swords(dt, hands);
+        this.dive(dt, hands);
         this.dragonTurn(dt);
         this.say();
         break;
@@ -268,7 +303,7 @@ export class DragonBattle {
     else if (this.flying) text = 'Fly true…';
     else {
       const sign = SIGNS[this.sequence[this.signStep]];
-      text = `Make the signs to gather light · ${this.signStep + 1}/3: ${sign.label}`;
+      text = `Fist: sword · Open palm: shield · Signs for a light orb: ${this.signStep + 1}/3 ${sign.label}`;
     }
     if (this.fireballs.some((f) => !f.reflected) && this.time > 0) text = 'Fire! Raise an open palm to shield. Angle it to bounce the fire back';
     if (this.noteTime > 0) text = this.note;
@@ -290,6 +325,9 @@ export class DragonBattle {
     this.orb.visible = false;
     this.newSequence();
     this.nextBreath = 3;
+    this.diveTime = 0;
+    this.biteDone = false;
+    this.dragon3d?.root.position.copy(this.dragonHome);
     this.setMode('fight');
   }
 
@@ -535,11 +573,102 @@ export class DragonBattle {
     }
     this.dragon.windup = Math.max(0, this.dragon.windup - dt * 3);
     if (this.dragon3d) this.dragon3d.windup = this.dragon.windup;
+    if (this.diveTime > 0) return;
     this.nextBreath -= dt;
-    if (this.nextBreath <= 0) {
+    if (this.nextBreath <= 0 && this.dragon3d && Math.random() < 0.4) {
+      this.diveTime = 0.001;
+      this.nextBreath = 3.5 + Math.random();
+      playRoar(0.09);
+      this.flash('It dives at you! Make a fist for your sword, and slash', 2);
+    } else if (this.nextBreath <= 0) {
       this.breathTime = 0.001;
       // Angrier as it weakens.
       this.nextBreath = this.dragonHealth > DRAGON_HEALTH / 2 ? 4.2 + Math.random() : 2.8 + Math.random();
+    }
+  }
+
+  // ============================================================ Sword
+
+  /** A fist held still grows a blade of light; swing it through the dragon to cut. */
+  private swords(dt: number, hands: readonly HandState[]): void {
+    hands.forEach((hand, h) => {
+      const blade = (this.blades[h] ??= this.makeBlade());
+      blade.cooldown = Math.max(0, blade.cooldown - dt);
+      const fist = hand.tracked && matches(hand.ext, [0, 0, 0, 0], 0.4) && this.orbHand !== h;
+      blade.fist = fist ? blade.fist + dt : 0;
+      blade.open = fist ? 0 : blade.open + dt;
+      const want = blade.fist >= FIST_HOLD || (blade.shown > 0.5 && blade.open < 0.6) ? 1 : 0;
+      if (want && blade.shown === 0) playCharge();
+      blade.shown += ((want ? 1 : 0) - blade.shown) * Math.min(1, dt * 8);
+      blade.root.visible = blade.shown > 0.02;
+      if (!blade.root.visible || !hand.tracked) return;
+      // The blade runs out from the fist, along the forearm.
+      const wrist = this.group.worldToLocal(this.v.copy(hand.wrist));
+      const palm = this.group.worldToLocal(this.w.copy(hand.palm));
+      const dir = palm.clone().sub(wrist).normalize();
+      blade.root.position.copy(palm);
+      blade.root.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir);
+      blade.root.scale.set(1, blade.shown, 1);
+      blade.lastTip.copy(blade.tip);
+      blade.tip.copy(palm).addScaledVector(dir, BLADE_LENGTH * blade.shown);
+      const speed = blade.tip.distanceTo(blade.lastTip) / Math.max(dt, 1e-3);
+      if (speed < 0.9 || blade.cooldown > 0 || !this.dragon3d) return;
+      // Does the swing pass through the head or heart?
+      for (const point of this.weakPoints()) {
+        if (segmentDistance(point, palm, blade.tip) < 0.08) {
+          blade.cooldown = 0.6;
+          playClang(0.6, 0.07);
+          this.burstAt(point, 34, 0xbfe8ff);
+          this.wound(0.75);
+          if (this.diveTime > 0) this.diveTime = Math.max(this.diveTime, DIVE_IN + DIVE_HOLD);
+          break;
+        }
+      }
+    });
+  }
+
+  private makeBlade(): Blade {
+    const root = new Group();
+    const core = new Mesh(new BoxGeometry(0.012, BLADE_LENGTH, 0.004).translate(0, BLADE_LENGTH / 2, 0), new MeshBasicMaterial({ color: 0xf2fbff }));
+    const glow = new Mesh(new BoxGeometry(0.03, BLADE_LENGTH * 1.04, 0.012).translate(0, BLADE_LENGTH / 2, 0), new MeshBasicMaterial({ color: 0x7fc8ff, transparent: true, opacity: 0.4, blending: AdditiveBlending, depthWrite: false }));
+    const guard = new Mesh(new BoxGeometry(0.06, 0.008, 0.016), new MeshBasicMaterial({ color: 0xe8c070 }));
+    root.add(core, glow, guard);
+    root.visible = false;
+    this.group.add(root);
+    return { root, fist: 0, open: 1, shown: 0, tip: new Vector3(), lastTip: new Vector3(), cooldown: 0 };
+  }
+
+  // ============================================================= Dive
+
+  /** Swoops in close, jaws open; snaps unless struck or blocked by a shield; pulls back. */
+  private dive(dt: number, hands: readonly HandState[]): void {
+    const dragon = this.dragon3d;
+    if (!dragon || this.diveTime <= 0) return;
+    this.diveTime += dt;
+    const t = this.diveTime;
+    const close = this.head.clone().lerp(this.dragonHome, 0.42);
+    close.y = this.head.y - 0.38;
+    let k: number;
+    if (t < DIVE_IN) k = smooth01(t / DIVE_IN);
+    else if (t < DIVE_IN + DIVE_HOLD) k = 1;
+    else k = 1 - smooth01((t - DIVE_IN - DIVE_HOLD) / DIVE_OUT);
+    dragon.root.position.lerpVectors(this.dragonHome, close, k);
+    dragon.windup = t > DIVE_IN && t < DIVE_IN + DIVE_HOLD ? 0.5 : 0;
+    if (!this.biteDone && t >= DIVE_IN + DIVE_HOLD - 0.15) {
+      this.biteDone = true;
+      const shielded = hands.some((hand) => hand.tracked && matches(hand.ext, [1, 1, 1, 1], 0.4));
+      if (shielded) {
+        playClang(0.3, 0.06);
+        this.flash('Blocked! Your shield of light holds', 1.4);
+      } else {
+        playBoom(0.08);
+        this.hurtPlayer(this.head.clone().add(new Vector3(0, -0.15, -0.15)));
+      }
+    }
+    if (t >= DIVE_IN + DIVE_HOLD + DIVE_OUT) {
+      this.diveTime = 0;
+      this.biteDone = false;
+      dragon.root.position.copy(this.dragonHome);
     }
   }
 
@@ -758,6 +887,18 @@ export class DragonBattle {
     this.orb.position.copy(this.head).add(new Vector3(0.1, -0.25, -0.3));
     this.release(target.sub(this.orb.position).setLength(2.2).divideScalar(1.8));
   }
+}
+
+function smooth01(x: number): number {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
+}
+
+/** Distance from a point to the segment a–b. */
+function segmentDistance(p: Vector3, a: Vector3, b: Vector3): number {
+  const ab = b.clone().sub(a);
+  const t = Math.min(1, Math.max(0, p.clone().sub(a).dot(ab) / Math.max(1e-9, ab.lengthSq())));
+  return a.clone().addScaledVector(ab, t).distanceTo(p);
 }
 
 function matches(ext: Extension, want: readonly number[], slack = 0.45): boolean {

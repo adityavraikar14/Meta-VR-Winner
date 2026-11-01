@@ -23,6 +23,9 @@ import {
   tickMusic,
 } from './audio.js';
 import { add as addResource, RESOURCE_ORDER } from './bag.js';
+import { diagnoseDragon } from './fight/dragon3d.js';
+import { installLevelTester, levelKeys } from './level-tester.js';
+import { drawInventory } from './inventory-art.js';
 import { devActions, devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -55,7 +58,7 @@ import {
   normalizeMask,
 } from './matcher.js';
 import { IntroShow } from './intro.js';
-import { MainMenu, type MenuAction, resumeIndex } from './menu.js';
+import { INVENTORY, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
 import { TableFinder } from './table.js';
@@ -387,7 +390,15 @@ export class ShadowGameSystem extends createSystem({
 
     loadProgress();
     this.menu = new MainMenu(paper, VIEWER, (kicker, title, body, footer) => {
-      this.drawBanner(kicker, title, body, footer);
+      if (title === INVENTORY) {
+        drawInventory(this.bannerCanvas, kicker);
+        this.bannerTexture.needsUpdate = true;
+        // The inventory fills most of the screen, so its slots and counts read easily.
+        this.banner.scale.setScalar(1.22);
+        this.banner.position.y = 0.06;
+      } else {
+        this.drawBanner(kicker, title, body, footer);
+      }
       this.bannerShown = true;
     });
     this.table = new TableFinder(paper);
@@ -396,6 +407,8 @@ export class ShadowGameSystem extends createSystem({
       if (this.phase === 'title') this.menuAction({ do: 'arena' });
     };
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
+    // Dev: F9 times each step of loading the dragon.
+    devActions.f9 = () => void diagnoseDragon((line) => console.log(`SHADOWPLAY diag ${line}`));
     // Dev: Q opens the Bag; Z fills it with three of everything.
     devActions.q = () => {
       if (this.phase === 'title') this.menu.open('bag');
@@ -416,6 +429,25 @@ export class ShadowGameSystem extends createSystem({
     });
     this.showTable();
 
+    installLevelTester({
+      levels: () => PUZZLES.map((p, index) => ({
+        index,
+        id: p.id,
+        chapter: `Chapter ${p.world + 1} · ${WORLDS[p.world].name}`,
+        title: p.title,
+        kind: p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend',
+      })),
+      current: () => this.puzzle?.id ?? '',
+      go: (index) => {
+        if (stage.arena) this.leaveArena();
+        this.startPuzzle(index);
+      },
+      help: (id) => {
+        const p = PUZZLES.find((q) => q.id === id);
+        return p ? `${p.ask}<br><br><i>Keys:</i> ${levelKeys(id, p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend')}` : '';
+      },
+      status: () => `phase: ${this.phase} · ${stage.task?.caption ?? this.caption}`,
+    });
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
       maskVersion: () => stage.maskVersion,
@@ -1314,6 +1346,8 @@ export class ShadowGameSystem extends createSystem({
 
   /** A storybook card on the paper: small heading, big title, a line of text. */
   private drawBanner(kicker: string, title: string, body: string, footer = ''): void {
+    this.banner.scale.setScalar(1);
+    this.banner.position.y = 0.03;
     const canvas = this.bannerCanvas;
     const ctx = canvas.getContext('2d')!;
     const w = canvas.width;

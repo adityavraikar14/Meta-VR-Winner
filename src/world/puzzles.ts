@@ -7,6 +7,7 @@ import type { HandState } from '../creatures/hand-input.js';
 import { DragonBattle } from '../fight/battle.js';
 import { InkDuel } from '../fight/duel.js';
 import { Bridge } from '../machines/bridge.js';
+import { SkyLantern } from '../machines/balloon.js';
 import { Brew } from '../machines/brew.js';
 import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
@@ -117,6 +118,7 @@ export const WORLDS: World[] = [
   { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle, ambience: 'jungle', music: 'explore' },
   { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver, ambience: 'river', music: 'river' },
   { name: 'The Old Mine', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine', music: 'mine' },
+  { name: 'The Sky Lantern', grows: 'The cliffs rise into the evening sky…', decorate: decorateMountain, ambience: 'river', music: 'river' },
   { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain', music: 'battle' },
 ];
 
@@ -553,7 +555,7 @@ const brokenBridge: Puzzle = {
 
 const shadowDragon: Puzzle = {
   id: 'shadow-dragon',
-  world: 3,
+  world: 4,
   title: 'The Shadow Dragon',
   story: 'At the top of the mountain the Shadow Dragon guards the Great Lantern, the way home.',
   ask: 'Gather light with your hands and throw it',
@@ -628,6 +630,32 @@ const strongDraught: Puzzle = {
         task.caption = brew.caption;
         task.done = brew.done;
         task.mistakes = brew.mistakes;
+      },
+    };
+  },
+};
+
+const skyLantern: Puzzle = {
+  id: 'sky-lantern',
+  world: 3,
+  title: 'The Sky Lantern',
+  story: 'The mountain path starts on a ledge no one can climb. A paper lantern could carry the Lantern Stone up, if the air inside is hot enough.',
+  ask: 'Light the lantern, then shelter its flame with a cupped hand',
+  handsOn: true,
+  solved: 'Hot air is lighter than cold: it rose, and the path is open!',
+  build(root, kit) {
+    const sky = new SkyLantern(kit.floor);
+    root.add(sky.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        sky.update(dt, hands);
+        task.caption = sky.caption;
+        task.done = sky.done;
+        task.mistakes = sky.mistakes;
       },
     };
   },
@@ -709,5 +737,6 @@ export const PUZZLES: Puzzle[] = [
   smithy,
   healingDraught,
   strongDraught,
+  skyLantern,
   shadowDragon,
 ];

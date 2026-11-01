@@ -1,6 +1,6 @@
 import type { Object3D, Vector3 } from '@iwsdk/core';
 import { isMuted, playClick, playPrompt, playTinkle, setMuted } from './audio.js';
-import { count, craft, items, needsText, RECIPES, RESOURCE_ORDER, RESOURCES } from './bag.js';
+import { craft, needsText, RECIPES } from './bag.js';
 import { play, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
@@ -17,6 +17,9 @@ export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'b
 export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'arena' };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
+
+/** Title that asks the screen to paint the inventory grid (the kicker carries its message). */
+export const INVENTORY = '\u0000inventory';
 
 interface Slot {
   label: string;
@@ -215,10 +218,7 @@ export class MainMenu {
 
   /** What you have gathered, what you carry, and the recipes. */
   private bag(): Slot[] {
-    const have = RESOURCE_ORDER.map((r) => `${RESOURCES[r].plural} ${count(r)}`).join('  ·  ');
-    const carrying = RECIPES.map((r) => `${items(r.item)} ${r.label}`).join('  ·  ');
-    const recipes = RECIPES.map((r) => `${r.label}: ${needsText(r)}`).join('  ·  ');
-    this.draw(this.crafted || 'Gather in the worlds, craft here', 'Your Bag', `${have}\nCarrying: ${carrying}`, recipes);
+    this.draw(this.crafted, INVENTORY, '');
     this.crafted = '';
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },

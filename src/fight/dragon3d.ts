@@ -14,6 +14,7 @@ import {
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
+  TextureLoader,
   Vector3,
 } from '@iwsdk/core';
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -36,6 +37,37 @@ const PHOENIX_LENGTH = 0.32;
 
 /** Loads the dragon, then the phoenix, one at a time, retrying a slow or failed load. */
 let loading: Promise<void> | null = null;
+
+/** Dev: time each step of loading the dragon, to find what stalls on a slow device. */
+export async function diagnoseDragon(log: (line: string) => void): Promise<void> {
+  const t0 = performance.now();
+  const ms = () => `${Math.round(performance.now() - t0)} ms`;
+  log(`visibility=${document.visibilityState} hasFocus=${document.hasFocus()}`);
+  let frames = 0;
+  const count = () => {
+    frames++;
+    if (performance.now() - t0 < 2000) requestAnimationFrame(count);
+  };
+  requestAnimationFrame(count);
+  setTimeout(() => log(`window frames in 2 s: ${frames}`), 2000);
+  const buffer = await (await fetch(`${import.meta.env.BASE_URL}${DRAGON_URL}`)).arrayBuffer();
+  log(`fetched ${buffer.byteLength} bytes at ${ms()}`);
+  // Does createImageBitmap answer at all? (a 1x1 PNG)
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+  const bitmap = createImageBitmap(new Blob([png], { type: 'image/png' })).then(() => 'resolved', (e) => `rejected ${e}`);
+  log(`createImageBitmap: ${await Promise.race([bitmap, new Promise((r) => setTimeout(() => r('no answer in 3 s'), 3000))])}`);
+  try {
+    const loader = new GLTFLoader();
+    loader.register((parser) => {
+      parser.textureLoader = new TextureLoader(parser.options.manager);
+      return { name: 'shadowplay_image_textures' };
+    });
+    const gltf = await loader.parseAsync(buffer, `${import.meta.env.BASE_URL}gltf/`);
+    log(`parsed with image textures at ${ms()}: ${gltf.animations.length} clips`);
+  } catch (error) {
+    log(`parse failed at ${ms()}: ${String(error)}`);
+  }
+}
 const loaded: Record<string, GLTF | undefined> = {};
 /** For dev info: how the big models are getting on. */
 export const dragonLoad = { dragon: 'waiting', phoenix: 'waiting' };
@@ -94,6 +126,34 @@ function fit(model: Object3D, length: number): void {
   model.position.set(-c.x * k, -box.min.y * k, -c.z * k);
 }
 
+/**
+ * Paint the dragon's scales in a sweep of colour, like a jewelled dragon:
+ * sapphire at the head, emerald, crimson along the body, gold at the tail,
+ * multiplied over its scale texture so every scale still shows.
+ */
+function rainbowScales(material: MeshStandardMaterial, minZ: number, maxZ: number): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSpan = { value: new Vector3(minZ, maxZ, 0) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vAlong;\nuniform vec3 uSpan;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAlong = clamp((position.z - uSpan.x) / (uSpan.y - uSpan.x), 0.0, 1.0);');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vAlong;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        vec3 c0 = vec3(0.15, 0.45, 1.0);
+        vec3 c1 = vec3(0.1, 0.85, 0.45);
+        vec3 c2 = vec3(1.0, 0.18, 0.12);
+        vec3 c3 = vec3(1.0, 0.72, 0.1);
+        float t = vAlong;
+        vec3 tint = t < 0.33 ? mix(c0, c1, t / 0.33) : t < 0.66 ? mix(c1, c2, (t - 0.33) / 0.33) : mix(c2, c3, (t - 0.66) / 0.34);
+        diffuseColor.rgb *= tint * 2.1;`,
+      );
+  };
+  material.customProgramCacheKey = () => 'dragon-rainbow';
+}
+
 export class Dragon3D {
   readonly root = new Group();
   private readonly body = new Group();
@@ -130,9 +190,14 @@ export class Dragon3D {
       // Its shadow falls on the screen, cast by the lantern behind you.
       mesh.castShadow = true;
       const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mesh.geometry.computeBoundingBox();
+      const box = mesh.geometry.boundingBox!;
       const own = list.map((m) => {
         const c = (m as MeshStandardMaterial).clone();
-        if ((c as MeshStandardMaterial).isMeshStandardMaterial) this.materials.push({ material: c, emissive: c.emissive.clone() });
+        if ((c as MeshStandardMaterial).isMeshStandardMaterial) {
+          this.materials.push({ material: c, emissive: c.emissive.clone() });
+          rainbowScales(c as MeshStandardMaterial, box.min.z, box.max.z);
+        }
         return c as Material;
       });
       mesh.material = Array.isArray(mesh.material) ? own : own[0];
