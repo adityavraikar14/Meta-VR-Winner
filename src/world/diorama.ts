@@ -153,6 +153,10 @@ export class Diorama {
       room: this.room,
     });
     mergeStatic(this.decor);
+    // Each room plant and frame part is its own group (they grow in one by one),
+    // so merging only joins meshes inside a group: fewer draw calls, same growth.
+    mergeStatic(this.screen);
+    mergeStatic(this.room);
   }
 
   /** True while a puzzle is waiting for a friend to try it. */

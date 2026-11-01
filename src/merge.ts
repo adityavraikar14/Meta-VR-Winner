@@ -44,7 +44,8 @@ function mergeChildren(parent: Object3D): void {
     const mesh = child as Mesh;
     if (!mesh.isMesh || (mesh as { isInstancedMesh?: boolean }).isInstancedMesh) continue;
     if (mesh.children.length > 0 || mesh.userData.keep || !mesh.visible) continue;
-    if (Array.isArray(mesh.material) || mesh.geometry.groups.length > 0) continue;
+    // With one material, draw groups (every Box, Cylinder, Extrude has them) change nothing.
+    if (Array.isArray(mesh.material)) continue;
     if (mesh.geometry.morphAttributes.position) continue;
     const key = [
       (mesh.material as Material).uuid,
@@ -61,7 +62,9 @@ function mergeChildren(parent: Object3D): void {
     if (meshes.length < 2) continue;
     const geometries: BufferGeometry[] = meshes.map((mesh) => {
       mesh.updateMatrix();
-      return mesh.geometry.clone().applyMatrix4(mesh.matrix);
+      const g = mesh.geometry.clone().applyMatrix4(mesh.matrix);
+      g.clearGroups();
+      return g;
     });
     const merged = mergeGeometries(geometries);
     geometries.forEach((g) => g.dispose());

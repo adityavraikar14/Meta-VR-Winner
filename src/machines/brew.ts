@@ -166,6 +166,8 @@ export class Brew {
     // The ring you lift it by.
     this.ring = new Mesh(new TorusGeometry(0.011, 0.0022, 8, 20), iron());
     this.ring.position.set(0.016, 0.03, 0);
+    // Grabbed by its position every frame: keep it out of the static merge.
+    this.ring.userData.keep = true;
     this.trammelBar.add(this.ring);
     this.group.add(this.trammelBar);
     const loop = new Mesh(new TorusGeometry(0.007, 0.0016, 6, 12), iron());

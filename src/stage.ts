@@ -108,6 +108,9 @@ export class ShadowStageSystem extends createSystem({}) {
   private readPending = false;
   /** The mask still shows hands that have since left; clear it once they go. */
   private maskStale = false;
+  /** Draw calls and triangles of the last full view render (for dev info). */
+  private mainCalls = 0;
+  private mainTriangles = 0;
 
   private a = new Vector3();
   private b = new Vector3();
@@ -153,8 +156,8 @@ export class ShadowStageSystem extends createSystem({}) {
     devInfo.render = () => {
       const info = this.renderer.info;
       return {
-        calls: info.render.calls,
-        triangles: info.render.triangles,
+        calls: this.mainCalls,
+        triangles: this.mainTriangles,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
         programs: info.programs?.length ?? 0,
@@ -498,6 +501,9 @@ export class ShadowStageSystem extends createSystem({}) {
       hand.forearm.material = hand.forearmMask;
       hand.forearm.renderOrder = -1;
     }
+    // Keep the main view's numbers before this small pass overwrites them.
+    this.mainCalls = renderer.info.render.calls;
+    this.mainTriangles = renderer.info.render.triangles;
     renderer.setRenderTarget(this.maskTarget);
     renderer.setClearColor(0x000000, 1);
     renderer.clear(true, false, false);
