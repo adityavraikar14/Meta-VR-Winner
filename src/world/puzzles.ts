@@ -3,6 +3,7 @@ import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
 import type { HandState } from '../creatures/hand-input.js';
+import { Bridge } from '../machines/bridge.js';
 import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
 import { stage } from '../stage-state.js';
@@ -445,6 +446,35 @@ const oldWell: Puzzle = {
   },
 };
 
+const brokenBridge: Puzzle = {
+  id: 'broken-bridge',
+  world: 1,
+  title: 'The Broken Bridge',
+  story: 'The flood took the old bridge. The ore cart must cross the river to reach the mine.',
+  ask: 'Build a bridge of timbers across the river',
+  handsOn: true,
+  solved: 'Your bridge held! Triangles carry the load.',
+  build(root, kit) {
+    const bridge = new Bridge(kit.floor, BRIDGE_AT);
+    root.add(bridge.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        bridge.update(dt, hands);
+        task.caption = bridge.caption;
+        task.done = bridge.done;
+        task.mistakes = bridge.mistakes;
+      },
+    };
+  },
+};
+
+/** Stage-local spot for the bridge, clear of the river world's pond. */
+const BRIDGE_AT = new Vector3(0.12, 0, -0.02);
+
 const smithy: Puzzle = {
   id: 'smithy',
   world: 2,
@@ -530,8 +560,7 @@ export const PUZZLES: Puzzle[] = [
   highBerries,
   lostStar,
   oldWell,
-  findStar('pond-song', 1, 'bird', 'The Silent Pond', 'The pond is too quiet. It needs a song.', 'Who can sing the pond awake?', 'The Bird sang, and a star woke up!'),
-  findStar('night-flowers', 1, 'butterfly', 'The Night Flowers', 'The flowers closed up for the night.', 'Who can wake the flowers gently?', 'The flowers opened for the Butterfly!'),
+  brokenBridge,
   smithy,
   findStar('great-lantern', 3, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),
 ];
