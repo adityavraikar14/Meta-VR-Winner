@@ -178,7 +178,7 @@ export class Diorama {
     });
   }
 
-  update(dt: number, hands: readonly HandState[]): void {
+  update(dt: number, hands: readonly HandState[], head: Vector3): void {
     if (this.growTime < 4) {
       this.growTime += dt;
       this.applyGrowth();
@@ -196,7 +196,7 @@ export class Diorama {
     // The room's plants stand on the real floor (y = 0), wherever the screen is.
     stage.paper!.getWorldPosition(this.paperAt);
     this.room.position.y = -this.paperAt.y;
-    this.scene?.update?.(dt, hands);
+    this.scene?.update?.(dt, hands, head);
     for (const spinner of this.spinners) spinner.object.rotation.y += spinner.speed * dt;
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tween = this.tweens[i];

@@ -3,6 +3,7 @@ import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
 import type { HandState } from '../creatures/hand-input.js';
+import { DragonBattle } from '../fight/battle.js';
 import { Bridge } from '../machines/bridge.js';
 import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
@@ -52,8 +53,8 @@ export interface PuzzleScene {
   start: Vector3;
   /** A friend of this kind and body size (1 = normal) tries the puzzle. */
   attempt(kind: string, size: number): Attempt;
-  /** Machines that keep running between attempts, and hands-on work. */
-  update?(dt: number, hands: readonly HandState[]): void;
+  /** Machines that keep running between attempts, and hands-on work. `head` is the viewer's, world space. */
+  update?(dt: number, hands: readonly HandState[], head: Vector3): void;
 }
 
 export interface Puzzle {
@@ -472,6 +473,32 @@ const brokenBridge: Puzzle = {
   },
 };
 
+const shadowDragon: Puzzle = {
+  id: 'shadow-dragon',
+  world: 3,
+  title: 'The Shadow Dragon',
+  story: 'At the top of the mountain the Shadow Dragon guards the Great Lantern, the way home.',
+  ask: 'Gather light with your hands and throw it',
+  handsOn: true,
+  solved: 'The shadow breaks into light. The Great Lantern is free, and so are you!',
+  build(root, kit) {
+    const battle = new DragonBattle(root);
+    root.add(battle.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is yours to fight.' }),
+      update: (dt, hands, head) => {
+        battle.update(dt, hands, head);
+        task.caption = battle.caption;
+        task.done = battle.done;
+        task.mistakes = battle.mistakes;
+      },
+    };
+  },
+};
+
 /** Stage-local spot for the bridge, clear of the river world's pond. */
 const BRIDGE_AT = new Vector3(0.12, 0, -0.02);
 
@@ -562,5 +589,5 @@ export const PUZZLES: Puzzle[] = [
   oldWell,
   brokenBridge,
   smithy,
-  findStar('great-lantern', 3, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),
+  shadowDragon,
 ];

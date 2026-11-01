@@ -720,8 +720,13 @@ export class ShadowGameSystem extends createSystem({
       this.drawBanner(firstOfWorld ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
       this.setCaption(puzzle.ask);
     } else {
-      this.drawBanner('Free play', 'The End… for now', 'Every friend is yours now. Make any shadow to call one!');
-      this.setCaption('Make any friend’s shadow');
+      this.drawBanner(
+        'You escaped the Lantern',
+        'Free at last',
+        'The Great Lantern carries you home. Your hands made light, friends, a bridge and an axe. Thank you for playing.',
+        `${totalStars()} ★ collected`,
+      );
+      this.setCaption('Free play: make any friend’s shadow, or open the menu on your palm');
     }
     this.bannerShown = true;
     this.setPhase('story');

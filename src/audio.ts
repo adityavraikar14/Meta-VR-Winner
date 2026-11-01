@@ -518,3 +518,82 @@ export function playIgnite(): void {
   roar.frequency.setValueAtTime(300, now);
   roar.frequency.exponentialRampToValueAtTime(1600, now + 0.6);
 }
+
+/** The dragon's roar: a low growl that swells, with breath roaring through it. */
+export function playRoar(volume = 0.12): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(70, now);
+  osc.frequency.linearRampToValueAtTime(95, now + 0.5);
+  osc.frequency.linearRampToValueAtTime(55, now + 1.6);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 23;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 18;
+  lfo.connect(lfoGain).connect(osc.frequency);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 520;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.25);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(now);
+  lfo.start(now);
+  osc.stop(now + 1.9);
+  lfo.stop(now + 1.9);
+  noise(ctx, now, 1.6, 'bandpass', 700, 0.8, volume * 0.5);
+}
+
+/** A ball of fire rushing past. */
+export function playFireball(volume = 0.06): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const f = noise(ctx, now, 0.9, 'bandpass', 400, 0.9, volume);
+  f.frequency.setValueAtTime(300, now);
+  f.frequency.exponentialRampToValueAtTime(1400, now + 0.7);
+}
+
+/** Something big landing: a thump and a burst. */
+export function playBoom(volume = 0.1): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 120, 35, now, 0.6, volume);
+  noise(ctx, now, 0.5, 'lowpass', 1200, 0.7, volume * 0.8);
+}
+
+/** One sign made: a bright bell, rising with each step of the sequence. */
+export function playSign(step: number): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const f = [523.25, 659.25, 783.99, 1046.5][Math.min(3, step)];
+  tone(ctx, f, now, 0.9, 0.06);
+  tone(ctx, f * 2, now, 0.5, 0.02);
+}
+
+/** Light gathering in the hand: a shimmering swell. */
+export function playCharge(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'triangle', 220, 880, now, 1.2, 0.04);
+  [1046.5, 1318.5, 1568].forEach((f, i) => tone(ctx, f, now + 0.2 + i * 0.12, 1.0, 0.025));
+}
+
+/** Light thrown: a rising whoosh. */
+export function playThrow(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const f = noise(ctx, now, 0.5, 'bandpass', 800, 1.2, 0.07);
+  f.frequency.setValueAtTime(600, now);
+  f.frequency.exponentialRampToValueAtTime(3000, now + 0.4);
+  sweep(ctx, 'sine', 440, 1320, now, 0.4, 0.04);
+}

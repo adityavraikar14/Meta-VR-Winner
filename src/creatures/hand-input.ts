@@ -1,5 +1,5 @@
 import { Vector3 } from '@iwsdk/core';
-import { createExtension, readExtension } from '../hand-pose.js';
+import { createExtension, type Extension, readExtension } from '../hand-pose.js';
 import { stage } from '../stage-state.js';
 
 /** WebXR joint indices used for interaction. */
@@ -35,6 +35,8 @@ export interface HandState {
   indexTip: Vector3;
   /** Index straight, other fingers folded: a perch for birds. */
   pointing: boolean;
+  /** How straight each finger is, 0 (curled) to 1 (straight). */
+  ext: Extension;
 }
 
 function createHand(): HandState {
@@ -53,6 +55,7 @@ function createHand(): HandState {
     tipSpeeds: TOUCH_TIPS.map(() => 0),
     indexTip: new Vector3(),
     pointing: false,
+    ext: createExtension(),
   };
 }
 
@@ -112,7 +115,7 @@ export class HandInput {
       this.joint(joints, MIDDLE_KNUCKLE, this.b);
       hand.palm.addVectors(this.a, this.b).multiplyScalar(0.5);
 
-      const ext = readExtension(joints, this.extension);
+      const ext = readExtension(joints, hand.ext);
       hand.pointing = ext.index > 0.8 && ext.middle < 0.35 && ext.ring < 0.35 && ext.pinky < 0.35;
 
       for (let t = 0; t < TOUCH_TIPS.length; t++) {

@@ -118,8 +118,23 @@ on device: hop onto the real table, hide behind real objects.
       a brass gauge shows the horse's pull against what the bucket needs. A small horse digs
       in, scrabbles and gives up (the load clunks back onto the pawl); a big horse walks the
       circle and winds up the glowing Lantern Stone. Beasts are smooth-shaded now
-- [ ] Next: more machine levels in the same kit (cart and brake, waterwheel, crane, catapult);
-      replace the remaining cute characters and v1 toy props
+- [x] Chapter "The Old Mine", The Smithy (hands-on): Lantern Stone lights the charcoal;
+      bellows pump air (oxygen) and the fire climbs 650 → 1350 °C; iron heats by Newton's
+      law, cools by radiation (T^4) and convection, glows its Planck black-body colour
+      (CIE → sRGB) and matches the smith's colour chart; tongs (pinch), hammer (other hand)
+      shape it only at forging heat; six blows draw an axe head; quench from above 780 °C
+      to harden it in a burst of steam; bare fingers on hot iron hurt. Axe saved to items
+- [x] River level 2, The Broken Bridge (hands-on build): pinch-drag timbers between joints
+      across the river; Test runs a real pin-jointed truss (XPBD, EA/L springs, tension
+      limit, Euler buckling π²EI/L²) with blue/red stress view; squares fold, triangles
+      hold; the ore cart rides the deck and falls in the river if it fails
+- [x] Final chapter, The Shadow Dragon: a jointed Reiniger-style shadow-puppet dragon fills
+      the screen; three hand signs gather an orb of light; throws use a pose buffer with
+      40 ms latency rewind and a least-squares release velocity; fireballs come out of the
+      screen at you; an open palm reflects them (v' = v − 2(v·n)n) back at the dragon;
+      hearts and a health bar; defeat dissolves the shadow; an ending banner
+- [ ] Next: Ink Fight vs computer; potion brewing and the wrist inventory; replace the
+      jungle chapter's cute characters and v1 toy props; chapter polish and on-Quest tuning
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving
