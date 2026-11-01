@@ -2,7 +2,6 @@ import {
   AdditiveBlending,
   type AnimationAction,
   AnimationMixer,
-  AssetManager,
   Box3,
   CanvasTexture,
   Color,
@@ -17,6 +16,8 @@ import {
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
+import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 /**
  * The Shadow Dragon in 3D (European Dragon by Regina Cachoa, CC-BY): it
@@ -35,6 +36,9 @@ const PHOENIX_LENGTH = 0.32;
 
 /** Loads the dragon, then the phoenix, one at a time, retrying a slow or failed load. */
 let loading: Promise<void> | null = null;
+const loaded: Record<string, GLTF | undefined> = {};
+/** For dev info: how the big models are getting on. */
+export const dragonLoad = { dragon: 'waiting', phoenix: 'waiting' };
 
 export function preloadDragon(): Promise<void> {
   loading ??= loadDragon();
@@ -45,10 +49,15 @@ async function loadDragon(): Promise<void> {
   const base = import.meta.env.BASE_URL;
   for (const [url, key] of [[DRAGON_URL, 'dragon3d'], [PHOENIX_URL, 'phoenix']] as const) {
     for (let attempt = 0; attempt < 4; attempt++) {
+      const name = key === 'dragon3d' ? 'dragon' : 'phoenix';
+      dragonLoad[name] = `loading (try ${attempt + 1})`;
       try {
-        await AssetManager.loadGLTF(`${base}${url}`, key);
+        // three's own loader: no fixed time limit, so a slow connection still gets there.
+        loaded[key] = await new GLTFLoader().loadAsync(`${base}${url}`);
+        dragonLoad[name] = 'ready';
         break;
       } catch (error) {
+        dragonLoad[name] = `failed (try ${attempt + 1})`;
         console.warn(`Could not load ${key} (try ${attempt + 1})`, error);
         await new Promise((resolve) => setTimeout(resolve, 3000 * (attempt + 1)));
       }
@@ -106,15 +115,14 @@ export class Dragon3D {
 
   /** Null until the model has loaded. */
   static create(): Dragon3D | null {
-    const gltf = AssetManager.getGLTF('dragon3d');
-    return gltf ? new Dragon3D(gltf.scene, gltf.animations) : null;
+    const gltf = loaded.dragon3d;
+    return gltf ? new Dragon3D(cloneRig(gltf.scene), gltf.animations) : null;
   }
 
   private constructor(model: Object3D, clips: import('@iwsdk/core').AnimationClip[]) {
     this.root.name = 'Dragon3D';
     this.body.add(model);
     this.root.add(this.body);
-    fit(model, LENGTH);
     model.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;
@@ -133,6 +141,9 @@ export class Dragon3D {
     const clip = clips.find((c) => c.name === 'Fly') ?? clips[0];
     this.fly = clip ? this.mixer.clipAction(clip) : null;
     this.fly?.setLoop(LoopRepeat, Infinity).play();
+    // Size it in its flying pose: the clip moves the body well away from the rest pose.
+    this.mixer.update(0);
+    fit(model, LENGTH);
 
     const find = (name: string) => model.getObjectByName(name) ?? null;
     // three.js drops dots from bone names: DEF-neck.004 becomes DEF-neck004.
@@ -142,6 +153,9 @@ export class Dragon3D {
 
     this.heart = glowSprite('rgba(255,240,180,1)', 'rgba(255,90,20,0.75)');
     this.heart.scale.setScalar(0.12);
+    // The ember glows through its hide: you always see where to aim.
+    (this.heart.material as SpriteMaterial).depthTest = false;
+    this.heart.renderOrder = 9;
     this.root.add(this.heart);
     this.breath = glowSprite('rgba(255,250,210,1)', 'rgba(255,120,30,0.8)');
     this.root.add(this.breath);
@@ -225,8 +239,8 @@ export class Phoenix {
   private time = 0;
 
   static create(): Phoenix | null {
-    const gltf = AssetManager.getGLTF('phoenix');
-    return gltf ? new Phoenix(gltf.scene, gltf.animations) : null;
+    const gltf = loaded.phoenix;
+    return gltf ? new Phoenix(cloneRig(gltf.scene), gltf.animations) : null;
   }
 
   private constructor(model: Object3D, clips: import('@iwsdk/core').AnimationClip[]) {

@@ -23,7 +23,7 @@ import { ParticlePool } from '../machines/particles.js';
 import { play, saveProgress } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { ShadowDragon } from './dragon.js';
-import { Dragon3D, Phoenix, preloadDragon } from './dragon3d.js';
+import { Dragon3D, dragonLoad, Phoenix, preloadDragon } from './dragon3d.js';
 
 /**
  * The last chapter: the Shadow Dragon guards the Great Lantern.
@@ -174,7 +174,7 @@ export class DragonBattle {
   }
 
   get state(): string {
-    return `${this.mode} hp=${this.health} dragon=${this.dragonHealth.toFixed(1)} sign=${this.signStep}/${this.sequence.join(',')} orb=${this.orbHand >= 0 ? this.orbCharge.toFixed(2) : this.flying ? 'flying' : '-'} fire=${this.fireballs.length}`;
+    return `3d=${this.dragon3d ? 'on' : `${dragonLoad.dragon}`} phoenix=${dragonLoad.phoenix} ${this.mode} hp=${this.health} dragon=${this.dragonHealth.toFixed(1)} sign=${this.signStep}/${this.sequence.join(',')} orb=${this.orbHand >= 0 ? this.orbCharge.toFixed(2) : this.flying ? 'flying' : '-'} fire=${this.fireballs.length}`;
   }
 
   // ================================================================ Update
