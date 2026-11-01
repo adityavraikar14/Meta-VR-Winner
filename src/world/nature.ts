@@ -41,7 +41,7 @@ const MODELS = {
 } as const;
 export type NatureModel = keyof typeof MODELS;
 
-const SURFACES = ['ground', 'wood', 'pebbles', 'soil', 'stone', 'iron', 'plank'] as const;
+const SURFACES = ['ground', 'wood', 'pebbles', 'soil', 'stone', 'iron', 'plank', 'bark'] as const;
 export type Surface = (typeof SURFACES)[number];
 const FALLBACK: Record<Surface, number> = {
   ground: 0x5e6a3c,
@@ -51,6 +51,7 @@ const FALLBACK: Record<Surface, number> = {
   stone: 0x8c8478,
   iron: 0x5a3a26,
   plank: 0x5b4632,
+  bark: 0x4a3a2c,
 };
 
 /**

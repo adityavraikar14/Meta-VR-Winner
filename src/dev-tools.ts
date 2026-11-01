@@ -27,8 +27,8 @@ export interface DevApi {
   reset(): void;
   spawnAll(): void;
   spawn(kind: string): void;
-  /** Bring a friend to life as if its shadow had just matched, at this body size. */
-  summon(kind: string, size: number): void;
+  /** Bring a friend to life as if its shadow had just matched, at this body size (null: the level's own friend). */
+  summon(kind: string | null, size: number): void;
   /** Jump to the first level of the next chapter. */
   nextChapter(): void;
   info(): unknown;
@@ -164,10 +164,10 @@ export function installDevTools(api: DevApi): void {
         api.spawn('stag');
         break;
       case 'b':
-        api.summon('horse', 1.35);
+        api.summon(null, 1.35);
         break;
       case 'v':
-        api.summon('horse', 0.95);
+        api.summon(null, 0.8);
         break;
       case 'g':
         api.nextChapter();

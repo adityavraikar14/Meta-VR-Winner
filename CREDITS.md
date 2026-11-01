@@ -9,6 +9,7 @@ ship, no attribution required. We credit them anyway.
 |---|---|---|---|
 | `public/gltf/horse.glb` | [Horse](https://poly.pizza/m/qvTrSG9pZF) via Poly Pizza | Quaternius | CC0 |
 | `public/gltf/stag.glb` | [Stag](https://poly.pizza/m/tQdzbZ1Cmw) via Poly Pizza | Quaternius | CC0 |
+| `public/gltf/fox.glb` | [Fox](https://poly.pizza/m/Bc97C66HKi) via Poly Pizza | Quaternius | CC0 |
 | `public/gltf/nature/fern.glb` | [Fern 02](https://polyhaven.com/a/fern_02) | Poly Haven | CC0 |
 | `public/gltf/nature/rocks.glb` | [Rock Moss Set 01](https://polyhaven.com/a/rock_moss_set_01) | Poly Haven | CC0 |
 | `public/gltf/nature/stump.glb` | [Tree Stump 01](https://polyhaven.com/a/tree_stump_01) | Poly Haven | CC0 |
@@ -35,6 +36,7 @@ textures reduced to 512–1024 px.
 | `public/textures/stone_*.jpg` | [Rock Boulder Dry](https://polyhaven.com/a/rock_boulder_dry), Poly Haven | CC0 |
 | `public/textures/iron_*.jpg` | [Rusty Metal 02](https://polyhaven.com/a/rusty_metal_02), Poly Haven | CC0 |
 | `public/textures/plank_*.jpg` | [Weathered Brown Planks](https://polyhaven.com/a/weathered_brown_planks), Poly Haven | CC0 |
+| `public/textures/bark_*.jpg` | [Bark Brown 02](https://polyhaven.com/a/bark_brown_02), Poly Haven | CC0 |
 | `public/textures/ivy*.{png,jpg}` | [Leaf Set 017](https://ambientcg.com/view?id=LeafSet017), ambientCG | CC0 |
 | `public/textures/leaf*.{png,jpg}` | [Leaf 001](https://ambientcg.com/view?id=Leaf001), ambientCG | CC0 |
 | `public/textures/studio.hdr` | [Brown Photostudio 02](https://polyhaven.com/a/brown_photostudio_02), Poly Haven | CC0 |

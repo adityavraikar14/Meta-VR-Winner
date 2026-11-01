@@ -404,8 +404,8 @@ export class ShadowGameSystem extends createSystem({
           stage.spawns.push({ kind: level.id, x: -0.36 + i * 0.12, y: -0.12 }),
         ),
       spawn: (kind: string, size = 1) => stage.spawns.push({ kind, x: 0, y: -0.12, size }),
-      summon: (kind: string, size: number) => {
-        const index = this.candidates.findIndex((level) => level.id === kind);
+      summon: (kind: string | null, size: number) => {
+        const index = kind ? this.candidates.findIndex((level) => level.id === kind) : 0;
         if (this.phase !== 'matching' || index < 0) return;
         // A square shadow of the size that makes this body, centred on the paper.
         const cells = Math.round(((size * SHADOW_FOR_NORMAL) / PAPER_WIDTH) * MASK_WIDTH);
@@ -935,13 +935,20 @@ export class ShadowGameSystem extends createSystem({
     } else if (anyPair && problem === 'twoHands' && !teaching) {
       text = 'Pick a friend: make their shadow';
     }
-    // A job that needs a big friend: read out the size this shadow would make.
+    // A job that needs a big (or a small) friend: read out the size this shadow would make.
     const need = this.puzzle?.needSize;
-    if (need && level && best >= 0 && this.candidateShadow[best] && score > 0.45 && !this.needsRelease) {
+    const most = this.puzzle?.maxSize;
+    if ((need || most) && level && best >= 0 && this.candidateShadow[best] && score > 0.45 && !this.needsRelease) {
       const size = bodySizeFromShadow(shadowSpan(this.candidateBounds[best]));
-      text = size >= need
-        ? `${level.name} size ×${size.toFixed(2)}: strong enough! Hold the shape`
-        : `${level.name} size ×${size.toFixed(2)} (needs ×${need.toFixed(2)}): bring your hand closer to the lantern`;
+      if (need) {
+        text = size >= need
+          ? `${level.name} size ×${size.toFixed(2)}: strong enough! Hold the shape`
+          : `${level.name} size ×${size.toFixed(2)} (needs ×${need.toFixed(2)}): bring your hand closer to the lantern`;
+      } else if (most) {
+        text = size <= most
+          ? `${level.name} size ×${size.toFixed(2)}: small enough! Hold the shape`
+          : `${level.name} size ×${size.toFixed(2)} (needs ×${most.toFixed(2)} or less): move your hand away from the lantern`;
+      }
     }
     if (DEV) text += `  ·  ${Math.round(score * 100)}%`;
 

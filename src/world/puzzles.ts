@@ -9,18 +9,11 @@ import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
 import { stage } from '../stage-state.js';
 import { decorateJungle, decorateMine, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
-import {
-  berries,
-  berryTree,
-  bush,
-  carrot,
-  goldStar,
-  hollowLog,
-  log,
-  moundMark,
-  mushroom,
-  rootArch,
-} from './props.js';
+import { berries, goldStar } from './props.js';
+import { emberShard, fallenLog as fallenTrunk, glowCaps, gnarledRoots, hollowTrunk, leafyTree } from './real-props.js';
+
+/** Small enough to squeeze under roots and into logs. */
+export const SMALL_FOX = 0.88;
 
 /** Helpers a puzzle uses to stage its scene and script its solution. */
 export interface Kit {
@@ -74,6 +67,8 @@ export interface Puzzle {
   walk?: WalkLevel;
   /** The job needs a friend at least this big (1 = normal); its size is read out while matching. */
   needSize?: number;
+  /** …or at most this big, to fit somewhere small. */
+  maxSize?: number;
   /** Done with your own hands, not a friend: the scene reports progress in `stage.task`. */
   handsOn?: boolean;
   /** Caption once solved. */
@@ -90,8 +85,7 @@ export interface World {
 }
 
 const NAMES: Record<string, string> = {
-  rabbit: 'Rabbit',
-  snail: 'Snail',
+  fox: 'Fox',
   stag: 'Stag',
   horse: 'Horse',
   bird: 'Bird',
@@ -192,16 +186,16 @@ const fallenLog: Puzzle = {
   id: 'fallen-log',
   world: 0,
   title: 'The Fallen Log',
-  story: 'A fallen log blocks the way to a juicy carrot.',
-  ask: 'Who can hop over the log?',
-  teach: 'rabbit',
-  solved: 'Crunch! The Rabbit got the carrot.',
+  story: 'A fallen tree blocks the path. Beyond it glows a shard of the Great Lantern.',
+  ask: 'Who can leap over the log?',
+  teach: 'fox',
+  solved: 'The Fox leapt it and found the shard!',
   build(root, kit) {
     const f = kit.floor;
     // Turned three-quarters to the viewer so it reads as a log, not a pipe.
-    place(root, log(0.2, 0.026), 0, f, -0.01, 1.05);
+    place(root, fallenTrunk(0.22, 0.026), 0, f, -0.01, 1.05);
     for (const t of [-0.07, 0, 0.07]) kit.block(t * 0.5, -0.01 - t * 0.87, 0.035);
-    const food = place(root, carrot(), 0.15, f, 0.02, 0.3, 1.2);
+    const food = place(root, emberShard(0.014).group, 0.15, f, 0.02, 0.3, 1.2);
     kit.block(0.15, 0.02, 0.03);
     return {
       start: new Vector3(-0.15, f, 0.04),
@@ -216,8 +210,8 @@ const fallenLog: Puzzle = {
             do: 'call',
             run: () => kit.tween(1.4, (k) => food.scale.setScalar(1.2 * (1 - k * 0.85))),
           },
-          { do: 'pose', pose: 'eat', time: 1.5, look: kit.where(food) },
-          { do: 'call', run: () => { food.visible = false; kit.chime(); } },
+          { do: 'pose', pose: 'sniff', time: 1.5, look: kit.where(food) },
+          { do: 'call', run: () => { food.visible = false; kit.chime(); kit.fx.burst(kit.where(food), 16, 0.25); } },
           { do: 'pose', pose: 'cheer', time: 1.6 },
         ],
       }),
@@ -229,10 +223,10 @@ const tinyTunnel: Puzzle = {
   id: 'tiny-tunnel',
   world: 0,
   title: 'The Tiny Tunnel',
-  story: 'The glow mushroom fell asleep behind the old roots.',
-  ask: 'Only someone tiny fits under the roots',
-  teach: 'snail',
-  solved: 'The Snail woke the glow mushroom!',
+  story: 'The glow caps fell asleep behind the old roots.',
+  ask: 'Only a small friend fits under the roots',
+  maxSize: SMALL_FOX,
+  solved: 'The little Fox slipped through and woke the glow caps!',
   build(root, kit) {
     const f = kit.floor;
     // The path runs diagonally through the arch, so the viewer sees the
@@ -241,18 +235,20 @@ const tinyTunnel: Puzzle = {
     const ax = Math.cos(turn);
     const az = -Math.sin(turn);
     const on = (t: number) => kit.at(ax * t, f, az * t);
-    place(root, rootArch(0.105), 0, f, 0, turn);
+    place(root, gnarledRoots(0.085), 0, f, 0, turn);
     for (const side of [-1, 1]) kit.block(-az * 0.105 * side, ax * 0.105 * side, 0.035);
-    place(root, bush(0.07, 0x5d9e52), az * 0.17, f, -ax * 0.17, turn);
-    place(root, bush(0.06, 0x6aa95a), -az * 0.17, f, ax * 0.17, turn);
     kit.block(az * 0.17, -ax * 0.17, 0.05);
     kit.block(-az * 0.17, ax * 0.17, 0.05);
-    const glow = mushroom(0.04, 0x9b7bff);
+    const glow = glowCaps(0.045, 0x9b7bff);
     place(root, glow.group, ax * 0.17, f, az * 0.17);
     kit.block(ax * 0.17, az * 0.17, 0.035);
     return {
       start: new Vector3(-ax * 0.17, f, -az * 0.17),
-      attempt: () => ({
+      attempt: (kind, size) => kind !== 'fox' || size > SMALL_FOX
+        ? bumpAndShrug(kit, on(-0.07), kit.where(glow.group), kind === 'fox'
+          ? 'Too big to fit! Hold your hand farther from the lantern: a smaller shadow makes a smaller fox'
+          : `The ${friendName(kind)} is far too big for the roots!`)
+        : ({
         solved: true,
         steps: [
           { do: 'walk', to: on(-0.08) },
@@ -286,7 +282,7 @@ const highBerries: Puzzle = {
   solved: 'Berries for everyone!',
   build(root, kit) {
     const f = kit.floor;
-    const tree = berryTree(0.24, 0.11);
+    const tree = leafyTree(0.24, 0.11);
     place(root, tree.group, 0.13, f, -0.12);
     kit.block(0.13, -0.12, 0.04);
     kit.block(0.1, 0.04, 0.035);
@@ -332,9 +328,10 @@ const lostStar: Puzzle = {
   id: 'lost-star',
   world: 0,
   title: 'The Lost Star',
-  story: 'A star fell from the sky and rolled inside a hollow log!',
+  story: 'A shard of the Great Lantern rolled deep inside a hollow log!',
   ask: 'Who is small enough to fit inside?',
-  solved: 'The star is free! The forest is glowing again.',
+  maxSize: SMALL_FOX,
+  solved: 'The shard is free! The jungle glows again.',
   build(root, kit) {
     const f = kit.floor;
     // Angled so the near opening faces the viewer and the star shows inside.
@@ -344,17 +341,18 @@ const lostStar: Puzzle = {
     const ax = Math.cos(turn);
     const az = -Math.sin(turn);
     const along = (t: number, y = f) => kit.at(cx + ax * t, y, cz + az * t);
-    place(root, hollowLog(0.17, 0.056), cx, f, cz, turn);
+    place(root, hollowTrunk(0.17, 0.056), cx, f, cz, turn);
     for (const t of [-0.06, 0, 0.06]) kit.block(cx + ax * t, cz + az * t, 0.055);
-    const star = goldStar(0.018);
-    place(root, star.group, cx, f + 0.03, cz);
+    const shard = emberShard(0.012);
+    const star = { group: shard.group, material: { emissiveIntensity: 1 } };
+    place(root, star.group, cx, f + 0.012, cz);
     kit.spin(star.group, 2);
     const mouth = along(-0.085, f + 0.04);
     const exit = { x: cx + ax * 0.13, z: cz + az * 0.13 };
     return {
       start: new Vector3(cx - ax * 0.2, f, cz - az * 0.2),
-      attempt: (kind) => {
-        if (kind === 'snail') {
+      attempt: (kind, size) => {
+        if (kind === 'fox' && size <= SMALL_FOX) {
           return {
             solved: true,
             steps: [
@@ -378,9 +376,9 @@ const lostStar: Puzzle = {
             ],
           };
         }
-        const line = kind === 'stag'
-          ? 'The Deer is far too tall for the log!'
-          : `The ${friendName(kind)} is too big to fit inside!`;
+        const line = kind === 'fox'
+          ? 'Too big to fit inside! Hold your hand farther from the lantern for a smaller fox'
+          : `The ${friendName(kind)} is far too big to fit inside!`;
         return bumpAndShrug(kit, along(-0.13), mouth, line);
       },
     };
@@ -527,56 +525,6 @@ const smithy: Puzzle = {
     };
   },
 };
-
-/** A buried or hidden star for a new friend to find; chapters 2 and 3 for now. */
-function findStar(
-  id: string,
-  world: number,
-  teach: string,
-  title: string,
-  story: string,
-  ask: string,
-  solved: string,
-): Puzzle {
-  return {
-    id,
-    world,
-    title,
-    story,
-    ask,
-    teach,
-    solved,
-    build(root, kit) {
-      const f = kit.floor;
-      place(root, moundMark(), 0.06, f, 0);
-      kit.block(0.06, 0, 0.035);
-      const star = goldStar(0.018);
-      place(root, star.group, 0.06, f + 0.005, 0);
-      star.group.visible = false;
-      return {
-        start: new Vector3(-0.14, f, 0.05),
-        attempt: () => ({
-          solved: true,
-          steps: [
-            { do: 'walk', to: kit.at(0.0, f, 0.01) },
-            { do: 'pose', pose: teach === 'horse' ? 'sniff' : 'look', time: 0.9, look: kit.at(0.06, f, 0) },
-            { do: 'pose', pose: teach === 'horse' ? 'dig' : 'reach', time: 1.1, look: kit.at(0.06, f, 0) },
-            {
-              do: 'call',
-              run: () => {
-                star.group.visible = true;
-                kit.spin(star.group, 2.5);
-                kit.chime();
-                kit.tween(1.2, (k) => star.group.position.setY(f + 0.005 + k * 0.12));
-              },
-            },
-            { do: 'pose', pose: 'cheer', time: 1.8 },
-          ],
-        }),
-      };
-    },
-  };
-}
 
 export const PUZZLES: Puzzle[] = [
   warmup,

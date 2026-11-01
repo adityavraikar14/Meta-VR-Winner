@@ -45,6 +45,15 @@ export interface BeastSpec {
 export const BEASTS: Record<string, BeastSpec> = {
   horse: { file: 'gltf/horse.glb', height: 0.15, walk: 0.5, gallop: 2.0, temper: 'Attack_Kick', voice: 1 },
   stag: { file: 'gltf/stag.glb', height: 0.17, walk: 0.45, gallop: 1.9, temper: 'Attack_Headbutt', voice: 0.7 },
+  fox: { file: 'gltf/fox.glb', height: 0.085, walk: 0.8, gallop: 2.6, temper: 'Attack', voice: 1.7 },
+};
+
+/** The animal packs name a few clips differently; try these when a name is missing. */
+const CLIP_ALIASES: Record<string, string[]> = {
+  Idle_Headlow: ['Idle_2_HeadLow'],
+  Jump_toIdle: ['Jump_ToIdle'],
+  Attack_Headbutt: ['Attack', 'Attack_Kick'],
+  Attack_Kick: ['Attack', 'Attack_Headbutt'],
 };
 
 /**
@@ -673,8 +682,18 @@ export class Beast {
 
   // ------------------------------------------------------------ Animation
 
+  private action(name: string): AnimationAction | undefined {
+    const direct = this.actions.get(name);
+    if (direct) return direct;
+    for (const alias of CLIP_ALIASES[name] ?? []) {
+      const found = this.actions.get(alias);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
   private play(name: string, loop = true, fade = 0.3, speed = 1): void {
-    const action = this.actions.get(name);
+    const action = this.action(name);
     if (!action) return;
     action.timeScale = speed;
     if (action === this.current && loop) return;
@@ -690,7 +709,7 @@ export class Beast {
 
   /** A one-shot clip that pauses free movement, then eases back to standing. */
   private playOnce(name: string, speed = 1): void {
-    const action = this.actions.get(name);
+    const action = this.action(name);
     if (!action) return;
     this.play(name, false, 0.12, speed);
     this.oneShot = action.getClip().duration / speed;

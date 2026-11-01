@@ -34,7 +34,7 @@ function random(): number {
 // ------------------------------------------------------------- Driftwood
 
 /** A crooked, tapering branch through the points, in weathered grey wood. */
-export function branch(points: Vector3[], radius: number, taper = 0.4): Mesh {
+export function branch(points: Vector3[], radius: number, taper = 0.4, material?: MeshStandardMaterial): Mesh {
   const curve = new CatmullRomCurve3(points);
   const tubular = 28;
   const radial = 9;
@@ -53,7 +53,7 @@ export function branch(points: Vector3[], radius: number, taper = 0.4): Mesh {
     }
   }
   geometry.computeVertexNormals();
-  const mesh = new Mesh(geometry, surface('wood', 4, 1, 0xa39a90));
+  const mesh = new Mesh(geometry, material ?? surface('wood', 4, 1, 0xa39a90));
   mesh.name = 'Branch';
   return mesh;
 }
