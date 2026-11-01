@@ -141,8 +141,14 @@ on device: hop onto the real table, hide behind real objects.
       mass = ink used; grab and throw it under real gravity; damage = ½mv² shown on the
       screen; hanging drawings are shields; a Reiniger-style Rival with a giant quill draws
       and throws back (ballistic aim v = d/T + ½gT), raises ink shields, topples when beaten
-- [ ] Next: potion brewing and the wrist inventory (heal in the dragon fight); chapter
-      polish and on-Quest tuning; trailer
+- [x] Old Mine level 2, The Healing Draught: a copper cauldron on an iron trammel (notched
+      bar, clicks per notch) over a fire pit; radiant heat falls off with height, water
+      boils at 100 °C and evaporates; herbs (yarrow, comfrey, sage) steep at an Arrhenius
+      rate (Ea/R 4000 K) while heat breaks the oils down faster (Ea/R 15000 K), so a gentle
+      simmer is best and a hard boil weakens and boils dry; ladle it into two vials
+- [x] Wrist inventory: the palm menu shows what you carry (the axe, draughts) and a Drink
+      button that heals a heart in the dragon fight
+- [ ] Next: polish pass on every chapter, on-Quest tuning (Nov 12), trailer
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

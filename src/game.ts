@@ -746,6 +746,12 @@ export class ShadowGameSystem extends createSystem({
   /** Restart and Skip from the hand menu. */
   private handleCommand(): void {
     const command = stage.command;
+    if (command === 'drink' && this.puzzle?.id !== 'shadow-dragon') {
+      // Outside the dragon's fire there is nothing to heal.
+      stage.command = null;
+      this.setCaption('You feel fine: save your draughts for the dragon');
+      return;
+    }
     if (command !== 'restart' && command !== 'skip' && command !== 'menu') return;
     stage.command = null;
     if (command === 'menu') {

@@ -12,6 +12,7 @@ import {
 import { playClick, playMenuOpen } from './audio.js';
 import { devInfo } from './dev-tools.js';
 import { createExtension, readExtension } from './hand-pose.js';
+import { play as progress } from './progress.js';
 import { type MenuCommand, stage } from './stage-state.js';
 
 const WRIST = 0;
@@ -40,6 +41,7 @@ const HOVER_DEPTH = 0.05;
 const REARM_DEPTH = 0.02;
 
 const BUTTONS: Array<{ command: MenuCommand; label: string }> = [
+  { command: 'drink', label: 'Drink' },
   { command: 'recenter', label: 'Recenter' },
   { command: 'restart', label: 'Restart' },
   { command: 'skip', label: 'Skip' },
@@ -72,6 +74,11 @@ export class HandMenuSystem extends createSystem({}) {
   private spent = false;
 
   private extension = createExtension();
+  /** Carried items, drawn on a strip above the buttons. */
+  private strip!: Mesh;
+  private readonly stripCanvas = document.createElement('canvas');
+  private stripTexture!: CanvasTexture;
+  private stripKey = '';
   private palm = new Vector3();
   private normal = new Vector3();
   private head = new Vector3();
@@ -100,6 +107,15 @@ export class HandMenuSystem extends createSystem({}) {
       this.buttons.push({ command, mesh, material, x });
     });
     this.player.add(this.root);
+
+    this.stripCanvas.width = 256;
+    this.stripCanvas.height = 64;
+    this.stripTexture = new CanvasTexture(this.stripCanvas);
+    this.stripTexture.colorSpace = SRGBColorSpace;
+    this.strip = new Mesh(new PlaneGeometry(0.12, 0.03), new MeshBasicMaterial({ map: this.stripTexture, transparent: true, depthWrite: false }));
+    this.strip.position.set(0, BUTTON_HEIGHT * 0.62, 0);
+    this.strip.renderOrder = 10;
+    this.root.add(this.strip);
 
     devInfo.menu = () => ({
       owner: this.owner,
@@ -148,8 +164,26 @@ export class HandMenuSystem extends createSystem({}) {
 
     stage.menuOpen = this.owner >= 0;
     if (!this.animate(dt) || this.owner < 0) return;
+    this.layout();
     this.place(dt);
     this.poke(dt);
+  }
+
+  /** Drink shows only while you carry a draught; the strip lists what you carry. */
+  private layout(): void {
+    const potions = progress.items.filter((i) => i === 'potion').length;
+    const shown = this.buttons.filter((b) => b.command !== 'drink' || potions > 0);
+    this.buttons.forEach((b) => (b.mesh.visible = shown.includes(b)));
+    shown.forEach((b, i) => {
+      b.x = (i - (shown.length - 1) / 2) * BUTTON_GAP;
+      b.mesh.position.x = b.x;
+    });
+    const key = progress.items.join(',');
+    if (key === this.stripKey) return;
+    this.stripKey = key;
+    drawItems(this.stripCanvas, progress.items.includes('axe'), potions);
+    this.stripTexture.needsUpdate = true;
+    this.strip.visible = progress.items.length > 0;
   }
 
   /** Grows in while open and shrinks away when closed; false once hidden. */
@@ -229,6 +263,7 @@ export class HandMenuSystem extends createSystem({}) {
       this.root.worldToLocal(this.player.localToWorld(this.tip));
       depth = this.tip.z;
       this.buttons.forEach((button, i) => {
+        if (!button.mesh.visible) return;
         const dx = this.tip.x - button.x;
         if (Math.abs(dx) < BUTTON_GAP / 2 && Math.abs(this.tip.y) < BUTTON_RADIUS * 1.4) hovered = i;
       });
@@ -253,6 +288,71 @@ export class HandMenuSystem extends createSystem({}) {
       this.closing = 0.35;
       this.spent = true;
     }
+  }
+}
+
+/** A stoppered glass vial, filled with draught. */
+function vial(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, fill: string): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc(0, 6, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(-5, -16, 10, 14);
+  ctx.strokeStyle = '#ffe2a8';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 6, 14, -Math.PI * 0.32, Math.PI * 1.32);
+  ctx.moveTo(-6, -4);
+  ctx.lineTo(-6, -17);
+  ctx.moveTo(6, -4);
+  ctx.lineTo(6, -17);
+  ctx.stroke();
+  ctx.fillStyle = '#a07a50';
+  ctx.fillRect(-6, -24, 12, 8);
+  ctx.restore();
+}
+
+/** What you carry: the axe you forged, and your draughts. */
+function drawItems(canvas: HTMLCanvasElement, axe: boolean, potions: number): void {
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(40, 22, 10, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(4, 4, 248, 56, 18);
+  ctx.fill();
+  let x = 30;
+  if (axe) {
+    // Handle and a bearded head.
+    ctx.strokeStyle = '#c8a070';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - 6, 52);
+    ctx.lineTo(x + 6, 12);
+    ctx.stroke();
+    ctx.fillStyle = '#c8ccd2';
+    ctx.beginPath();
+    ctx.moveTo(x + 2, 12);
+    ctx.lineTo(x + 22, 8);
+    ctx.quadraticCurveTo(x + 26, 22, x + 20, 32);
+    ctx.lineTo(x + 6, 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffe2a8';
+    ctx.font = '700 22px Georgia, serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Axe', x + 32, 33);
+    x += 100;
+  }
+  if (potions > 0) {
+    vial(ctx, x, 36, 0.9, '#9fd060');
+    ctx.fillStyle = '#ffe2a8';
+    ctx.font = '700 22px Georgia, serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`×${potions}`, x + 18, 33);
   }
 }
 
@@ -319,6 +419,9 @@ function drawButton(canvas: HTMLCanvasElement, command: MenuCommand, label: stri
     case 'menu':
       // Three bars.
       for (const dy of [-14, 0, 14]) ctx.fillRect(cx - 22, cy + dy - 3.5, 44, 7);
+      break;
+    case 'drink':
+      vial(ctx, cx, cy + 4, 1.4, '#9fd060');
       break;
   }
 

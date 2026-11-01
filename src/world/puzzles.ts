@@ -6,6 +6,7 @@ import type { HandState } from '../creatures/hand-input.js';
 import { DragonBattle } from '../fight/battle.js';
 import { InkDuel } from '../fight/duel.js';
 import { Bridge } from '../machines/bridge.js';
+import { Brew } from '../machines/brew.js';
 import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
 import { stage } from '../stage-state.js';
@@ -498,6 +499,32 @@ const shadowDragon: Puzzle = {
   },
 };
 
+const healingDraught: Puzzle = {
+  id: 'healing-draught',
+  world: 2,
+  title: 'The Healing Draught',
+  story: 'The dragon’s fire burns. An old herbalist’s pot hangs in the mine: brew something to heal you.',
+  ask: 'Drop the three herbs into the pot',
+  handsOn: true,
+  solved: 'Two healing draughts, steeped just right.',
+  build(root, kit) {
+    const brew = new Brew(kit.floor);
+    root.add(brew.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        brew.update(dt, hands);
+        task.caption = brew.caption;
+        task.done = brew.done;
+        task.mistakes = brew.mistakes;
+      },
+    };
+  },
+};
+
 /** Stage-local spot for the bridge, clear of the river world's pond. */
 const BRIDGE_AT = new Vector3(0.12, 0, -0.02);
 
@@ -573,5 +600,6 @@ export const PUZZLES: Puzzle[] = [
   oldWell,
   brokenBridge,
   smithy,
+  healingDraught,
   shadowDragon,
 ];

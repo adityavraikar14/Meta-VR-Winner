@@ -55,4 +55,4 @@ export const stage = {
   grow: null as { from: Vector3 | null } | null,
 };
 
-export type MenuCommand = 'recenter' | 'restart' | 'skip' | 'menu';
+export type MenuCommand = 'recenter' | 'restart' | 'skip' | 'menu' | 'drink';

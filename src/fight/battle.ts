@@ -20,6 +20,7 @@ import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import type { Extension } from '../hand-pose.js';
 import { ParticlePool } from '../machines/particles.js';
+import { play, saveProgress } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { ShadowDragon } from './dragon.js';
 
@@ -179,6 +180,10 @@ export class DragonBattle {
     if (!stage.playing && this.mode !== 'won') {
       this.dragon.update(dt);
       return;
+    }
+    if (stage.command === 'drink') {
+      stage.command = null;
+      this.drink();
     }
     switch (this.mode) {
       case 'intro':
@@ -534,6 +539,22 @@ export class DragonBattle {
     }
   }
 
+  /** A healing draught from the wrist: one heart back, if any were lost. */
+  private drink(): void {
+    const i = play.items.indexOf('potion');
+    if (i < 0) return;
+    if (this.health >= PLAYER_HEALTH) {
+      this.flash('You are at full strength: save it for later', 1.6);
+      return;
+    }
+    play.items.splice(i, 1);
+    saveProgress();
+    this.health++;
+    playCharge();
+    this.burstAt(this.v.copy(this.head).add(this.w.set(0, -0.15, -0.1)), 24, 0x9fd060);
+    this.flash('A healing draught! One heart back', 1.6);
+  }
+
   private hurtPlayer(at: Vector3): void {
     this.health--;
     this.mistakes++;
@@ -547,7 +568,10 @@ export class DragonBattle {
       this.orbHand = -1;
       this.orb.visible = false;
     } else {
-      this.flash(this.health === 1 ? 'Burned! One heart left: shield with an open palm' : 'Burned! Shield with an open palm');
+      const potions = play.items.includes('potion');
+      this.flash(potions
+        ? 'Burned! Look at your palm and tap Drink to heal'
+        : this.health === 1 ? 'Burned! One heart left: shield with an open palm' : 'Burned! Shield with an open palm', 2.2);
     }
   }
 
