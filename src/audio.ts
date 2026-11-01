@@ -451,3 +451,70 @@ export function playDrip(volume = 0.025): void {
   const now = ctx.currentTime;
   sweep(ctx, 'sine', 700 + Math.random() * 300, 1900 + Math.random() * 500, now, 0.06, volume);
 }
+
+/**
+ * Hammer on hot iron over the anvil: a bright ring built from an anvil's
+ * inharmonic partials, damped when the iron is soft and hot.
+ */
+export function playClang(hot = 1, volume = 0.07): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = 820 + Math.random() * 60;
+  // Struck steel bar partials (free-free beam): 1, 2.76, 5.40, 8.93.
+  [1, 2.76, 5.4, 8.93].forEach((ratio, i) => {
+    const ring = 0.5 * (1 - hot * 0.6) / (1 + i * 0.6) + 0.08;
+    tone(ctx, base * ratio, now, ring, volume / (1 + i * 1.4));
+  });
+  noise(ctx, now, 0.05, 'bandpass', 2500, 1.2, volume * 0.7);
+  sweep(ctx, 'sine', 160, 60, now, 0.12, volume * 0.8 * hot);
+}
+
+/** A blow on iron too cold to move: a hard, high tink that rings on. */
+export function playTink(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = 1500 + Math.random() * 100;
+  [1, 2.76, 5.4].forEach((ratio, i) => tone(ctx, base * ratio, now, 1.1 / (1 + i), volume / (1 + i)));
+}
+
+/** Air pushed through the bellows' nozzle. */
+export function playWhoosh(strength = 0.5): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const filter = noise(ctx, now, 0.45, 'bandpass', 500, 0.8, 0.02 + 0.05 * Math.min(1, strength));
+  filter.frequency.setValueAtTime(350, now);
+  filter.frequency.exponentialRampToValueAtTime(1100, now + 0.3);
+}
+
+/** Red-hot steel plunged into water: a violent hiss that dies to a simmer. */
+export function playHiss(volume = 0.08, seconds = 1.6): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, seconds, 'highpass', 3000, 0.7, volume);
+  noise(ctx, now, seconds * 0.6, 'bandpass', 900, 1.5, volume * 0.5);
+}
+
+/** A pop and crackle from the burning charcoal. */
+export function playCrackle(volume = 0.02): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (let i = 0; i < 3; i++) {
+    noise(ctx, now + Math.random() * 0.15, 0.015 + Math.random() * 0.02, 'highpass', 1800 + Math.random() * 2000, 0.8, volume * Math.random());
+  }
+}
+
+/** The forge catching light: a soft whump and a rush of flame. */
+export function playIgnite(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 90, 45, now, 0.5, 0.09);
+  const roar = noise(ctx, now, 1.4, 'lowpass', 600, 0.7, 0.07);
+  roar.frequency.setValueAtTime(300, now);
+  roar.frequency.exponentialRampToValueAtTime(1600, now + 0.6);
+}

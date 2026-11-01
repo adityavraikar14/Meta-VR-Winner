@@ -113,6 +113,8 @@ const OOPS_TIME = 3.2;
 const WARMUP_HOLD = 1.2;
 /** Solve within this many seconds of choosing for the speed star. */
 const FAST_TIME = 20;
+/** Hands-on jobs take longer; finishing under this earns the speed star. */
+const HANDS_ON_FAST = 150;
 const CARD_SIZE = 0.11;
 const CARD_GAP = 0.125;
 /** Cards line the top of the paper; the bottom is hidden behind the stage. */
@@ -494,6 +496,7 @@ export class ShadowGameSystem extends createSystem({
           this.setCaption('Paused · poke a button, or lower your hand');
         } else if (this.puzzle?.warmup) this.updateWarmup(dt);
         else if (this.puzzle?.walk) this.updateWalk(dt);
+        else if (this.puzzle?.handsOn) this.updateHandsOn(dt);
         else this.updateMatching(dt);
         break;
       case 'awakening':
@@ -682,7 +685,7 @@ export class ShadowGameSystem extends createSystem({
     const puzzle = this.puzzle;
     if (!puzzle) {
       this.candidates = [...LEVELS];
-    } else if (puzzle.warmup || puzzle.walk) {
+    } else if (puzzle.warmup || puzzle.walk || puzzle.handsOn) {
       this.candidates = [];
     } else if (puzzle.teach) {
       this.candidates = [levelFor(puzzle.teach)];
@@ -848,6 +851,24 @@ export class ShadowGameSystem extends createSystem({
     this.setCaption(text);
   }
 
+  /** Hands-on work (the forge): the scene says what to do next and when it is done. */
+  private updateHandsOn(dt: number): void {
+    this.matchTime += dt;
+    const task = stage.task;
+    if (task?.done) {
+      if (!this.walkCleared) {
+        this.walkCleared = true;
+        this.walkClearAt = this.phaseTime + 1.5;
+      }
+      if (this.phaseTime >= this.walkClearAt) {
+        playAwaken();
+        this.clearPuzzle();
+        return;
+      }
+    }
+    this.setCaption(task?.caption || this.puzzle!.ask);
+  }
+
   private updateMatching(dt: number): void {
     this.matchTime += dt;
     this.judgeCandidates(dt);
@@ -967,6 +988,8 @@ export class ShadowGameSystem extends createSystem({
       ? 3
       : puzzle.walk
         ? 1 + (this.shadowWorld.falls === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0)
+        : puzzle.handsOn
+          ? 1 + ((stage.task?.mistakes ?? 0) === 0 ? 1 : 0) + (this.matchTime < HANDS_ON_FAST ? 1 : 0)
         : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
     play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
     // Resume from the next level if the player leaves now.

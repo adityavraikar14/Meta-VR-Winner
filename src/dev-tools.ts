@@ -17,6 +17,8 @@
 
 /** Extra debug readouts other systems add to the `I` info dump. */
 export const devInfo: Record<string, () => unknown> = {};
+/** Extra keys a scene can claim while it is on stage (dev builds only). */
+export const devActions: Record<string, () => void> = {};
 
 export interface DevApi {
   capture(): string;
@@ -112,6 +114,11 @@ export function installDevTools(api: DevApi): void {
       const hand = event.shiftKey ? hands.left : hands.right;
       setPose(hand, DIGIT_POSES[Number(digit[1])]);
       console.log(`SHADOWPLAY pose ${event.shiftKey ? 'left' : 'right'}=${hand.poseId}`);
+      return;
+    }
+    const action = devActions[event.key.toLowerCase()];
+    if (action) {
+      action();
       return;
     }
     switch (event.key.toLowerCase()) {

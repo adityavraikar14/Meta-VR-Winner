@@ -3,6 +3,7 @@ import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, nature } from './nature.js';
 import { playAwaken } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
+import type { HandState } from '../creatures/hand-input.js';
 import type { Creature } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import { mergeStatic } from '../merge.js';
@@ -129,6 +130,7 @@ export class Diorama {
     this.spinners = [];
     this.attempting = false;
     this.blockers = [];
+    stage.task = null;
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
     mergeStatic(this.props);
@@ -176,7 +178,7 @@ export class Diorama {
     });
   }
 
-  update(dt: number): void {
+  update(dt: number, hands: readonly HandState[]): void {
     if (this.growTime < 4) {
       this.growTime += dt;
       this.applyGrowth();
@@ -194,7 +196,7 @@ export class Diorama {
     // The room's plants stand on the real floor (y = 0), wherever the screen is.
     stage.paper!.getWorldPosition(this.paperAt);
     this.room.position.y = -this.paperAt.y;
-    this.scene?.update?.(dt);
+    this.scene?.update?.(dt, hands);
     for (const spinner of this.spinners) spinner.object.rotation.y += spinner.speed * dt;
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tween = this.tweens[i];

@@ -312,6 +312,42 @@ export function decorateMountain(roots: SceneryRoots): void {
 }
 
 /** Boulders on your floor, crystal clusters glowing among them, embers rising. */
+/**
+ * The old mine: the mountain's gravel and timbered entrance, its crystals
+ * pushed out to the edges to leave the floor clear for the smithy, embers
+ * drifting up as if from a forge.
+ */
+export function decorateMine(roots: SceneryRoots): void {
+  const spec: GroundSpec = {
+    edge: organicOutline({ ...SLAB, wobble: 0.04, seed: 5.3 }),
+    surface: 'pebbles',
+    tint: 0x9c968f,
+    relief: 0.003,
+    tiles: 7,
+    depth: 0.07,
+  };
+  const g = base(roots, spec);
+  g.add(grass({
+    count: 1200, inner: 0.05, outer: 0.7, height: [0.006, 0.014], width: 0.002,
+    edgeBias: 0.95, ground: spec, seed: 17,
+  }));
+  placeAll(g, spec, [
+    { model: 'rocks', node: 'rock_moss_set_01_rock03', x: -0.53, z: -0.4, scale: 0.07, turn: 0.4, sink: 0.02 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock02', x: 0.53, z: -0.34, scale: 0.06, turn: 2.0, sink: 0.018 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.52, z: 0.17, scale: 0.04, turn: 1.1, sink: 0.01 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: -0.52, z: 0.16, scale: 0.04, turn: 3.6, sink: 0.008 },
+    { model: 'fern', node: 'fern_02_a', x: 0.15, z: -0.45, scale: 0.1, turn: 0.2 },
+  ]);
+  const clusters = [[-0.56, -0.12, 0.09, 7, 21], [0.57, -0.1, 0.08, 6, 22], [-0.42, 0.24, 0.05, 5, 23], [0.45, 0.25, 0.05, 5, 24]] as const;
+  for (const [x, z, size, n, s] of clusters) {
+    const cluster = crystals(size, n, s, 0xff9b5a);
+    cluster.position.set(x, groundHeight(spec, x, z) - 0.004, z);
+    g.add(cluster);
+  }
+  roots.screen.add(mineFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
+  mountainInRoom(roots.room);
+}
+
 function mountainInRoom(room: Group): void {
   placeAll(room, null, [
     { model: 'rocks', node: 'rock_moss_set_01_rock03', x: -1.15, z: 0.2, scale: 0.42, turn: 0.4, sink: 0.12 },

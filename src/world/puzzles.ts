@@ -2,8 +2,11 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
+import type { HandState } from '../creatures/hand-input.js';
+import { Forge } from '../machines/forge.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
-import { decorateJungle, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
+import { stage } from '../stage-state.js';
+import { decorateJungle, decorateMine, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
 import {
   berries,
   berryTree,
@@ -48,8 +51,8 @@ export interface PuzzleScene {
   start: Vector3;
   /** A friend of this kind and body size (1 = normal) tries the puzzle. */
   attempt(kind: string, size: number): Attempt;
-  /** Machines that keep running between attempts. */
-  update?(dt: number): void;
+  /** Machines that keep running between attempts, and hands-on work. */
+  update?(dt: number, hands: readonly HandState[]): void;
 }
 
 export interface Puzzle {
@@ -69,6 +72,8 @@ export interface Puzzle {
   walk?: WalkLevel;
   /** The job needs a friend at least this big (1 = normal); its size is read out while matching. */
   needSize?: number;
+  /** Done with your own hands, not a friend: the scene reports progress in `stage.task`. */
+  handsOn?: boolean;
   /** Caption once solved. */
   solved: string;
   build(root: Group, kit: Kit): PuzzleScene;
@@ -109,6 +114,7 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 export const WORLDS: World[] = [
   { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle },
   { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver },
+  { name: 'The Old Mine', grows: 'The old mine opens around you…', decorate: decorateMine },
   { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain },
 ];
 
@@ -439,6 +445,32 @@ const oldWell: Puzzle = {
   },
 };
 
+const smithy: Puzzle = {
+  id: 'smithy',
+  world: 2,
+  title: 'The Smithy',
+  story: 'Roots hard as iron bar the mine. An old smithy stands cold: forge an axe to cut through.',
+  ask: 'Light the forge with the Lantern Stone',
+  handsOn: true,
+  solved: 'You forged an axe: hard steel, a keen edge.',
+  build(root, kit) {
+    const forge = new Forge(kit.floor);
+    root.add(forge.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        forge.update(dt, hands);
+        task.caption = forge.caption;
+        task.done = forge.done;
+        task.mistakes = forge.mistakes;
+      },
+    };
+  },
+};
+
 /** A buried or hidden star for a new friend to find; chapters 2 and 3 for now. */
 function findStar(
   id: string,
@@ -500,5 +532,6 @@ export const PUZZLES: Puzzle[] = [
   oldWell,
   findStar('pond-song', 1, 'bird', 'The Silent Pond', 'The pond is too quiet. It needs a song.', 'Who can sing the pond awake?', 'The Bird sang, and a star woke up!'),
   findStar('night-flowers', 1, 'butterfly', 'The Night Flowers', 'The flowers closed up for the night.', 'Who can wake the flowers gently?', 'The flowers opened for the Butterfly!'),
-  findStar('great-lantern', 2, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),
+  smithy,
+  findStar('great-lantern', 3, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),
 ];

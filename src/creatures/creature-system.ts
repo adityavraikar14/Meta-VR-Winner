@@ -173,7 +173,7 @@ export class CreatureSystem extends createSystem({}) {
       this.diorama.grow(stage.grow.from);
       stage.grow = null;
     }
-    this.diorama.update(dt);
+    this.diorama.update(dt, this.handInput.hands);
     this.ground.blockers = this.diorama.blockers;
 
     while (stage.spawns.length > 0) {
