@@ -1,7 +1,7 @@
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, nature } from './nature.js';
-import { playAwaken } from '../audio.js';
+import { playAwaken, setAmbience, tickAmbience } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
 import type { HandState } from '../creatures/hand-input.js';
 import type { Creature } from '../creatures/creature.js';
@@ -138,6 +138,7 @@ export class Diorama {
 
   private decorate(world: number): void {
     this.worldIndex = world;
+    setAmbience(WORLDS[world].ambience);
     this.decorVersion = nature.version;
     clear(this.decor);
     clear(this.screen);
@@ -193,6 +194,7 @@ export class Diorama {
       this.grow(null);
     }
     animateNature(dt);
+    tickAmbience(dt);
     // The room's plants stand on the real floor (y = 0), wherever the screen is.
     stage.paper!.getWorldPosition(this.paperAt);
     this.room.position.y = -this.paperAt.y;

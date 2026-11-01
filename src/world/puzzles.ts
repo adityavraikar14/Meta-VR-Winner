@@ -2,6 +2,7 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
+import type { AmbienceKind } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { DragonBattle } from '../fight/battle.js';
 import { InkDuel } from '../fight/duel.js';
@@ -84,6 +85,8 @@ export interface World {
   grows: string;
   /** Builds the world: its earth on the stage, the screen's frame, and the plants in your room. */
   decorate(roots: SceneryRoots): void;
+  /** Its background sound. */
+  ambience: AmbienceKind;
 }
 
 const NAMES: Record<string, string> = {
@@ -110,10 +113,10 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 // ---------------------------------------------------------------- Worlds
 
 export const WORLDS: World[] = [
-  { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle },
-  { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver },
-  { name: 'The Old Mine', grows: 'The old mine opens around you…', decorate: decorateMine },
-  { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain },
+  { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle, ambience: 'jungle' },
+  { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver, ambience: 'river' },
+  { name: 'The Old Mine', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine' },
+  { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain' },
 ];
 
 // --------------------------------------------------------------- Puzzles

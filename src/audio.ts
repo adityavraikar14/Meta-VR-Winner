@@ -606,3 +606,157 @@ export function playSplat(volume = 0.08): void {
   noise(ctx, now, 0.18, 'lowpass', 900, 0.9, volume);
   sweep(ctx, 'sine', 260, 80, now, 0.12, volume * 0.6);
 }
+
+// ---------------------------------------------------------------- Ambience
+
+/** Background sound for each world, made from filtered noise and little calls. */
+export type AmbienceKind = 'jungle' | 'river' | 'mine' | 'mountain';
+
+interface Bed {
+  kind: AmbienceKind;
+  gain: GainNode;
+  sources: AudioScheduledSourceNode[];
+}
+
+let bed: Bed | null = null;
+let eventIn = 1;
+let ambienceKind: AmbienceKind | null = null;
+
+/** A few seconds of noise to loop, coloured: 0 white, 1 pink-ish, 2 brown. */
+function noiseLoop(ctx: AudioContext, colour: 0 | 1 | 2): AudioBufferSourceNode {
+  const length = ctx.sampleRate * 4;
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < length; i++) {
+    const white = Math.random() * 2 - 1;
+    if (colour === 0) data[i] = white;
+    else if (colour === 1) data[i] = last = last * 0.86 + white * 0.14 * 3;
+    else {
+      // Brown: a leaky random walk, scaled up afterwards.
+      last = (last + white * 0.02) / 1.02;
+      data[i] = last * 3.5;
+    }
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  return source;
+}
+
+function startBed(ctx: AudioContext, kind: AmbienceKind): Bed {
+  const out = ctx.createGain();
+  out.gain.value = 0;
+  out.connect(ctx.destination);
+  const sources: AudioScheduledSourceNode[] = [];
+  const layer = (colour: 0 | 1 | 2, type: BiquadFilterType, frequency: number, q: number, volume: number, wobble = 0) => {
+    const src = noiseLoop(ctx, colour);
+    const filter = ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = frequency;
+    filter.Q.value = q;
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+    if (wobble > 0) {
+      // A slow swell, like wind or water coming and going.
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = wobble;
+      const depth = ctx.createGain();
+      depth.gain.value = volume * 0.6;
+      lfo.connect(depth).connect(gain.gain);
+      lfo.start();
+      sources.push(lfo);
+    }
+    src.connect(filter).connect(gain).connect(out);
+    src.start();
+    sources.push(src);
+  };
+  switch (kind) {
+    case 'jungle':
+      layer(1, 'lowpass', 500, 0.5, 0.25, 0.07);
+      // Insects: a high band of noise pulsing fast.
+      layer(0, 'bandpass', 5200, 6, 0.06, 6.5);
+      break;
+    case 'river':
+      layer(1, 'lowpass', 900, 0.6, 0.35, 0.21);
+      layer(0, 'bandpass', 2400, 1.5, 0.04, 0.4);
+      break;
+    case 'mine':
+      layer(2, 'lowpass', 180, 0.7, 0.5, 0.05);
+      layer(1, 'bandpass', 700, 2, 0.05, 0.09);
+      break;
+    case 'mountain':
+      layer(2, 'lowpass', 120, 0.7, 0.6, 0.04);
+      layer(1, 'bandpass', 420, 3, 0.09, 0.11);
+      break;
+  }
+  out.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 2.5);
+  return { kind, gain: out, sources };
+}
+
+function stopBed(ctx: AudioContext, old: Bed): void {
+  const now = ctx.currentTime;
+  old.gain.gain.cancelScheduledValues(now);
+  old.gain.gain.setValueAtTime(old.gain.gain.value, now);
+  old.gain.gain.linearRampToValueAtTime(0, now + 1.5);
+  for (const s of old.sources) s.stop(now + 1.6);
+}
+
+/** Cross-fade to a world's background sound (null: silence). */
+export function setAmbience(kind: AmbienceKind | null): void {
+  ambienceKind = kind;
+  const ctx = audio();
+  if (!ctx) {
+    if (bed && context) stopBed(context, bed);
+    bed = null;
+    return;
+  }
+  if (bed?.kind === kind) return;
+  if (bed) stopBed(ctx, bed);
+  bed = kind ? startBed(ctx, kind) : null;
+}
+
+/** Little events over the bed: birds, frogs, drips, distant rumbles. */
+export function tickAmbience(dt: number): void {
+  if (muted) {
+    if (bed && context) stopBed(context, bed);
+    bed = null;
+    return;
+  }
+  if (!bed && ambienceKind) setAmbience(ambienceKind);
+  const ctx = audio();
+  if (!ctx || !bed) return;
+  eventIn -= dt;
+  if (eventIn > 0) return;
+  const now = ctx.currentTime;
+  switch (bed.kind) {
+    case 'jungle': {
+      eventIn = 1.5 + Math.random() * 4;
+      // A bird: two or three quick whistles.
+      const base = 1800 + Math.random() * 1600;
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < n; i++) sweep(ctx, 'sine', base * (1 + Math.random() * 0.2), base * (0.7 + Math.random() * 0.6), now + i * 0.13, 0.1, 0.008);
+      break;
+    }
+    case 'river':
+      eventIn = 2 + Math.random() * 5;
+      if (Math.random() < 0.5) {
+        // A frog.
+        for (let i = 0; i < 2; i++) sweep(ctx, 'square', 220, 180, now + i * 0.16, 0.08, 0.006);
+      } else {
+        sweep(ctx, 'sine', 700 + Math.random() * 400, 1800, now, 0.05, 0.007);
+      }
+      break;
+    case 'mine':
+      eventIn = 1 + Math.random() * 3;
+      // Water dripping somewhere in the dark.
+      sweep(ctx, 'sine', 900 + Math.random() * 500, 2200, now, 0.05, 0.012);
+      break;
+    case 'mountain':
+      eventIn = 4 + Math.random() * 6;
+      // Far-off thunder, or the dragon stirring.
+      sweep(ctx, 'sine', 70, 35, now, 2.2, 0.04);
+      noise(ctx, now, 2, 'lowpass', 300, 0.7, 0.03);
+      break;
+  }
+}
