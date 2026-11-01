@@ -451,6 +451,80 @@ const oldWell: Puzzle = {
   },
 };
 
+/** The same whim, a heavier load: only a big horse turns it. */
+const DEEP_NEED = 1.32;
+const deepShaft: Puzzle = {
+  id: 'deep-shaft',
+  world: 1,
+  title: 'The Deep Shaft',
+  story: 'Iron ore waits at the bottom of the old shaft: twice the weight of the stone. The forge will need it.',
+  ask: 'Cast the biggest horse you can: your hand near the lantern',
+  teach: 'horse',
+  needSize: DEEP_NEED,
+  solved: 'A mighty horse! The ore is up.',
+  build(root, kit) {
+    const f = kit.floor;
+    const whim = new HorseWhim(f, WHIM_AT, WELL_AT, DEEP_NEED);
+    root.add(whim.group);
+    for (const [x, z, r] of whimFootprint(WHIM_AT, WELL_AT)) kit.block(x, z, r);
+    return {
+      start: new Vector3(-0.08, f, 0.12),
+      update: (dt) => whim.update(dt),
+      attempt: (kind, size) => {
+        if (kind !== 'horse') {
+          return bumpAndShrug(kit, kit.at(0.04, f, 0.1), kit.at(WHIM_AT.x, f + 0.1, WHIM_AT.z), `The ${friendName(kind)} can't push the whim round. It needs a horse.`);
+        }
+        const strong = size >= DEEP_NEED;
+        const { at, ahead } = whim.harnessSpot(size);
+        return {
+          solved: strong,
+          line: strong ? undefined : `Still too heavy: a horse of size ×${DEEP_NEED.toFixed(2)} is needed. Bring your hand right up near the lantern.`,
+          steps: [
+            { do: 'walk', to: kit.at(at.x, f, at.z) },
+            { do: 'pose', pose: 'look', time: 0.8, look: kit.at(ahead.x, f + 0.06, ahead.z) },
+            { do: 'harness', rig: whim },
+            ...(strong
+              ? [
+                  { do: 'call' as const, run: () => whim.freeStone(kit.tween, new Vector3(0, f + 0.32, -0.46), () => { kit.fx.burst(kit.at(0, f + 0.32, -0.46), 24, 0.3); kit.chime(); }) },
+                  { do: 'pose' as const, pose: 'cheer' as const, time: 2.4 },
+                ]
+              : [{ do: 'pose' as const, pose: 'shrug' as const, time: 1.3 }]),
+          ],
+        };
+      },
+    };
+  },
+};
+
+/** A heavier cart over the river: the same timbers must carry twice the load. */
+const oreTrain: Puzzle = {
+  id: 'ore-train',
+  world: 1,
+  title: 'The Ore Train',
+  story: 'Now the cart is full of iron ore, twice as heavy. A bridge that was enough before may not be now.',
+  ask: 'Build it stronger: brace the triangles, or add a second truss above the road',
+  handsOn: true,
+  solved: 'It carried the ore! Strong, light, and all triangles.',
+  build(root, kit) {
+    // Tuned with the truss physics: the first bridge's design buckles under this cart,
+    // cross-braces or a second truss above the road carry it.
+    const bridge = new Bridge(kit.floor, BRIDGE_AT, { budget: 28, cartMass: 1.65 });
+    root.add(bridge.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        bridge.update(dt, hands);
+        task.caption = bridge.caption;
+        task.done = bridge.done;
+        task.mistakes = bridge.mistakes;
+      },
+    };
+  },
+};
+
 const brokenBridge: Puzzle = {
   id: 'broken-bridge',
   world: 1,
@@ -532,6 +606,33 @@ const healingDraught: Puzzle = {
 /** Stage-local spot for the bridge, clear of the river world's pond. */
 const BRIDGE_AT = new Vector3(0.12, 0, -0.02);
 
+/** A stronger draught: the brew must be steeped longer, at just the right heat. */
+const strongDraught: Puzzle = {
+  id: 'strong-draught',
+  world: 2,
+  title: 'The Strong Draught',
+  story: 'The dragon\u2019s fire will be fierce. Only a draught steeped to full strength will do: keep it at a gentle simmer.',
+  ask: 'Brew it stronger: 90 percent, not a degree too hot',
+  handsOn: true,
+  solved: 'Draughts at full strength. You are ready for the mountain.',
+  build(root, kit) {
+    const brew = new Brew(kit.floor, { ready: 0.9 });
+    root.add(brew.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        brew.update(dt, hands);
+        task.caption = brew.caption;
+        task.done = brew.done;
+        task.mistakes = brew.mistakes;
+      },
+    };
+  },
+};
+
 const smithy: Puzzle = {
   id: 'smithy',
   world: 2,
@@ -602,8 +703,11 @@ export const PUZZLES: Puzzle[] = [
   highBerries,
   lostStar,
   oldWell,
+  deepShaft,
   brokenBridge,
+  oreTrain,
   smithy,
   healingDraught,
+  strongDraught,
   shadowDragon,
 ];

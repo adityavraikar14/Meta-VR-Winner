@@ -108,7 +108,11 @@ export class Brew {
   private readonly v = new Vector3();
   private readonly w = new Vector3();
 
-  constructor(private readonly floor: number) {
+  /** Strength the draught must reach before it can be bottled. */
+  private readonly ready: number;
+
+  constructor(private readonly floor: number, options: { ready?: number } = {}) {
+    this.ready = options.ready ?? READY;
     const f = floor;
     this.group.name = 'Brew';
 
@@ -251,7 +255,7 @@ export class Brew {
     devActions['/'] = () => {
       // Dev: skip the steeping.
       this.temperature = 88;
-      this.potency = READY + 0.03;
+      this.potency = this.ready + 0.03;
     };
     this.place();
     playIgnite();
@@ -287,7 +291,7 @@ export class Brew {
     else if (this.herbs.size < 3) {
       const missing = HERBS.filter((h) => !this.herbs.has(h));
       text = `Pinch the herbs and drop them in the pot: ${missing.map((h) => h[0].toUpperCase() + h.slice(1)).join(', ')} · ${t} °C`;
-    } else if (this.potency >= READY) text = 'The draught is ready! Dip the ladle in, then pour it into the vials';
+    } else if (this.potency >= this.ready) text = 'The draught is ready! Dip the ladle in, then pour it into the vials';
     else if (this.temperature >= 99.5) text = `Boiling hard! Heat breaks the healing oils: lift the pot higher · ${Math.round(this.potency * 100)}%`;
     else if (this.temperature < 70) text = `Barely warm (${t} °C): lower the pot towards the fire · ${Math.round(this.potency * 100)}%`;
     else text = `Simmering at ${t} °C · steeping ${Math.round(this.potency * 100)}%`;
@@ -422,7 +426,7 @@ export class Brew {
     const surface = this.floor + this.height + 0.004 + POT_DEPTH * 0.8 * this.volume;
     const inPot = Math.hypot(bowl.x - PIT.x, bowl.z - PIT.z) < POT_R * 0.8 && bowl.y < surface && bowl.y > this.floor + this.height;
     if (inPot && !this.ladleFull) {
-      if (this.potency < READY || this.herbs.size < 3) {
+      if (this.potency < this.ready || this.herbs.size < 3) {
         if (this.noteTime <= 0) this.flash('Not ready yet: let it steep longer', 1.4);
         return;
       }
@@ -537,7 +541,7 @@ export class Brew {
   }
 
   private devLadle(): void {
-    if (this.potency < READY) return;
+    if (this.potency < this.ready) return;
     for (const vial of this.vials) {
       if (vial.full) continue;
       vial.full = true;

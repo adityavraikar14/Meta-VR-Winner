@@ -59,6 +59,7 @@ const FIRE_SPEED = 0.75;
 const HEAD_RADIUS = 0.16;
 const SHIELD_REACH = 0.1;
 const BREATH_TIME = 1.2;
+const UP_AXIS = new Vector3(0, 1, 0);
 
 type Mode = 'intro' | 'fight' | 'lost' | 'won';
 
@@ -116,6 +117,7 @@ export class DragonBattle {
   private readonly fireballs: Fireball[] = [];
   private readonly fireMaterial: SpriteMaterial;
   private breathTime = 0;
+  private twin = false;
   private nextBreath = 3;
   private readonly shields: Mesh[] = [];
 
@@ -508,7 +510,10 @@ export class DragonBattle {
       return;
     }
     playRoar(0.06);
-    this.flash(damage >= 1 ? 'A direct hit! The dragon reels' : 'It stings! Hit the head or heart for more');
+    const enraged = this.dragonHealth <= DRAGON_HEALTH / 2 && this.dragonHealth + damage > DRAGON_HEALTH / 2;
+    this.flash(enraged
+      ? 'The dragon is enraged! Twin fireballs: shield with both palms'
+      : damage >= 1 ? 'A direct hit! The dragon reels' : 'It stings! Hit the head or heart for more');
     // Wounded, it breathes faster.
     this.nextBreath = Math.min(this.nextBreath, 1.5);
   }
@@ -548,6 +553,17 @@ export class DragonBattle {
     vel.x += (Math.random() - 0.5) * 0.08;
     vel.y -= 0.03;
     vel.setLength(FIRE_SPEED);
+    // Wounded past half, it breathes twin fireballs, a little apart and faster.
+    if (this.dragonHealth <= DRAGON_HEALTH / 2 && !this.twin) {
+      this.twin = true;
+      this.launch(pos.clone(), vel.clone().applyAxisAngle(UP_AXIS, 0.12).multiplyScalar(1.12));
+      vel.applyAxisAngle(UP_AXIS, -0.12).multiplyScalar(1.12);
+    }
+    this.twin = false;
+    this.launch(pos, vel);
+  }
+
+  private launch(pos: Vector3, vel: Vector3): void {
     const sprite = new Sprite(this.fireMaterial);
     sprite.scale.setScalar(0.06);
     sprite.position.copy(pos);

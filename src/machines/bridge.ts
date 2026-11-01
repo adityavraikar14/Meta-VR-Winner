@@ -123,7 +123,13 @@ export class Bridge {
   private readonly c = new Color();
   private readonly tips: Vector3[] = [];
 
-  constructor(floor: number, at: Vector3) {
+  /** Timbers you may use, and the loaded cart's mass (kg, toy scale). */
+  private readonly budget: number;
+  private readonly cartMass: number;
+
+  constructor(floor: number, at: Vector3, options: { budget?: number; cartMass?: number } = {}) {
+    this.budget = options.budget ?? BUDGET;
+    this.cartMass = options.cartMass ?? CART_MASS;
     this.group.name = 'Bridge';
     this.group.position.set(at.x, floor, at.z);
 
@@ -145,7 +151,7 @@ export class Bridge {
     // Eight-sided like hewn logs, axis along x; scaled to length and thickness.
     const log = new CylinderGeometry(0.5, 0.5, 1, 8);
     log.rotateZ(Math.PI / 2);
-    this.beams = new InstancedMesh(log, beamMaterial, BUDGET * 2 + 8 + RAIL_CAPACITY);
+    this.beams = new InstancedMesh(log, beamMaterial, (options.budget ?? BUDGET) * 2 + 8 + RAIL_CAPACITY);
     this.beams.count = 0;
     this.beams.frustumCulled = false;
     this.beams.userData.keep = true;
@@ -221,13 +227,13 @@ export class Bridge {
   }
 
   private say(): void {
-    const used = `Timbers ${this.members.length}/${BUDGET}`;
+    const used = `Timbers ${this.members.length}/${this.budget}`;
     switch (this.mode) {
       case 'build':
         if (this.members.length === 0) this.caption = 'Pinch an iron anchor on the bank, pull out a timber, and let go';
         else if (!this.roadAcross()) this.caption = `${used} · Build a road of timbers across at bank height, held up by triangles`;
         else this.caption = `${used} · The road is across. Push Test when you think it will hold`;
-        if (this.drags.some((d) => d && !d.valid) && this.members.length >= BUDGET) this.caption = 'No timbers left: push Undo to take one back';
+        if (this.drags.some((d) => d && !d.valid) && this.members.length >= this.budget) this.caption = 'No timbers left: push Undo to take one back';
         break;
       case 'settle':
         this.caption = 'Knocking out the props… will it stand on its own?';
@@ -304,7 +310,7 @@ export class Bridge {
     drag.x = ex;
     drag.y = ey;
     drag.to = to;
-    drag.valid = span >= MIN_LENGTH && span <= MAX_LENGTH + 1e-6 && !duplicate && !insideBank && this.members.length < BUDGET;
+    drag.valid = span >= MIN_LENGTH && span <= MAX_LENGTH + 1e-6 && !duplicate && !insideBank && this.members.length < this.budget;
   }
 
   private place(drag: Drag): void {
@@ -496,7 +502,7 @@ export class Bridge {
       if (x < lo || x > hi || hi - lo < 1e-4) continue;
       const t = (x - a.x) / (b.x - a.x);
       // Each of the two trusses carries half.
-      const weight = (CART_MASS * 9.8) / 2;
+      const weight = (this.cartMass * 9.8) / 2;
       a.load += weight * (1 - t);
       b.load += weight * t;
       this.cartY = a.y + (b.y - a.y) * t;
