@@ -401,3 +401,53 @@ export function playGrow(): void {
   rustle.frequency.exponentialRampToValueAtTime(3200, now + 1.6);
   [196, 293.66, 392, 587.33].forEach((f, i) => tone(ctx, f, now + 0.25 + i * 0.16, 2.2, 0.035));
 }
+
+/** The ratchet's pawl dropping off one tooth: a small dry tick of iron on iron. */
+export function playPawl(volume = 0.03): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, 0.035, 'bandpass', 4200 + Math.random() * 600, 3, volume);
+  tone(ctx, 2600 + Math.random() * 200, now, 0.05, volume * 0.25);
+}
+
+/** Loaded timber turning on its pegs: a short stick-slip groan. Louder under more load. */
+export function playCreak(load = 0.5): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const duration = 0.18 + Math.random() * 0.22;
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(38 + Math.random() * 30, now);
+  osc.frequency.linearRampToValueAtTime(55 + Math.random() * 40, now + duration);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 700 + Math.random() * 900;
+  filter.Q.value = 4;
+  const gain = ctx.createGain();
+  const volume = 0.012 + 0.03 * Math.min(1, load);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + duration * 0.3);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.05);
+}
+
+/** The load trying to run back, caught by the pawl: a heavy wooden clunk. */
+export function playClunk(volume = 0.06): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 140, 55, now, 0.16, volume);
+  noise(ctx, now, 0.08, 'lowpass', 900, 0.8, volume * 0.6);
+}
+
+/** A drop of water falling back into the well. */
+export function playDrip(volume = 0.025): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 700 + Math.random() * 300, 1900 + Math.random() * 500, now, 0.06, volume);
+}

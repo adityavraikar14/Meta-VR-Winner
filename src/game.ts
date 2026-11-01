@@ -73,6 +73,31 @@ type Problem =
   | null;
 
 const OUTLINE_SIZE = 0.4;
+/**
+ * Shadow size (metres on the paper) that makes a normal-sized friend. Real
+ * optics sets the shadow: magnification = lantern-to-paper ÷ lantern-to-hand,
+ * so a hand near the lantern casts a big shadow and a big friend.
+ */
+const SHADOW_FOR_NORMAL = 0.38;
+const BODY_SIZES: [number, number] = [0.7, 1.45];
+
+function bodySizeFromShadow(shadow: number): number {
+  return Math.min(BODY_SIZES[1], Math.max(BODY_SIZES[0], shadow / SHADOW_FOR_NORMAL));
+}
+
+/** Height or width of a shadow on the paper, whichever is larger, in metres. */
+function shadowSpan(b: MaskBounds): number {
+  const bw = ((b.maxX - b.minX + 1) / MASK_WIDTH) * PAPER_WIDTH;
+  const bh = ((b.maxY - b.minY + 1) / MASK_HEIGHT) * PAPER_HEIGHT;
+  return Math.max(bw, bh);
+}
+
+function sizeWord(size: number): string {
+  if (size >= 1.32) return 'A huge ';
+  if (size >= 1.12) return 'A big ';
+  if (size <= 0.85) return 'A little ';
+  return 'The ';
+}
 const SHADOW_OPACITY = 0.88;
 const AWAKEN_SHIVER = 0.45;
 const AWAKEN_DURATION = 1.8;
@@ -216,6 +241,8 @@ export class ShadowGameSystem extends createSystem({
   private creatureX = 0;
   private creatureY = 0;
   private creatureSize = OUTLINE_SIZE;
+  /** Body size of the friend about to be born, from its shadow's size. */
+  private bodySize = 1;
   private welcomed = false;
 
   init(): void {
@@ -374,7 +401,24 @@ export class ShadowGameSystem extends createSystem({
         LEVELS.forEach((level, i) =>
           stage.spawns.push({ kind: level.id, x: -0.36 + i * 0.12, y: -0.12 }),
         ),
-      spawn: (kind: string) => stage.spawns.push({ kind, x: 0, y: -0.12 }),
+      spawn: (kind: string, size = 1) => stage.spawns.push({ kind, x: 0, y: -0.12, size }),
+      summon: (kind: string, size: number) => {
+        const index = this.candidates.findIndex((level) => level.id === kind);
+        if (this.phase !== 'matching' || index < 0) return;
+        // A square shadow of the size that makes this body, centred on the paper.
+        const cells = Math.round(((size * SHADOW_FOR_NORMAL) / PAPER_WIDTH) * MASK_WIDTH);
+        const b = this.candidateBounds[index];
+        b.minX = Math.round(MASK_WIDTH / 2 - cells / 2);
+        b.maxX = b.minX + cells - 1;
+        b.minY = Math.round(MASK_HEIGHT / 2 - cells / 2);
+        b.maxY = b.minY + cells - 1;
+        this.awaken(this.candidates[index], index);
+      },
+      nextChapter: () => {
+        const world = PUZZLES[this.puzzleIndex]?.world ?? -1;
+        const next = PUZZLES.findIndex((p) => p.world > world);
+        if (next >= 0) this.startPuzzle(next);
+      },
       info: () => {
         const describe = (i: number) => {
           if (!stage.tracked[i]) return null;
@@ -865,6 +909,14 @@ export class ShadowGameSystem extends createSystem({
     } else if (anyPair && problem === 'twoHands' && !teaching) {
       text = 'Pick a friend: make their shadow';
     }
+    // A job that needs a big friend: read out the size this shadow would make.
+    const need = this.puzzle?.needSize;
+    if (need && level && best >= 0 && this.candidateShadow[best] && score > 0.45 && !this.needsRelease) {
+      const size = bodySizeFromShadow(shadowSpan(this.candidateBounds[best]));
+      text = size >= need
+        ? `${level.name} size ×${size.toFixed(2)}: strong enough! Hold the shape`
+        : `${level.name} size ×${size.toFixed(2)} (needs ×${need.toFixed(2)}): bring your hand closer to the lantern`;
+    }
     if (DEV) text += `  ·  ${Math.round(score * 100)}%`;
 
     // The ghost hand: always on while teaching; when choosing, it steps in
@@ -1045,9 +1097,8 @@ export class ShadowGameSystem extends createSystem({
   private awaken(level: Level, index: number): void {
     this.chosen = level;
     const b = this.candidateBounds[index];
-    const bw = ((b.maxX - b.minX + 1) / MASK_WIDTH) * PAPER_WIDTH;
-    const bh = ((b.maxY - b.minY + 1) / MASK_HEIGHT) * PAPER_HEIGHT;
-    this.creatureSize = Math.max(bw, bh);
+    this.creatureSize = shadowSpan(b);
+    this.bodySize = bodySizeFromShadow(this.creatureSize);
     this.creatureX = (((b.minX + b.maxX + 1) / 2) / MASK_WIDTH - 0.5) * PAPER_WIDTH;
     this.creatureY = (((b.minY + b.maxY + 1) / 2) / MASK_HEIGHT - 0.5) * PAPER_HEIGHT;
     drawSilhouette(this.creatureCanvas, decodeCells(level.outline), 3, 1);
@@ -1062,7 +1113,7 @@ export class ShadowGameSystem extends createSystem({
     this.ring.visible = false;
     this.ghost.show(null);
     this.needsRelease = true;
-    this.setCaption(`The ${level.name} is free!`);
+    this.setCaption(`${sizeWord(this.bodySize)}${level.name} is free!`);
     this.setPhase('awakening');
     playAwaken();
   }
@@ -1114,6 +1165,7 @@ export class ShadowGameSystem extends createSystem({
         x: this.creature.position.x,
         y: this.creature.position.y,
         attempt,
+        size: this.bodySize,
       });
       if (shadowMaterial) shadowMaterial.opacity = SHADOW_OPACITY;
       if (attempt) {

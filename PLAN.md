@@ -106,7 +106,20 @@ on device: hop onto the real table, hide behind real objects.
 - [x] Menus: Home (Chapters / Play-Continue / Settings) on the screen with push buttons;
       Chapters page with stars and locks where the room becomes each chapter's world as
       you page through; Settings (mute, find table again, recenter); wrist menu gains Menu
-- [ ] Next: replace the remaining cute characters and v1 toy props; then Chapter 3 Summon
+- [x] Shadow size is real optics and it matters: a friend's body size comes from its
+      shadow's size (hand nearer the lantern = bigger shadow = bigger friend, x0.7 to x1.45).
+      Bigger animals walk faster with slower strides (speed ~ sqrt of leg length) and pull
+      harder (strength ~ size squared, like muscle cross-section). A live readout shows the
+      size while you hold the shape on levels that need a big friend
+- [x] Chapter "Friends", level 1, The Old Well: a working horse whim. Crown wheel (36 cogs)
+      drives a lantern pinion (9 staves) at right angles, 4:1 to a winding drum; rope coils
+      on the drum in a helix, runs over a sheave at its tangent point and down a dark well;
+      an iron ratchet clicks every tooth and the pawl catches the load when the horse rests;
+      a brass gauge shows the horse's pull against what the bucket needs. A small horse digs
+      in, scrabbles and gives up (the load clunks back onto the pawl); a big horse walks the
+      circle and winds up the glowing Lantern Stone. Beasts are smooth-shaded now
+- [ ] Next: more machine levels in the same kit (cart and brake, waterwheel, crane, catapult);
+      replace the remaining cute characters and v1 toy props
 
 ## Schedule
 - [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving

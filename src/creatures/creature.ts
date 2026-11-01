@@ -37,7 +37,24 @@ export type TaskStep =
   | { do: 'walk'; to: Vector3 }
   | { do: 'leap'; to: Vector3; height: number; time: number }
   | { do: 'pose'; pose: TaskPose; time: number; look?: Vector3 }
-  | { do: 'call'; run: () => void };
+  | { do: 'call'; run: () => void }
+  | { do: 'harness'; rig: Harness };
+
+/** Where a machine puts a harnessed friend this frame, and how hard it is working. */
+export interface HarnessPose {
+  position: Vector3;
+  yaw: number;
+  /** Ground speed along its path, metres per second. */
+  speed: number;
+  /** 0 = walking freely, 1 = leaning into the collar with all its strength. */
+  strain: number;
+}
+
+/** A machine a friend is harnessed to: it leads the friend round each frame. */
+export interface Harness {
+  /** Advance one frame for a friend of this size (1 = normal); false once it lets go. */
+  drive(dt: number, size: number, pose: HarnessPose): boolean;
+}
 
 /** Where creatures live and what they can see around them. */
 export interface Ground {
@@ -740,6 +757,10 @@ export class Creature {
         this.holdPose(step.pose, this.taskTime, dt);
         this.faceTowards(this.lookTarget, dt, 4);
         if (this.taskTime >= step.time) this.nextStep();
+        return;
+      case 'harness':
+        // Plush pets are too small for machines.
+        this.nextStep();
         return;
     }
   }

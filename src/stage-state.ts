@@ -35,7 +35,8 @@ export const stage = {
    * consumed by the creature system. x/y are paper-local meters. `attempt`
    * sends the creature to try the puzzle on stage.
    */
-  spawns: [] as Array<{ kind: string; x: number; y: number; attempt?: boolean }>,
+  /** Friends to bring to life; `size` is body size from the shadow (1 = normal). */
+  spawns: [] as Array<{ kind: string; x: number; y: number; attempt?: boolean; size?: number }>,
   /** A hand-menu choice waiting to be handled by the stage or the game. */
   command: null as MenuCommand | null,
   /** The hand menu is open: the game pauses judging so the menu hand is not scored. */

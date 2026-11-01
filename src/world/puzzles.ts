@@ -2,6 +2,7 @@ import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
+import { HorseWhim, whimFootprint } from '../machines/whim.js';
 import { decorateJungle, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
 import {
   berries,
@@ -45,7 +46,10 @@ export interface Attempt {
 export interface PuzzleScene {
   /** Stage-local spot where a newly made friend lands. */
   start: Vector3;
-  attempt(kind: string): Attempt;
+  /** A friend of this kind and body size (1 = normal) tries the puzzle. */
+  attempt(kind: string, size: number): Attempt;
+  /** Machines that keep running between attempts. */
+  update?(dt: number): void;
 }
 
 export interface Puzzle {
@@ -63,6 +67,8 @@ export interface Puzzle {
   warmup?: boolean;
   /** A shadow-world level on the paper: help a tiny shadow friend across. */
   walk?: WalkLevel;
+  /** The job needs a friend at least this big (1 = normal); its size is read out while matching. */
+  needSize?: number;
   /** Caption once solved. */
   solved: string;
   build(root: Group, kit: Kit): PuzzleScene;
@@ -373,6 +379,66 @@ const lostStar: Puzzle = {
   },
 };
 
+/** The size of horse that can just wind up the full bucket. */
+export const WELL_NEED = 1.18;
+/** Stage-local spots for the whim and its well; the river's scenery keeps clear of them. */
+export const WHIM_AT = new Vector3(0.34, 0, -0.06);
+/** The well's z follows the drum: the rope runs straight back to it. */
+export const WELL_AT = new Vector3(-0.06, 0, -0.356);
+
+const oldWell: Puzzle = {
+  id: 'old-well',
+  world: 1,
+  title: 'The Old Well',
+  story: 'The Lantern Stone fell down the old well. Its bucket is far too heavy to wind up by hand.',
+  ask: 'Who is strong enough to turn the horse whim?',
+  teach: 'horse',
+  needSize: WELL_NEED,
+  solved: 'The Horse wound it up! The Lantern Stone is ours.',
+  build(root, kit) {
+    const f = kit.floor;
+    const whim = new HorseWhim(f, WHIM_AT, WELL_AT, WELL_NEED);
+    root.add(whim.group);
+    for (const [x, z, r] of whimFootprint(WHIM_AT, WELL_AT)) kit.block(x, z, r);
+    return {
+      start: new Vector3(-0.08, f, 0.12),
+      update: (dt) => whim.update(dt),
+      attempt: (kind, size) => {
+        if (kind !== 'horse') {
+          return bumpAndShrug(kit, kit.at(0.04, f, 0.1), kit.at(WHIM_AT.x, f + 0.1, WHIM_AT.z), `The ${friendName(kind)} can't push the whim round. It needs a horse.`);
+        }
+        const strong = size >= WELL_NEED;
+        const { at, ahead } = whim.harnessSpot(size);
+        return {
+          solved: strong,
+          line: strong
+            ? undefined
+            : 'Too heavy for that horse. Hold your hand closer to the lantern: a bigger shadow makes a bigger, stronger horse.',
+          steps: [
+            { do: 'walk', to: kit.at(at.x, f, at.z) },
+            { do: 'pose', pose: 'look', time: 0.8, look: kit.at(ahead.x, f + 0.06, ahead.z) },
+            { do: 'harness', rig: whim },
+            ...(strong
+              ? [
+                  {
+                    do: 'call' as const,
+                    run: () => {
+                      whim.freeStone(kit.tween, new Vector3(0, f + 0.32, -0.46), () => {
+                        kit.fx.burst(kit.at(0, f + 0.32, -0.46), 24, 0.3);
+                        kit.chime();
+                      });
+                    },
+                  },
+                  { do: 'pose' as const, pose: 'cheer' as const, time: 2.4 },
+                ]
+              : [{ do: 'pose' as const, pose: 'shrug' as const, time: 1.3 }]),
+          ],
+        };
+      },
+    };
+  },
+};
+
 /** A buried or hidden star for a new friend to find; chapters 2 and 3 for now. */
 function findStar(
   id: string,
@@ -431,7 +497,7 @@ export const PUZZLES: Puzzle[] = [
   tinyTunnel,
   highBerries,
   lostStar,
-  findStar('buried-lantern', 1, 'horse', 'The Buried Lantern', 'Something shiny is buried by the pond.', 'Who has the best nose?', 'The Horse sniffed it out!'),
+  oldWell,
   findStar('pond-song', 1, 'bird', 'The Silent Pond', 'The pond is too quiet. It needs a song.', 'Who can sing the pond awake?', 'The Bird sang, and a star woke up!'),
   findStar('night-flowers', 1, 'butterfly', 'The Night Flowers', 'The flowers closed up for the night.', 'Who can wake the flowers gently?', 'The flowers opened for the Butterfly!'),
   findStar('great-lantern', 2, 'dragon', 'The Great Lantern', 'On top of the mountain, the Great Lantern has gone out.', 'Who can light it with a tiny spark?', 'The Dragon lit the Great Lantern! The end... for now.'),

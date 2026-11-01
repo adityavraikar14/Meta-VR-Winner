@@ -25,6 +25,10 @@ export interface DevApi {
   reset(): void;
   spawnAll(): void;
   spawn(kind: string): void;
+  /** Bring a friend to life as if its shadow had just matched, at this body size. */
+  summon(kind: string, size: number): void;
+  /** Jump to the first level of the next chapter. */
+  nextChapter(): void;
   info(): unknown;
 }
 
@@ -151,6 +155,15 @@ export function installDevTools(api: DevApi): void {
         break;
       case 'j':
         api.spawn('stag');
+        break;
+      case 'b':
+        api.summon('horse', 1.35);
+        break;
+      case 'v':
+        api.summon('horse', 0.95);
+        break;
+      case 'g':
+        api.nextChapter();
         break;
       case 'i':
       case 'k': {

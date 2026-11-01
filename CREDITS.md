@@ -32,9 +32,13 @@ textures reduced to 512–1024 px.
 | `public/textures/wood_*.jpg` | [Dark Wood](https://polyhaven.com/a/dark_wood), Poly Haven | CC0 |
 | `public/textures/pebbles_*.jpg` | [Dry River Pebbles](https://polyhaven.com/a/dry_river_pebbles), Poly Haven | CC0 |
 | `public/textures/soil_*.jpg` | [Forest Ground 04](https://polyhaven.com/a/forest_ground_04), Poly Haven | CC0 |
+| `public/textures/stone_*.jpg` | [Rock Boulder Dry](https://polyhaven.com/a/rock_boulder_dry), Poly Haven | CC0 |
+| `public/textures/iron_*.jpg` | [Rusty Metal 02](https://polyhaven.com/a/rusty_metal_02), Poly Haven | CC0 |
+| `public/textures/plank_*.jpg` | [Weathered Brown Planks](https://polyhaven.com/a/weathered_brown_planks), Poly Haven | CC0 |
 | `public/textures/ivy*.{png,jpg}` | [Leaf Set 017](https://ambientcg.com/view?id=LeafSet017), ambientCG | CC0 |
 | `public/textures/leaf*.{png,jpg}` | [Leaf 001](https://ambientcg.com/view?id=Leaf001), ambientCG | CC0 |
 | `public/textures/studio.hdr` | [Brown Photostudio 02](https://polyhaven.com/a/brown_photostudio_02), Poly Haven | CC0 |
 
 Everything else (sounds, grass, water, bamboo, vines, giant leaves, fireflies,
-shadow puppets, driftwood, mine timbers, crystals and the earth slab) is made in code for this project.
+shadow puppets, driftwood, mine timbers, crystals, the earth slab, and the horse whim's
+gears, ratchet, rope, bucket, well and gauge) is made in code for this project.

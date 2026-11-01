@@ -167,7 +167,7 @@ export class Diorama {
     if (!this.scene) return;
     this.attempting = true;
     const kind = creature.kind;
-    const attempt = this.scene.attempt(kind);
+    const attempt = this.scene.attempt(kind, 'size' in creature ? creature.size : 1);
     creature.perform(attempt.steps, () => {
       // A solved puzzle stays closed until the next one loads.
       this.attempting = attempt.solved;
@@ -194,6 +194,7 @@ export class Diorama {
     // The room's plants stand on the real floor (y = 0), wherever the screen is.
     stage.paper!.getWorldPosition(this.paperAt);
     this.room.position.y = -this.paperAt.y;
+    this.scene?.update?.(dt);
     for (const spinner of this.spinners) spinner.object.rotation.y += spinner.speed * dt;
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tween = this.tweens[i];

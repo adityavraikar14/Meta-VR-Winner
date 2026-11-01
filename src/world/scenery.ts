@@ -215,7 +215,8 @@ export function decorateRiver(roots: SceneryRoots): void {
   g.add(grass({
     count: 9000, inner: 0.02, outer: 0.7, height: [0.01, 0.03], width: 0.0026,
     edgeBias: 0.5, ground: spec, seed: 8,
-    avoid: [[POND.x, POND.z, POND.r * 1.25]],
+    // The pond, and the horse whim's trodden circle and well (see WHIM_AT, WELL_AT).
+    avoid: [[POND.x, POND.z, POND.r * 1.25], [0.34, -0.06, 0.19], [-0.06, -0.356, 0.075]],
   }));
   // Reeds crowd the far bank.
   g.add(grass({
@@ -225,7 +226,7 @@ export function decorateRiver(roots: SceneryRoots): void {
   placeAll(g, spec, [
     { model: 'rocks', node: 'rock_moss_set_01_rock02', x: POND.x + 0.13, z: POND.z + 0.05, scale: 0.022, turn: 0.8, sink: 0.006 },
     { model: 'rocks', node: 'rock_moss_set_01_rock03', x: POND.x - 0.03, z: POND.z + 0.14, scale: 0.018, turn: 2.6, sink: 0.005 },
-    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.35, z: -0.38, scale: 0.03, turn: 1.6, sink: 0.007 },
+    { model: 'rocks', node: 'rock_moss_set_01_rock06', x: 0.52, z: -0.36, scale: 0.03, turn: 1.6, sink: 0.007 },
     { model: 'fern', node: 'fern_02_b', x: 0.46, z: -0.25, scale: 0.2, turn: 2.4 },
     { model: 'fern', node: 'fern_02_d', x: 0.47, z: 0.1, scale: 0.15, turn: 0.7 },
     { model: 'calathea', node: 'calathea_orbifolia_01_c', x: 0.36, z: 0.18, scale: 0.3, turn: 1.0 },
@@ -233,7 +234,7 @@ export function decorateRiver(roots: SceneryRoots): void {
     { model: 'gazania', node: 'flower_gazania_d_LOD0', x: 0.25, z: 0.2, scale: 0.42, turn: 1.0 },
     { model: 'dandelion', node: 'dandelion_01_c_LOD0', x: -0.25, z: 0.21, scale: 0.45, turn: 3.0 },
     ...sorrelClump(-0.12, 0.23, 6, 2),
-    ...sorrelClump(0.3, -0.12, 5, 5),
+    ...sorrelClump(0.55, -0.32, 5, 5),
   ]);
   roots.screen.add(driftwoodFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
   riverbankInRoom(roots.room);

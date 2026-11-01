@@ -4,6 +4,7 @@ import {
   AnimationMixer,
   AssetManager,
   Box3,
+  type BufferGeometry,
   Color,
   LoopOnce,
   LoopRepeat,
@@ -15,8 +16,9 @@ import {
   Quaternion,
   Vector3,
 } from '@iwsdk/core';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { playHoof, playNicker, playSnort } from '../audio.js';
-import type { Ground, TaskPose, TaskStep } from './creature.js';
+import type { Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
 
@@ -45,6 +47,21 @@ export const BEASTS: Record<string, BeastSpec> = {
   stag: { file: 'gltf/stag.glb', height: 0.17, walk: 0.45, gallop: 1.9, temper: 'Attack_Headbutt', voice: 0.7 },
 };
 
+/**
+ * The models are faceted low-poly: weld the split corners and average the
+ * normals so the body reads as rounded muscle, not cut paper. Clones share
+ * geometry, so this runs once per model.
+ */
+function smoothShade(geometry: BufferGeometry): void {
+  if (geometry.userData.smoothed) return;
+  geometry.userData.smoothed = true;
+  geometry.deleteAttribute('normal');
+  const welded = mergeVertices(geometry, 1e-4);
+  geometry.setIndex(welded.index);
+  for (const name of Object.keys(welded.attributes)) geometry.setAttribute(name, welded.attributes[name]);
+  geometry.computeVertexNormals();
+}
+
 /** Starts loading every beast model; spawning falls back to plush pets until they arrive. */
 export function preloadBeasts(): void {
   for (const [kind, spec] of Object.entries(BEASTS)) {
@@ -54,11 +71,11 @@ export function preloadBeasts(): void {
 }
 
 /** A fresh beast, or null if its model has not loaded yet. */
-export function createBeast(kind: string, fx: Effects): Beast | null {
+export function createBeast(kind: string, fx: Effects, size = 1): Beast | null {
   const spec = BEASTS[kind];
   const gltf = spec ? AssetManager.getGLTF(`beast-${kind}`) : null;
   if (!spec || !gltf) return null;
-  return new Beast(kind, spec, gltf.scene, gltf.animations, fx);
+  return new Beast(kind, spec, gltf.scene, gltf.animations, fx, size);
 }
 
 type BeastState = 'emerging' | 'leaping' | 'idle' | 'task';
@@ -145,6 +162,9 @@ export class Beast {
   private taskDone: (() => void) | null = null;
   private taskLook = new Vector3();
   private taskLooking = false;
+  private readonly harnessPose: HarnessPose = { position: new Vector3(), yaw: 0, speed: 0, strain: 0 };
+  /** Forward lean into the collar, radians. */
+  private lean = 0;
 
   private tmp = new Vector3();
   private tmp2 = new Vector3();
@@ -161,6 +181,12 @@ export class Beast {
     model: Object3D,
     clips: AnimationClip[],
     private readonly fx: Effects,
+    /**
+     * Body size from the shadow it was cast from (1 = normal). Bigger animals
+     * walk faster but with slower strides (speed grows with the square root of
+     * leg length) and pull harder (strength grows with muscle cross-section).
+     */
+    readonly size = 1,
   ) {
     this.root.name = `Beast-${kind}`;
     this.root.add(model);
@@ -168,19 +194,20 @@ export class Beast {
     // Normalise size and put the hooves on the origin.
     model.updateMatrixWorld(true);
     const box = new Box3().setFromObject(model, true);
-    const size = box.getSize(this.tmp);
-    const scale = spec.height / size.y;
+    const extent = box.getSize(this.tmp);
+    const scale = (spec.height * this.size) / extent.y;
     model.scale.multiplyScalar(scale);
     const center = box.getCenter(this.tmp2);
     model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    this.height = spec.height;
-    this.length = size.z * scale;
+    this.height = spec.height * this.size;
+    this.length = extent.z * scale;
 
     model.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;
       // Skinned bounds do not follow the animation; the beast is always in view anyway.
       mesh.frustumCulled = false;
+      smoothShade(mesh.geometry);
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       const graded = materials.map((m) => this.grade(m));
       mesh.material = Array.isArray(mesh.material) ? graded : graded[0];
@@ -552,7 +579,41 @@ export class Beast {
         }
         if (this.taskTime >= step.time) this.nextStep();
         break;
+      case 'harness':
+        if (!this.pull(step.rig, dt)) this.nextStep();
+        break;
     }
+  }
+
+  /** Harnessed to a machine: it leads us round; we walk, or dig in and strain. */
+  private pull(rig: Harness, dt: number): boolean {
+    const pose = this.harnessPose;
+    const going = rig.drive(dt, this.size, pose);
+    this.lean += ((going ? pose.strain * 0.11 : 0) - this.lean) * Math.min(1, dt * 5);
+    if (!going) {
+      this.play('Idle');
+      return false;
+    }
+    this.position.copy(pose.position);
+    this.yaw = pose.yaw;
+    // The clip's natural pace at this size; the stride rate follows the ground speed.
+    const pace = this.spec.height * Math.sqrt(this.size) * this.spec.walk;
+    let rate = pose.speed / pace;
+    // Digging in against a load that will not move: hooves scrabble on the spot.
+    if (pose.strain > 0.6 && rate < 0.3) rate = 0.55 + 0.25 * Math.sin(this.taskTime * 9);
+    if (rate > 0.05) {
+      this.play('Walk', true, 0.3, rate / Math.sqrt(this.size));
+      this.clopIn -= dt * rate;
+      if (this.clopIn <= 0) {
+        this.clopIn = 0.3;
+        playHoof(0.012 + pose.strain * 0.01);
+        if (pose.strain > 0.6) this.fx.burst(this.position, 2, 0.05);
+      }
+    } else {
+      this.play('Idle');
+    }
+    if (pose.strain > 0.8 && Math.random() < dt * 0.7) playSnort(0.05);
+    return true;
   }
 
   private nextStep(): void {
@@ -572,8 +633,8 @@ export class Beast {
       return true;
     }
     const gallop = distance > this.length * 2.2;
-    const speed = this.height * (gallop ? this.spec.gallop : this.spec.walk);
-    this.play(gallop ? 'Gallop' : 'Walk', true, 0.3);
+    const speed = this.spec.height * Math.sqrt(this.size) * (gallop ? this.spec.gallop : this.spec.walk);
+    this.play(gallop ? 'Gallop' : 'Walk', true, 0.3, 1 / Math.sqrt(this.size));
     // Turn first, then go: a sharp turn slows the stride.
     const turn = this.faceTowards(goal, Math.min(1, dt * 3.5));
     const pace = speed * Math.max(0.2, Math.cos(Math.min(Math.PI / 2, Math.abs(turn))));
@@ -607,7 +668,7 @@ export class Beast {
 
   private place(): void {
     this.root.position.copy(this.position);
-    this.root.rotation.set(0, this.yaw, 0);
+    this.root.rotation.set(this.lean, this.yaw, 0, 'YXZ');
   }
 
   // ------------------------------------------------------------ Animation

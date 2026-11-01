@@ -178,7 +178,7 @@ export class CreatureSystem extends createSystem({}) {
 
     while (stage.spawns.length > 0) {
       const request = stage.spawns.shift()!;
-      this.spawn(request.kind, request.x, request.y, request.attempt ?? false);
+      this.spawn(request.kind, request.x, request.y, request.attempt ?? false, request.size ?? 1);
     }
 
     let purr = 0;
@@ -231,13 +231,13 @@ export class CreatureSystem extends createSystem({}) {
     this.diorama.relayout();
   }
 
-  private spawn(kind: string, x: number, y: number, attempt: boolean): void {
+  private spawn(kind: string, x: number, y: number, attempt: boolean, size: number): void {
     // A new shadow replaces the friend already out, so the stage stays one-on-one.
     const twin = this.creatures.findIndex((living) => living.creature.kind === kind);
     if (twin >= 0) this.remove(twin);
     else if (this.creatures.length >= MAX_CREATURES) this.remove(0);
     const paper = stage.paper!;
-    const creature = createBeast(kind, this.fx) ?? this.createPet(kind);
+    const creature = createBeast(kind, this.fx, size) ?? this.createPet(kind);
     const body = this.world.createTransformEntity(creature.root);
     const blob = new Mesh(this.blobGeometry, this.blobMaterial);
     blob.name = 'CreatureContactShadow';
