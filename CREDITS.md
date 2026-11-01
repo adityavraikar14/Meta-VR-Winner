@@ -21,6 +21,9 @@ ship, no attribution required. We credit them anyway.
 | `public/gltf/nature/calathea.glb` | [Calathea Orbifolia 01](https://polyhaven.com/a/calathea_orbifolia_01) | Poly Haven | CC0 |
 | `public/gltf/nature/elephant_ear.glb` | [Potted Plant 02](https://polyhaven.com/a/potted_plant_02) (leaves only) | Poly Haven | CC0 |
 | `public/gltf/nature/periwinkle.glb` | [Periwinkle Plant](https://polyhaven.com/a/periwinkle_plant) | Poly Haven | CC0 |
+| `public/gltf/nature/empodium.glb` | [Flower Empodium](https://polyhaven.com/a/flower_empodium) | Poly Haven | CC0 |
+| `public/gltf/nature/ursinia.glb` | [Flower Ursinia](https://polyhaven.com/a/flower_ursinia) | Poly Haven | CC0 |
+| `public/gltf/nature/shrub.glb` | [Shrub 03](https://polyhaven.com/a/shrub_03) | Poly Haven | CC0 |
 
 Poly Haven models were repacked for Quest: unused variants removed and
 textures reduced to 512–1024 px.
@@ -39,7 +42,8 @@ textures reduced to 512–1024 px.
 | `public/textures/bark_*.jpg` | [Bark Brown 02](https://polyhaven.com/a/bark_brown_02), Poly Haven | CC0 |
 | `public/textures/ivy*.{png,jpg}` | [Leaf Set 017](https://ambientcg.com/view?id=LeafSet017), ambientCG | CC0 |
 | `public/textures/leaf*.{png,jpg}` | [Leaf 001](https://ambientcg.com/view?id=Leaf001), ambientCG | CC0 |
-| `public/textures/studio.hdr` | [Brown Photostudio 02](https://polyhaven.com/a/brown_photostudio_02), Poly Haven | CC0 |
+| `public/textures/sky.hdr` | [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky), Poly Haven | CC0 |
+| `public/textures/studio.hdr` | [Brown Photostudio 02](https://polyhaven.com/a/brown_photostudio_02), Poly Haven (no longer used) | CC0 |
 
 Everything else (sounds, grass, water, bamboo, vines, giant leaves, fireflies,
 shadow puppets, driftwood, mine timbers, crystals, the earth slab, and the horse whim's

@@ -38,6 +38,9 @@ const MODELS = {
   calathea: 'gltf/nature/calathea.glb',
   elephantEar: 'gltf/nature/elephant_ear.glb',
   periwinkle: 'gltf/nature/periwinkle.glb',
+  empodium: 'gltf/nature/empodium.glb',
+  ursinia: 'gltf/nature/ursinia.glb',
+  shrub: 'gltf/nature/shrub.glb',
 } as const;
 export type NatureModel = keyof typeof MODELS;
 
@@ -407,18 +410,22 @@ function earthSide(spec: GroundSpec): Mesh {
 /** Shared clock for swaying grass, rippling water and drifting fireflies. */
 export const clock = { value: 0 };
 
-/** One blade: a tapered, slightly bent strip, 1 unit tall. Colour runs dark root → sunlit tip. */
+/**
+ * One blade, 1 unit tall: widest a third of the way up, narrowing to a
+ * rounded tip, arching over. Colour runs from a shaded root to a sunlit tip.
+ */
 function bladeGeometry(): BufferGeometry {
-  const rows = 4;
+  const rows = 6;
   const positions: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
-  const root = new Color(0x1c2e12);
-  const tip = new Color(0x7d9a47);
+  const root = new Color(0x2c5a1a);
+  const tip = new Color(0xa6d65e);
   for (let i = 0; i <= rows; i++) {
     const t = i / rows;
-    const half = 0.5 * (1 - t) ** 0.8;
-    const bend = t * t * 0.25;
+    // Swells from the root, then closes in a round end (never a needle point).
+    const half = 0.5 * Math.sin(Math.min(1, t * 1.6 + 0.25) * Math.PI * 0.5) * Math.sqrt(Math.max(0, 1 - t * t * 0.92));
+    const bend = t * t * 0.38;
     positions.push(-half, t, bend, half, t, bend);
     const c = root.clone().lerp(tip, t);
     colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
@@ -507,7 +514,7 @@ export function grass(spec: GrassSpec): InstancedMesh {
     s.set(spec.width * (0.7 + rand() * 0.6), h, spec.width);
     m.compose(p, q, s);
     mesh.setMatrixAt(n, m);
-    tint.setHSL(0.2 + rand() * 0.06, 0.35 + rand() * 0.2, 0.75 + rand() * 0.35);
+    tint.setHSL(0.23 + rand() * 0.07, 0.55 + rand() * 0.25, 0.85 + rand() * 0.3);
     mesh.setColorAt(n, tint);
     n++;
   }

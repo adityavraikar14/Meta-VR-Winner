@@ -109,7 +109,7 @@ function hangingVine(x: number, z: number, top: number, length: number, seed: nu
 export function decorateJungle(roots: SceneryRoots): void {
   const spec: GroundSpec = {
     edge: organicOutline({ ...SLAB, wobble: 0.025, seed: 1.3 }),
-    tint: 0xbfcaa8,
+    tint: 0xd8e6c4,
     tiles: 3.5,
     relief: 0.0022,
     depth: 0.05,
@@ -147,6 +147,14 @@ export function decorateJungle(roots: SceneryRoots): void {
     { model: 'periwinkle', node: 'periwinkle_plant_03_LOD0', x: -0.2, z: 0.2, scale: 0.35, turn: 0.4 },
     { model: 'periwinkle', node: 'periwinkle_plant_05_LOD0', x: 0.22, z: 0.21, scale: 0.4, turn: 2.1 },
     { model: 'periwinkle', node: 'periwinkle_plant_06_LOD0', x: 0.05, z: 0.24, scale: 0.4, turn: 1.0 },
+    { model: 'ursinia', node: 'flower_ursinia_c_LOD0', x: -0.11, z: 0.23, scale: 0.34, turn: 0.3 },
+    { model: 'empodium', node: 'flower_empodium_a_LOD0', x: 0.14, z: 0.24, scale: 0.5, turn: 1.2 },
+    { model: 'ursinia', node: 'flower_ursinia_e_LOD0', x: 0.38, z: 0.2, scale: 0.36, turn: 2.0 },
+    { model: 'empodium', node: 'flower_empodium_c_LOD0', x: -0.4, z: 0.2, scale: 0.5, turn: 2.6 },
+    { model: 'ursinia', node: 'flower_ursinia_d_LOD0', x: -0.5, z: -0.02, scale: 0.34, turn: 4.1 },
+    { model: 'empodium', node: 'flower_empodium_d_LOD0', x: 0.5, z: 0.1, scale: 0.55, turn: 0.7 },
+    { model: 'shrub', node: 'shrub_03_a', x: -0.5, z: -0.42, scale: 0.13, turn: 1.4 },
+    { model: 'shrub', node: 'shrub_03_c', x: 0.47, z: -0.43, scale: 0.12, turn: 3.6 },
     ...sorrelClump(-0.1, 0.22, 5, 1),
     ...sorrelClump(0.3, -0.18, 5, 4),
   ]);
@@ -176,6 +184,12 @@ function junglePlantsInRoom(room: Group): void {
     { model: 'calathea', node: 'calathea_orbifolia_01_b', x: 1.0, z: 1.35, scale: 2.4, turn: 0.4 },
     { model: 'fern', node: 'fern_02_c', x: 0.9, z: 1.95, scale: 2.0, turn: 3.0 },
     { model: 'elephantEar', x: 0.3, z: 2.25, scale: 1.8, turn: 5.0 },
+    { model: 'ursinia', node: 'flower_ursinia_c_LOD0', x: -0.7, z: 0.6, scale: 1.4, turn: 0.4 },
+    { model: 'empodium', node: 'flower_empodium_a_LOD0', x: -0.6, z: 1.4, scale: 2.2, turn: 2.1 },
+    { model: 'ursinia', node: 'flower_ursinia_d_LOD0', x: 0.7, z: 0.5, scale: 1.4, turn: 3.3 },
+    { model: 'empodium', node: 'flower_empodium_c_LOD0', x: 0.65, z: 1.55, scale: 2.2, turn: 1.0 },
+    { model: 'shrub', node: 'shrub_03_a', x: -1.25, z: 1.6, scale: 0.6, turn: 0.8 },
+    { model: 'shrub', node: 'shrub_03_c', x: 1.3, z: 1.85, scale: 0.6, turn: 2.4 },
   ]);
   for (const [x, z, h, s] of [[-0.75, -0.6, 1.8, 3], [0.85, -0.5, 2.0, 5], [-0.45, 2.3, 1.6, 9]] as const) {
     const plant = giantLeafPlant(h, 8, s);
@@ -202,7 +216,7 @@ export function decorateRiver(roots: SceneryRoots): void {
   const spec: GroundSpec = {
     edge: organicOutline({ ...SLAB, wobble: 0.03, seed: 4.1 }),
     pond: POND,
-    tint: 0xd5ded8,
+    tint: 0xe8f0e2,
     tiles: 3.5,
   };
   const g = base(roots, spec);
@@ -233,6 +247,10 @@ export function decorateRiver(roots: SceneryRoots): void {
     { model: 'calathea', node: 'calathea_orbifolia_01_b', x: -0.5, z: 0.15, scale: 0.28, turn: 3.1 },
     { model: 'gazania', node: 'flower_gazania_d_LOD0', x: 0.25, z: 0.2, scale: 0.42, turn: 1.0 },
     { model: 'dandelion', node: 'dandelion_01_c_LOD0', x: -0.25, z: 0.21, scale: 0.45, turn: 3.0 },
+    { model: 'empodium', node: 'flower_empodium_a_LOD0', x: -0.53, z: 0.06, scale: 0.5, turn: 0.9 },
+    { model: 'ursinia', node: 'flower_ursinia_e_LOD0', x: -0.42, z: 0.21, scale: 0.34, turn: 2.2 },
+    { model: 'empodium', node: 'flower_empodium_c_LOD0', x: -0.52, z: -0.3, scale: 0.5, turn: 3.9 },
+    { model: 'ursinia', node: 'flower_ursinia_c_LOD0', x: 0.53, z: 0.22, scale: 0.32, turn: 1.1 },
     ...sorrelClump(-0.12, 0.23, 6, 2),
     ...sorrelClump(0.55, -0.32, 5, 5),
   ]);
@@ -283,7 +301,7 @@ export function decorateMountain(roots: SceneryRoots): void {
   const spec: GroundSpec = {
     edge: organicOutline({ ...SLAB, wobble: 0.045, seed: 7.7 }),
     surface: 'pebbles',
-    tint: 0xa8a29c,
+    tint: 0xc4bcb2,
     relief: 0.004,
     tiles: 7,
     depth: 0.07,
@@ -321,7 +339,7 @@ export function decorateMine(roots: SceneryRoots): void {
   const spec: GroundSpec = {
     edge: organicOutline({ ...SLAB, wobble: 0.04, seed: 5.3 }),
     surface: 'pebbles',
-    tint: 0x9c968f,
+    tint: 0xbab2a8,
     relief: 0.003,
     tiles: 7,
     depth: 0.07,

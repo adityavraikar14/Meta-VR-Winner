@@ -3,7 +3,7 @@
   "units": "meters",
   "components": {
     "com.iwsdk.components.IBLTexture": {
-      "src": "./textures/studio.hdr",
+      "src": "./textures/sky.hdr",
       "intensity": 1
     }
   },

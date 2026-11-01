@@ -51,6 +51,9 @@ const CART_START = -SPAN - 0.08;
 const CART_END = SPAN + 0.08;
 const CART_SPEED = 0.05;
 const WHEEL_R = 0.007;
+/** Railing posts stand this tall over the road; room for them in the instances. */
+const RAIL_H = 0.026;
+const RAIL_CAPACITY = 60;
 /** Water surface height in the river. */
 const RIVER_Y = 0.032;
 
@@ -113,6 +116,8 @@ export class Bridge {
 
   private readonly m4 = new Matrix4();
   private readonly q = new Quaternion();
+  private readonly q2 = new Quaternion();
+  private readonly zAxis = new Vector3(0, 0, 1);
   private readonly v = new Vector3();
   private readonly s = new Vector3();
   private readonly c = new Color();
@@ -137,7 +142,10 @@ export class Bridge {
     }
 
     const beamMaterial = timber().clone();
-    this.beams = new InstancedMesh(new BoxGeometry(1, BEAM, BEAM), beamMaterial, BUDGET * 2 + 8);
+    // Eight-sided like hewn logs, axis along x; scaled to length and thickness.
+    const log = new CylinderGeometry(0.5, 0.5, 1, 8);
+    log.rotateZ(Math.PI / 2);
+    this.beams = new InstancedMesh(log, beamMaterial, BUDGET * 2 + 8 + RAIL_CAPACITY);
     this.beams.count = 0;
     this.beams.frustumCulled = false;
     this.beams.userData.keep = true;
@@ -549,6 +557,7 @@ export class Bridge {
     const testing = this.mode !== 'build';
     const joints = testing ? this.truss.joints : this.joints;
     let beam = 0;
+    let rails = 0;
     let plank = 0;
     let pin = 0;
     const list: Array<{ a: number; b: number; usage: number; deck: boolean }> = testing
@@ -567,10 +576,30 @@ export class Bridge {
       else if (testing && m.usage < 0) this.c.setRGB(1 + 2.6 * u, 1 - 0.4 * u, 1 - 0.6 * u);
       else this.c.setRGB(1, 1, 1);
       for (const z of [-HALF_W, HALF_W]) {
-        this.m4.compose(this.v.set((a.x + b.x) / 2, (a.y + b.y) / 2, z), this.q, this.s.set(length, 1, 1));
+        this.m4.compose(this.v.set((a.x + b.x) / 2, (a.y + b.y) / 2, z), this.q, this.s.set(length + BEAM * 0.6, BEAM, BEAM));
         this.beams.setMatrixAt(beam, this.m4);
         this.beams.setColorAt(beam, this.c);
         beam++;
+      }
+      if (m.deck && rails < RAIL_CAPACITY - 6) {
+        this.c.setRGB(1, 1, 1);
+        for (const side of [-1, 1]) {
+          const z = side * (HALF_W + 0.006);
+          // A post at each end, and a handrail along the top.
+          for (const end of [a, b]) {
+            this.q2.setFromAxisAngle(this.zAxis, Math.PI / 2);
+            this.m4.compose(this.v.set(end.x, end.y + RAIL_H / 2, z), this.q2, this.s.set(RAIL_H, BEAM * 0.7, BEAM * 0.7));
+            this.beams.setMatrixAt(beam, this.m4);
+            this.beams.setColorAt(beam, this.c);
+            beam++;
+            rails++;
+          }
+          this.m4.compose(this.v.set((a.x + b.x) / 2, (a.y + b.y) / 2 + RAIL_H, z), this.q, this.s.set(length + BEAM * 0.7, BEAM * 0.6, BEAM * 0.6));
+          this.beams.setMatrixAt(beam, this.m4);
+          this.beams.setColorAt(beam, this.c);
+          beam++;
+          rails++;
+        }
       }
       if (m.deck) {
         const n = Math.max(1, Math.floor(length / 0.011));
@@ -712,18 +741,21 @@ export class Bridge {
     const L = 0;
     const R = 2;
     if (kind === 'warren') {
-      // Deck joints every 7.5 cm, top chord between them: all triangles.
+      // A deck truss: road joints every 7.5 cm, a lower chord between the
+      // banks' low anchors, and diagonals zigzagging under the road.
       const d1 = add(-0.075, DECK_Y);
       const d2 = add(0, DECK_Y);
       const d3 = add(0.075, DECK_Y);
-      const t1 = add(-0.1125, DECK_Y + 0.065);
-      const t2 = add(-0.0375, DECK_Y + 0.065);
-      const t3 = add(0.0375, DECK_Y + 0.065);
-      const t4 = add(0.1125, DECK_Y + 0.065);
+      const b1 = add(-0.1125, LOW_Y);
+      const b2 = add(-0.0375, LOW_Y);
+      const b3 = add(0.0375, LOW_Y);
+      const b4 = add(0.1125, LOW_Y);
+      const lowL = 1;
+      const lowR = 3;
       const pairs: Array<[number, number]> = [
         [L, d1], [d1, d2], [d2, d3], [d3, R],
-        [L, t1], [t1, d1], [d1, t2], [t2, d2], [d2, t3], [t3, d3], [d3, t4], [t4, R],
-        [t1, t2], [t2, t3], [t3, t4],
+        [lowL, b1], [b1, b2], [b2, b3], [b3, b4], [b4, lowR],
+        [L, b1], [b1, d1], [d1, b2], [b2, d2], [d2, b3], [b3, d3], [d3, b4], [b4, R],
       ];
       for (const [a, b] of pairs) this.members.push({ a, b });
     } else {
