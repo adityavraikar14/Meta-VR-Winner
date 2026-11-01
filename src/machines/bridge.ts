@@ -160,12 +160,12 @@ export class Bridge {
     this.buildCart();
     this.group.add(this.splash.points);
 
-    // Two push buttons on the near bank: take back the last timber, and test.
+    // A push button on each bank, by the road: take back the last timber, and test.
     const undo = new PushButton(this.group, 'Undo');
     const test = new PushButton(this.group, 'Test');
-    for (const [button, x] of [[undo, -0.07], [test, 0.07]] as const) {
+    for (const [button, x] of [[undo, -0.25], [test, 0.25]] as const) {
       button.size = 0.42;
-      button.root.position.set(x, 0.012, 0.16);
+      button.root.position.set(x, DECK_Y + 0.004, 0.066);
       button.show(true);
     }
     this.buttons = { test, undo };

@@ -115,6 +115,13 @@ export class CreatureSystem extends createSystem({}) {
     this.fx = new Effects();
     this.world.createTransformEntity(this.fx.root);
     this.handInput = new HandInput();
+    devInfo.hands = () => this.handInput.hands.map((h) => ({
+      tracked: h.tracked,
+      pinching: h.pinching,
+      gap: Number(h.pinchGap.toFixed(3)),
+      pinch: h.pinch.toArray().map((n) => Number(n.toFixed(3))),
+      index: h.tips[0].toArray().map((n) => Number(n.toFixed(3))),
+    }));
     this.diorama = new Diorama(this.stageRoot, STAGE_HEIGHT, this.fx);
     preloadBeasts();
 
