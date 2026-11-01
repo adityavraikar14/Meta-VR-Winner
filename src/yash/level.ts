@@ -46,7 +46,7 @@ interface XRHandFrame {
 /** Item icons float this far ahead of and below the eyes, this far apart. */
 const ICON_DISTANCE = 0.55;
 const ICON_DROP = 0.3;
-const ICON_GAP = 0.17;
+const ICON_GAP = 0.15;
 /** "Show your hands" appears after the hands are gone this long. */
 const SHOW_HANDS_AFTER = 0.8;
 /** A held item stays where a lost hand was last seen for this long, instead of jumping away. */
@@ -162,7 +162,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
     this.handleEvents();
 
-    this.arsenal.update(dt, this.forward);
+    this.arsenal.update(dt, this.forward, this.head);
     this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
     this.bursts.update(dt);
     this.updateHud(dt, anyHand);
@@ -340,10 +340,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
     ITEMS.forEach((item, i) => {
       const icon = this.icons[item];
       icon.sprite.visible = armed;
-      icon.sprite.position.copy(center).addScaledVector(this.right, (i - 1.5) * ICON_GAP);
+      icon.sprite.position.copy(center).addScaledVector(this.right, (i - (ITEMS.length - 1) / 2) * ICON_GAP);
       const active = armed && r.candidate === item;
       icon.sprite.material.opacity = active ? 1 : 0.75;
-      icon.resize(active ? 0.065 : 0.05);
+      icon.resize(active ? 0.055 : 0.042);
     });
 
     // "Show your hands" only matters in the headset with no controllers either.
@@ -434,8 +434,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
         this.sim.setPose(command.pose);
         break;
       case 'move':
-        // Webcam or headset hands: Push throws the held item directly instead of moving fake hands.
-        if (command.move === 'push' && !this.sim.active && this.arsenal.held) this.arsenal.throwHeld(this.look);
+        // Webcam or headset hands: Push throws and Shoot fires directly instead of moving fake hands.
+        if (!this.sim.active && this.arsenal.held && command.move === 'push') this.arsenal.throwHeld(this.look);
+        else if (!this.sim.active && this.arsenal.held?.item === 'gun' && command.move === 'shoot') this.arsenal.fireGun();
         else this.sim.startMove(command.move);
         break;
       case 'recipe':
@@ -521,7 +522,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
     const a = this.arsenal;
     lines.push(
-      `held: ${a.held ? a.held.item : '–'} · flying ${a.projectiles.length} · wall ${a.wallLeft > 0 ? `${a.wallHp}/${WALL_HP} hp, ${a.wallLeft.toFixed(1)}s` : '–'}`,
+      `held: ${a.held ? a.held.item : '–'} · flying ${a.projectiles.length} · shots ${a.shots} · wall ${a.wallLeft > 0 ? `${a.wallHp}/${WALL_HP} hp, ${a.wallLeft.toFixed(1)}s` : '–'}`,
+      ...(a.held?.item === 'gun' && (L.tracked || R.tracked)
+        ? [`trigger: thumb ${(this.hands[a.held.side].thumbDrop * 100).toFixed(1)} cm from fingers (fires < 3.0)`]
+        : []),
       `sentinel ${this.opponent.hp}/${MAX_HP} · hits taken ${this.opponent.hitsTaken} · defeated ${this.opponent.defeats}`,
     );
     return lines.join('\n');

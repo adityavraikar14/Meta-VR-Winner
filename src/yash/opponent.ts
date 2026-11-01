@@ -41,6 +41,18 @@ export interface Foe {
   damage(amount: number, at: Vector3): void;
   /** Destroys orbs touching the sphere; returns how many. */
   cutOrbs(point: Vector3, radius: number): number;
+  /**
+   * The nearest target (body or orb) along a ray. Targets count as `assist`
+   * metres wider per metre of distance, a little aim help for shaky hands.
+   */
+  raycast(origin: Vector3, direction: Vector3, assist: number): RayHit | null;
+}
+
+export interface RayHit {
+  distance: number;
+  /** Centre of what was hit. */
+  point: Vector3;
+  orb: boolean;
 }
 
 export class Opponent implements Foe {
@@ -60,6 +72,8 @@ export class Opponent implements Foe {
   private home = new Vector3();
   private aim = new Vector3();
   private tmp = new Vector3();
+  private ray = new Vector3();
+  private hit: RayHit = { distance: 0, point: new Vector3(), orb: false };
 
   constructor(
     private parent: Group,
@@ -126,6 +140,27 @@ export class Opponent implements Foe {
       }
     }
     return cut;
+  }
+
+  raycast(origin: Vector3, direction: Vector3, assist: number): RayHit | null {
+    let best = Infinity;
+    let orb = false;
+    const test = (center: Vector3, radius: number, isOrb: boolean) => {
+      const along = this.ray.copy(center).sub(origin).dot(direction);
+      if (along <= 0) return;
+      const miss = this.ray.copy(center).sub(origin).addScaledVector(direction, -along).length();
+      if (miss < radius + along * assist && along < best) {
+        best = along;
+        orb = isOrb;
+        this.hit.point.copy(center);
+      }
+    };
+    if (this.alive) test(this.center, FOE_RADIUS, false);
+    for (const o of this.orbs) test(o.object.position, ORB_RADIUS, true);
+    if (best === Infinity) return null;
+    this.hit.distance = best;
+    this.hit.orb = orb;
+    return this.hit;
   }
 
   update(

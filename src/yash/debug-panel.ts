@@ -43,12 +43,14 @@ const SIGN_BUTTONS: ButtonSpec[] = [
   { label: SIGN_LABELS.spear, key: '3', command: { type: 'pose', pose: 'spear' }, pose: 'spear' },
   { label: SIGN_LABELS.ball, key: '4', command: { type: 'pose', pose: 'ball' }, pose: 'ball' },
   { label: SIGN_LABELS.wall, key: '5', command: { type: 'pose', pose: 'wall' }, pose: 'wall' },
+  { label: SIGN_LABELS.gun, key: '7', command: { type: 'pose', pose: 'gun' }, pose: 'gun' },
   { label: '🖐️ Relaxed', key: '6', command: { type: 'pose', pose: 'relaxed' }, pose: 'relaxed' },
 ];
 
 const MOVE_BUTTONS: ButtonSpec[] = [
-  { label: '👉 Push / throw', key: 't', command: { type: 'move', move: 'push' } },
+  { label: '🫸 Push / throw', key: 't', command: { type: 'move', move: 'push' } },
   { label: '↘️ Swing', key: 'g', command: { type: 'move', move: 'swing' } },
+  { label: '💥 Shoot (thumb drop)', key: 'f', command: { type: 'move', move: 'shoot' } },
   { label: '🚫 Hands off', key: '0', command: { type: 'handsOff' } },
 ];
 
@@ -156,7 +158,8 @@ export function mountDebugPanel(api: DebugApi): () => void {
   }
   const tip = document.createElement('div');
   tip.style.cssText = 'margin-top:4px;color:#8fb6e0';
-  tip.textContent = 'Then: Push / throw launches a ball or spear, Swing cuts orbs with a sword or spear.';
+  tip.textContent =
+    'Then: Push / throw launches a ball or spear, Swing cuts orbs with a sword or spear, Shoot fires the blaster (aim with the index finger).';
   body.appendChild(tip);
 
   // Webcam: real fingers from a camera, for testing without a headset.

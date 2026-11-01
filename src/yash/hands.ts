@@ -5,8 +5,10 @@ export const JOINT_COUNT = 25;
 const WRIST = 0;
 const THUMB_TIP = 4;
 const INDEX_KNUCKLE = 6;
+const INDEX_MIDDLE = 7;
 const INDEX_TIP = 9;
 const MIDDLE_KNUCKLE = 11;
+const MIDDLE_MIDDLE = 12;
 const PINKY_KNUCKLE = 21;
 /** Metacarpal joint of index, middle, ring and pinky: +1 knuckle, +2 middle joint, +4 tip. */
 const FINGER_BASES = [5, 10, 15, 20] as const;
@@ -45,6 +47,11 @@ export class HandState {
   readonly straight = new Float32Array(4);
   /** Thumb tip to index tip, in metres. */
   pinch = 1;
+  /**
+   * Finger-gun trigger: how close the thumb tip is to the side of the curled
+   * middle finger / index base, in metres. Small when the thumb is dropped.
+   */
+  thumbDrop = 1;
   /** Palm velocity in m/s, smoothed over VELOCITY_WINDOW. */
   readonly velocity = new Vector3();
   /**
@@ -99,7 +106,13 @@ export class HandState {
       const tip = this.joint(base + 4, this.d).sub(knuckle).normalize();
       this.straight[f] += (bone.dot(tip) - this.straight[f]) * k;
     }
-    this.pinch = this.joint(THUMB_TIP, this.a).distanceTo(this.joint(INDEX_TIP, this.b));
+    const thumb = this.joint(THUMB_TIP, this.a);
+    this.pinch = thumb.distanceTo(this.joint(INDEX_TIP, this.b));
+    this.thumbDrop = Math.min(
+      thumb.distanceTo(this.joint(INDEX_MIDDLE, this.b)),
+      thumb.distanceTo(this.joint(MIDDLE_KNUCKLE, this.b)),
+      thumb.distanceTo(this.joint(MIDDLE_MIDDLE, this.b)),
+    );
     this.fresh = false;
     this.record(time);
     this.lastVelocity.copy(this.velocity);

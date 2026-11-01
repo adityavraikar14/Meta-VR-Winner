@@ -100,7 +100,15 @@ export const sfx = {
         tone(110, 0.5, { type: 'square', gain: 0.07, to: 220 });
         noise(0.45, 0.25, 400, 1600);
         break;
+      case 'gun':
+        tone(300, 0.12, { type: 'square', gain: 0.06, to: 900 });
+        tone(1200, 0.15, { type: 'triangle', gain: 0.08, delay: 0.1 });
+        break;
     }
+  },
+  shoot(): void {
+    tone(1600, 0.12, { type: 'square', gain: 0.07, to: 260 });
+    noise(0.08, 0.2, 4000, 1500);
   },
   throw(): void {
     noise(0.3, 0.3, 900, 3500);

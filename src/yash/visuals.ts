@@ -104,6 +104,63 @@ export interface WallRig {
   barMaterial: MeshBasicMaterial;
 }
 
+/** Muzzle at the origin, barrel back along −Y, so it can sit along the index finger. */
+export function makeGun(): Group {
+  const gun = new Group();
+  gun.name = 'Blaster';
+  const shell = new MeshBasicMaterial({ color: 0x2a3550 });
+  const barrel = new Mesh(new CylinderGeometry(0.011, 0.014, 0.1, 10), shell);
+  barrel.position.y = -0.05;
+  const rails = new Mesh(new BoxGeometry(0.03, 0.08, 0.012), new MeshBasicMaterial({ color: 0x8fa6c8 }));
+  rails.position.set(0, -0.06, 0.016);
+  const core = new Mesh(new CylinderGeometry(0.008, 0.008, 0.07, 8), glow(0x7af0ff, 0.9));
+  core.position.y = -0.055;
+  const ring = new Mesh(new TorusGeometry(0.014, 0.004, 6, 16), new MeshBasicMaterial({ color: 0x7af0ff }));
+  ring.rotation.x = Math.PI / 2;
+  const muzzleGlow = new Mesh(new SphereGeometry(0.018, 10, 8), glow(0x7af0ff, 0.5));
+  gun.add(barrel, rails, core, ring, muzzleGlow);
+  return gun;
+}
+
+/** A crosshair sprite: ring with four ticks. Tint it with `material.color`. */
+export function makeCrosshair(): Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d');
+  if (g) {
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.arc(64, 64, 34, 0, Math.PI * 2);
+    g.stroke();
+    g.lineWidth = 6;
+    for (const [x0, y0, x1, y1] of [[64, 4, 64, 22], [64, 106, 64, 124], [4, 64, 22, 64], [106, 64, 124, 64]]) {
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.stroke();
+    }
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.arc(64, 64, 5, 0, Math.PI * 2);
+    g.fill();
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  sprite.renderOrder = 12;
+  return sprite;
+}
+
+/** A thin beam along +Y with length 1; scale y to its length. */
+export function makeBeam(radius: number, color: number, opacity: number): Mesh {
+  const geometry = new CylinderGeometry(radius, radius, 1, 6);
+  geometry.translate(0, 0.5, 0);
+  const beam = new Mesh(geometry, glow(color, opacity));
+  beam.frustumCulled = false;
+  return beam;
+}
+
 /** Bottom edge at the origin, facing +Z, with a health bar along the top. */
 export function makeWall(): WallRig {
   const wall = new Group();

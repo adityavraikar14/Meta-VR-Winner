@@ -7,8 +7,9 @@
  *   spear  points where the fist points; thrust to cut, open the hand mid-push to throw.
  *   ball   grows on the open palm; push or throw the palm forward to launch it.
  *   wall   rises in front of the player and blocks orbs for a few seconds.
+ *   gun    rides the pointing index finger with a crosshair; drop the thumb to fire.
  */
-import { Group, Quaternion, Vector3 } from '@iwsdk/core';
+import { Group, Mesh, Quaternion, Sprite, Vector3 } from '@iwsdk/core';
 import { isFist, Item } from './gestures.js';
 import { HandState, Side } from './hands.js';
 import type { Foe } from './opponent.js';
@@ -17,6 +18,9 @@ import {
   BALL_RADIUS,
   Bursts,
   makeBall,
+  makeBeam,
+  makeCrosshair,
+  makeGun,
   makeSpear,
   makeSword,
   makeWall,
@@ -71,6 +75,50 @@ const WALL_FADE = 1;
 /** Orbs the wall can take before it shatters. */
 export const WALL_HP = 5;
 const WALL_FLASH = 0.15;
+
+/** Blaster: damage per shot and seconds between shots. */
+const GUN_DAMAGE = 1;
+const GUN_COOLDOWN = 0.2;
+/** Thumb-to-finger distance (m) that pulls the trigger, and that releases it again. */
+const TRIGGER_PULL = 0.03;
+const TRIGGER_RELEASE = 0.045;
+/** A freshly summoned gun ignores the trigger this long, so summoning can't misfire. */
+const GUN_READY = 0.3;
+/**
+ * The aim runs from a point just below the eye on the shooting side, through
+ * the index fingertip, the way people line a finger up with a target. Meta's
+ * own hand rays work this way: positions are tracked far more steadily than
+ * a finger's angle, and the long eye-to-fingertip baseline shrinks jitter.
+ */
+const AIM_EYE_DROP = 0.1;
+const AIM_EYE_SIDE = 0.05;
+/** The aim line passes this far from the index knuckle towards the fingertip (tip jitters more). */
+const AIM_FINGER_POINT = 0.7;
+/**
+ * Adaptive smoothing (per second): slow while the aim barely moves, which
+ * hides jitter, fast for deliberate moves, so turning to a new target doesn't lag.
+ */
+const AIM_SMOOTH_SLOW = 8;
+const AIM_SMOOTH_FAST = 35;
+/** Aim changes of this many degrees per frame count as deliberate. */
+const AIM_DELIBERATE_DEG = 1.0;
+/** Aim help: targets count this much wider per metre of distance (about 2.5°). */
+const GUN_ASSIST = 0.044;
+/**
+ * A shot uses the aim from this long before the trigger: dropping the thumb
+ * jolts the finger a little, and this keeps that jolt out of the shot.
+ */
+const SHOT_LOOKBACK = 0.08;
+/** With nothing under it, the crosshair floats this far out. */
+const CROSSHAIR_DISTANCE = 4;
+/** Crosshair size per metre of distance, so it looks the same size anywhere. */
+const CROSSHAIR_SIZE = 0.045;
+const SHOT_RANGE = 20;
+const TRACER_TIME = 0.07;
+const AIM_HISTORY = 12;
+/** Index finger joints: the knuckle and the tip. */
+const INDEX_KNUCKLE = 6;
+const INDEX_TIP = 9;
 
 const Y = new Vector3(0, 1, 0);
 
@@ -128,6 +176,27 @@ export class Arsenal {
   private dir = new Vector3();
   private toFoe = new Vector3();
 
+  // Blaster state: smoothed aim, its recent history, the trigger and the visuals.
+  private aim = new Vector3();
+  private aimReady = false;
+  private head = new Vector3();
+  private eye = new Vector3();
+  private lastForward = new Vector3(0, 0, -1);
+  private muzzle = new Vector3();
+  private aimTimes = new Float64Array(AIM_HISTORY);
+  private aimDirs = new Float32Array(AIM_HISTORY * 3);
+  private aimHead = 0;
+  private clock = 0;
+  private triggerDown = false;
+  private crosshair: Sprite;
+  private laser: Mesh;
+  private tracer: Mesh;
+  private tracerLeft = 0;
+  private shotDir = new Vector3();
+  private shotEnd = new Vector3();
+  /** Shots fired since the level started. */
+  shots = 0;
+
   constructor(
     private root: Group,
     private bursts: Bursts,
@@ -137,6 +206,11 @@ export class Arsenal {
     this.wall = makeWall();
     this.wall.root.visible = false;
     root.add(this.wall.root);
+    this.crosshair = makeCrosshair();
+    this.laser = makeBeam(0.0025, 0x7af0ff, 0.25);
+    this.tracer = makeBeam(0.006, 0xbff8ff, 0.9);
+    this.crosshair.visible = this.laser.visible = this.tracer.visible = false;
+    root.add(this.crosshair, this.laser, this.tracer);
   }
 
   summon(item: Item, side: Side | null, head: Vector3, forward: Vector3): void {
@@ -146,8 +220,11 @@ export class Arsenal {
       return;
     }
     this.drop();
-    const object = item === 'sword' ? makeSword() : item === 'spear' ? makeSpear() : makeBall();
+    const object =
+      item === 'sword' ? makeSword() : item === 'spear' ? makeSpear() : item === 'gun' ? makeGun() : makeBall();
     if (item === 'ball') object.scale.setScalar(0.01);
+    this.aimReady = false;
+    this.triggerDown = false;
     this.root.add(object);
     this.held = {
       item,
@@ -167,6 +244,7 @@ export class Arsenal {
     if (!this.held) return;
     this.dispose(this.held.object);
     this.held = null;
+    this.crosshair.visible = this.laser.visible = false;
   }
 
   clear(): void {
@@ -183,7 +261,7 @@ export class Arsenal {
    */
   throwHeld(direction: Vector3): void {
     const held = this.held;
-    if (!held || held.item === 'sword') return;
+    if (!held || held.item === 'sword' || held.item === 'gun') return;
     if (held.item === 'ball') held.age = Math.max(held.age, BALL_GROW);
     this.dir.copy(direction).normalize().multiplyScalar(7);
     this.launch(held, this.dir);
@@ -220,10 +298,119 @@ export class Arsenal {
     );
   }
 
-  update(dt: number, forward: Vector3): void {
+  update(dt: number, forward: Vector3, head: Vector3): void {
+    this.clock += dt;
+    this.head.copy(head);
+    this.lastForward.copy(forward);
     if (this.held) this.updateHeld(this.held, dt, forward);
     this.updateProjectiles(dt);
     this.updateWall(dt);
+    if (this.tracerLeft > 0) {
+      this.tracerLeft -= dt;
+      this.tracer.visible = this.tracerLeft > 0;
+    }
+  }
+
+  /** Fires the held blaster, if any (the thumb trigger, or the test panel's Shoot). */
+  fireGun(): void {
+    const held = this.held;
+    if (!held || held.item !== 'gun' || held.cooldown > 0 || !this.aimReady) return;
+    held.cooldown = GUN_COOLDOWN;
+    this.shots++;
+
+    // Aim from just before the trigger, if the history reaches that far back.
+    this.shotDir.copy(this.aim);
+    for (let n = 1; n < AIM_HISTORY; n++) {
+      const k = (this.aimHead - n + AIM_HISTORY) % AIM_HISTORY;
+      if (this.aimTimes[k] === 0) break;
+      if (this.clock - this.aimTimes[k] >= SHOT_LOOKBACK) {
+        this.shotDir.set(this.aimDirs[k * 3], this.aimDirs[k * 3 + 1], this.aimDirs[k * 3 + 2]);
+        break;
+      }
+    }
+
+    const hit = this.foe.raycast(this.muzzle, this.shotDir, GUN_ASSIST);
+    if (hit?.orb) this.shotEnd.copy(hit.point);
+    else this.shotEnd.copy(this.muzzle).addScaledVector(this.shotDir, hit ? hit.distance : SHOT_RANGE);
+    this.stretch(this.tracer, this.muzzle, this.shotEnd);
+    this.tracer.visible = true;
+    this.tracerLeft = TRACER_TIME;
+    this.bursts.spawn(this.muzzle, 0x7af0ff, 0.06, 0.12);
+    sfx.shoot();
+    if (hit?.orb) {
+      if (this.foe.cutOrbs(hit.point, 0.02) > 0) sfx.slice();
+    } else if (hit) {
+      this.foe.damage(GUN_DAMAGE, this.shotEnd);
+    }
+  }
+
+  private updateGun(held: Held, anchor: Anchor, dt: number): void {
+    // Muzzle at the fingertip; aim from beside the eye through the finger. A controller just points forward.
+    const finger = anchor.hand ?? anchor.recent;
+    if (finger) {
+      finger.joint(INDEX_TIP, this.muzzle);
+      const through = finger.joint(INDEX_KNUCKLE, this.tip).lerp(this.muzzle, AIM_FINGER_POINT);
+      const side = held.side === 'right' ? 1 : -1;
+      // Right of the eyes is (−forward.z, 0, forward.x); forward comes from the last summon/update.
+      this.eye.copy(this.head);
+      this.eye.y -= AIM_EYE_DROP;
+      this.eye.x += -this.lastForward.z * AIM_EYE_SIDE * side;
+      this.eye.z += this.lastForward.x * AIM_EYE_SIDE * side;
+      this.dir.copy(through).sub(this.eye).normalize();
+    } else {
+      this.dir.copy(anchor.pointing);
+      this.muzzle.copy(anchor.position).addScaledVector(anchor.pointing, 0.12);
+    }
+    if (!this.aimReady) {
+      this.aim.copy(this.dir);
+      this.aimReady = true;
+      this.aimTimes.fill(0);
+    } else {
+      const change = (Math.acos(Math.min(1, this.aim.dot(this.dir))) * 180) / Math.PI;
+      const k = Math.min(1, change / AIM_DELIBERATE_DEG);
+      const rate = AIM_SMOOTH_SLOW + (AIM_SMOOTH_FAST - AIM_SMOOTH_SLOW) * k;
+      this.aim.lerp(this.dir, 1 - Math.exp(-rate * dt)).normalize();
+    }
+    const h = this.aimHead;
+    this.aimTimes[h] = this.clock;
+    this.aimDirs[h * 3] = this.aim.x;
+    this.aimDirs[h * 3 + 1] = this.aim.y;
+    this.aimDirs[h * 3 + 2] = this.aim.z;
+    this.aimHead = (h + 1) % AIM_HISTORY;
+
+    held.object.position.copy(this.muzzle);
+    held.object.quaternion.setFromUnitVectors(Y, this.aim);
+
+    // Crosshair on whatever the gun points at (red over a target), else floating ahead.
+    const hit = this.foe.raycast(this.muzzle, this.aim, GUN_ASSIST);
+    const distance = hit ? hit.distance : CROSSHAIR_DISTANCE;
+    if (hit?.orb) this.mid.copy(hit.point);
+    else this.mid.copy(this.muzzle).addScaledVector(this.aim, distance);
+    this.crosshair.position.copy(this.mid);
+    this.crosshair.scale.setScalar(Math.max(0.05, distance * CROSSHAIR_SIZE));
+    this.crosshair.material.color.setHex(hit ? 0xff4a4a : 0xffffff);
+    this.crosshair.visible = true;
+    this.stretch(this.laser, this.muzzle, this.mid);
+    this.laser.visible = true;
+
+    // Thumb trigger, with a gap between pull and release so it can't chatter.
+    const hand = anchor.hand;
+    if (!hand) return;
+    if (!this.triggerDown && hand.thumbDrop < TRIGGER_PULL) {
+      this.triggerDown = true;
+      if (held.age > GUN_READY) this.fireGun();
+    } else if (this.triggerDown && hand.thumbDrop > TRIGGER_RELEASE) {
+      this.triggerDown = false;
+    }
+  }
+
+  /** Points a beam (built along +Y, length 1) from `from` to `to`. */
+  private stretch(beam: Mesh, from: Vector3, to: Vector3): void {
+    this.toFoe.copy(to).sub(from);
+    const length = this.toFoe.length();
+    beam.position.copy(from);
+    beam.quaternion.setFromUnitVectors(Y, this.toFoe.divideScalar(length || 1));
+    beam.scale.set(1, Math.max(0.001, length), 1);
   }
 
   private updateHeld(held: Held, dt: number, forward: Vector3): void {
@@ -233,9 +420,14 @@ export class Arsenal {
     const hand = anchor.hand;
     const object = held.object;
 
+    if (held.item === 'gun') {
+      this.updateGun(held, anchor, dt);
+      return;
+    }
+
     // The hand vanished mid-throw: throw along the way it was moving.
     const recent = anchor.recent;
-    if (recent && held.item !== 'sword' && (held.item === 'spear' || held.age >= BALL_GROW)) {
+    if (recent && (held.item === 'spear' || (held.item === 'ball' && held.age >= BALL_GROW))) {
       const v = recent.lastVelocity;
       if (v.length() > THROW_SPEED && v.dot(forward) > 0) {
         this.dir.copy(v).multiplyScalar(THROW_BOOST);
@@ -301,7 +493,7 @@ export class Arsenal {
 
   private launch(held: Held, velocity: Vector3): void {
     const item = held.item;
-    if (item === 'sword') return;
+    if (item === 'sword' || item === 'gun') return;
     const from = held.object.position;
     let speed = velocity.length();
     speed = Math.min(MAX_LAUNCH, Math.max(MIN_LAUNCH, speed));

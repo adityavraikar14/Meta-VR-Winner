@@ -18,7 +18,7 @@ import type { Sign } from './gestures.js';
 import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 
 export type SimPose = 'relaxed' | Exclude<Sign, 'none'>;
-export type SimMove = 'push' | 'swing';
+export type SimMove = 'push' | 'swing' | 'shoot';
 
 /** Head-relative frame: x to the right, y up, z forward (metres / directions). */
 type V3 = readonly [number, number, number];
@@ -30,6 +30,8 @@ interface HandPose {
   /** Wrist towards the fingertips. */
   fingers: V3;
   fist: boolean;
+  /** Finger gun: index straight, other fingers curled, thumb up. */
+  point?: boolean;
 }
 
 const RELAXED_LEFT: HandPose = { wrist: [-0.17, -0.38, 0.28], normal: [0, -1, 0], fingers: [0.1, 0, 1], fist: false };
@@ -57,7 +59,16 @@ const POSES: Record<SimPose, Record<Side, HandPose>> = {
     left: { wrist: [-0.17, -0.32, 0.33], normal: [0, 0, 1], fingers: [0, 1, 0], fist: false },
     right: { wrist: [0.17, -0.32, 0.33], normal: [0, 0, 1], fingers: [0, 1, 0], fist: false },
   },
+  gun: {
+    left: RELAXED_LEFT,
+    // Fingertip on the line from beside the eye to the sentinel, as a player would line it up.
+    right: { wrist: [0.05, -0.21, 0.18], normal: [-1, 0, 0], fingers: [0, 0, 1], fist: false, point: true },
+  },
 };
+
+/** Shoot: the thumb stays dropped this long. */
+const SHOOT_DOWN = 0.12;
+const SHOOT_TIME = 0.25;
 
 /** A push drives the hands this far forward in PUSH_OUT seconds (about 2.3 m/s), then back. */
 const PUSH_DISTANCE = 0.35;
@@ -121,7 +132,7 @@ export class SimHands {
   }
 
   startMove(move: SimMove): void {
-    if (!this.active) this.setPose(move === 'swing' ? 'sword' : 'relaxed');
+    if (!this.active) this.setPose(move === 'swing' ? 'sword' : move === 'shoot' ? 'gun' : 'relaxed');
     this.move = move;
     this.moveTime = 0;
   }
@@ -155,10 +166,14 @@ export class SimHands {
     let push = 0;
     let swing = -1;
     let openSpear = false;
+    let thumbDown = false;
     if (this.move) {
       this.moveTime += dt;
       const t = this.moveTime;
-      if (this.move === 'push') {
+      if (this.move === 'shoot') {
+        thumbDown = t < SHOOT_DOWN;
+        if (t > SHOOT_TIME) this.move = null;
+      } else if (this.move === 'push') {
         push = t < PUSH_OUT ? t / PUSH_OUT : Math.max(0, 1 - (t - PUSH_OUT) / PUSH_BACK);
         openSpear = this.pose === 'spear' && t > PUSH_OUT * SPEAR_RELEASE;
         if (t > PUSH_OUT + PUSH_BACK) this.move = null;
@@ -184,7 +199,7 @@ export class SimHands {
       }
       this.toWorld(pose.normal, this.normal, false).normalize();
       this.toWorld(pose.fingers, this.fingers, false).normalize();
-      this.writeHand(hands[side], pose.fist && !openSpear);
+      this.writeHand(hands[side], pose.fist && !openSpear, pose.point === true, thumbDown);
       hands[side].tracked = true;
       hands[side].lostFor = 0;
       hands[side].update(time);
@@ -201,7 +216,7 @@ export class SimHands {
   }
 
   /** Lays out the 25 joints from the wrist, palm normal and finger direction. */
-  private writeHand(hand: HandState, fist: boolean): void {
+  private writeHand(hand: HandState, fist: boolean, point: boolean, thumbDown: boolean): void {
     const j = hand.joints;
     const put = (i: number, p: Vector3) => {
       j[i * 3] = p.x;
@@ -217,20 +232,29 @@ export class SimHands {
     put(0, this.wrist);
 
     // Thumb: out to the side and forward, tucked across the fingers in a fist.
+    // On a finger gun it stands up like a hammer, or lies along the curled
+    // middle finger when dropped to fire.
     for (let k = 1; k <= 4; k++) {
-      this.v.copy(this.wrist).addScaledVector(t, fist ? 0.03 + 0.004 * k : 0.02 + 0.017 * k);
-      this.v.addScaledVector(d, fist ? 0.02 + 0.016 * k : 0.018 * k);
-      if (fist) this.v.addScaledVector(n, 0.008 * k);
+      if (point && !thumbDown) {
+        this.v.copy(this.wrist).addScaledVector(d, 0.025 + 0.007 * k).addScaledVector(t, 0.015 + 0.019 * k);
+      } else if (point) {
+        this.v.copy(this.wrist).addScaledVector(t, 0.02).addScaledVector(d, 0.02 + 0.016 * k).addScaledVector(n, 0.008 * k);
+      } else {
+        this.v.copy(this.wrist).addScaledVector(t, fist ? 0.03 + 0.004 * k : 0.02 + 0.017 * k);
+        this.v.addScaledVector(d, fist ? 0.02 + 0.016 * k : 0.018 * k);
+        if (fist) this.v.addScaledVector(n, 0.008 * k);
+      }
       put(k, this.v);
     }
     for (let f = 0; f < 4; f++) {
+      const curled = point ? f > 0 : fist;
       const base = 5 + f * 5;
       this.v.copy(this.wrist).addScaledVector(d, 0.03).addScaledVector(t, KNUCKLE_ACROSS[f] * 0.6);
       put(base, this.v);
       const knuckle = this.w.copy(this.wrist).addScaledVector(d, 0.09).addScaledVector(t, KNUCKLE_ACROSS[f]);
       put(base + 1, knuckle);
       const length = f === 3 ? 0.8 : 1;
-      if (!fist) {
+      if (!curled) {
         for (const [k, along] of [[2, 0.042], [3, 0.068], [4, 0.088]] as const) {
           this.v.copy(knuckle).addScaledVector(d, along * length);
           put(base + k, this.v);
