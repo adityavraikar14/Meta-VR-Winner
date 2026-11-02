@@ -8,7 +8,10 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  type InstancedMesh,
+  type Object3D,
   PlaneGeometry,
+  Raycaster,
   Shape,
   ShapeGeometry,
   SRGBColorSpace,
@@ -21,17 +24,20 @@ import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
 import { stage } from '../stage-state.js';
 import { ribbon, silhouette } from './dragon.js';
+import { NamePlate, preloadWitch, Witch3D, WITCH_HEIGHT, witchLoad } from './witch3d.js';
 
 /**
- * Ink Duel: a casual fight against a computer shadow-puppeteer.
+ * Ink Duel: a fight against Morwen, the Ink Witch.
  *
- * Pinch and draw in the air: your stroke of light-ink hangs there, a solid
- * thing whose mass is the ink you used. Grab it and throw it at the Rival
- * on the screen. It flies under real gravity, and the hit does damage by
- * its kinetic energy, ½mv²: a big drawing hits hard but is heavy to throw;
- * a small one flies fast. Drawings left hanging in the air are shields that
- * stop the Rival's ink. The Rival draws on the screen with a giant quill
- * and flings its shapes back at you. First to run out loses.
+ * She steps out of the screen and stands on the hill in front of it. Pinch
+ * and draw in the air: your stroke of light-ink hangs there, a solid thing
+ * whose mass is the ink you used. Grab it and throw it at her. It flies
+ * under real gravity, and the hit does damage by its kinetic energy, ½mv²:
+ * a big drawing hits hard but is heavy to throw; a small one flies fast. A
+ * hit on the head counts half again. Drawings left hanging in the air are
+ * shields that stop her ink. She hurls ink in arcs, flicks fast straight
+ * bolts, and raises a ward of runes that stops your throws until it fades.
+ * First to run out loses.
  */
 
 const PLAYER_HEARTS = 5;
@@ -44,6 +50,15 @@ const GRAVITY = 9.8;
 const GRAB_REACH = 0.035;
 /** Damage per joule of kinetic energy. */
 const DAMAGE_PER_JOULE = 40;
+/** A hit on the head counts this much more. */
+const HEAD_BONUS = 1.5;
+/** How far in front of the screen the witch stands, metres. */
+const WITCH_OUT = 0.3;
+/** Seconds to walk out of the screen, then a breath before the fight. */
+const WALK_TIME = 2.6;
+const READY_TIME = WALK_TIME + 1.6;
+/** The flat puppet stands in only if the 3D witch never arrives. */
+const FLAT_AFTER = 20;
 
 type Mode = 'ready' | 'fight' | 'won' | 'lost';
 type InkState = 'drawing' | 'hanging' | 'held' | 'flying' | 'gone';
@@ -101,26 +116,42 @@ export class InkDuel {
   private readonly splats: Mesh[] = [];
   private readonly splatMaterial: MeshBasicMaterial;
   private readonly heartMeshes: Mesh[] = [];
+  private readonly frame: Mesh;
   private readonly bar: Mesh;
   private readonly score: { mesh: Mesh; canvas: HTMLCanvasElement; texture: CanvasTexture; time: number };
   private nextRival = 3;
   private note = '';
   private noteTime = 0;
+  /** The 3D witch, once her model has loaded. */
+  private witch: Witch3D | null = null;
+  /** The flat puppet stands in (the model never arrived). */
+  private flat = false;
+  private readonly plate = new NamePlate('Morwen the Ink Witch');
+  private readonly witchFrom = new Vector3();
+  private readonly witchSpot = new Vector3();
+  private emerged = false;
   private readonly head = new Vector3();
+  private readonly headWorld = new Vector3();
   private readonly v = new Vector3();
   private readonly w = new Vector3();
 
-  constructor(root: Group) {
+  constructor(
+    root: Group,
+    private readonly floor: number,
+  ) {
     this.group.name = 'InkDuel';
     root.updateWorldMatrix(true, false);
     const toPaper = new Matrix4().copy(root.matrixWorld).invert().multiply(stage.paper!.matrixWorld);
     toPaper.decompose(this.paper.position, this.paper.quaternion, this.paper.scale);
     this.group.add(this.paper, this.splashes.points, this.sparks.points);
     this.rival = new Rival();
+    this.rival.root.visible = false;
     this.paper.add(this.rival.root);
+    void preloadWitch();
 
     this.light = new MeshStandardMaterial({ color: 0x9fd8ff, emissive: 0x4aa8ff, emissiveIntensity: 0.9, roughness: 0.3 });
-    this.dark = new MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.25, metalness: 0.3 });
+    // Her ink: near black, with a violet glow so it shows against the sky.
+    this.dark = new MeshStandardMaterial({ color: 0x1a0c24, emissive: 0x6a20a8, emissiveIntensity: 0.7, roughness: 0.25, metalness: 0.3 });
     this.splatMaterial = new MeshBasicMaterial({ map: splatTexture(), transparent: true, depthWrite: false });
 
     // Hearts and the Rival's strength on the screen.
@@ -138,6 +169,7 @@ export class InkDuel {
     const frame = new Mesh(new BoxGeometry(0.26, 0.022, 0.001), new MeshBasicMaterial({ color: 0x1a1218, transparent: true, opacity: 0.8, depthWrite: false }));
     frame.position.set(0.3, 0.315, 0.011);
     frame.renderOrder = 8;
+    this.frame = frame;
     this.paper.add(frame);
     this.bar = new Mesh(new BoxGeometry(0.25, 0.014, 0.001).translate(0.125, 0, 0), new MeshBasicMaterial({ color: 0x302838, transparent: true, depthWrite: false }));
     this.bar.position.set(0.175, 0.315, 0.0125);
@@ -149,20 +181,23 @@ export class InkDuel {
     canvas.height = 128;
     const texture = new CanvasTexture(canvas);
     texture.colorSpace = SRGBColorSpace;
-    const mesh = new Mesh(new PlaneGeometry(0.16, 0.08), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }));
+    const mesh = new Mesh(new PlaneGeometry(0.24, 0.12), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
     mesh.renderOrder = 10;
     mesh.visible = false;
-    this.paper.add(mesh);
+    this.group.add(mesh);
     this.score = { mesh, canvas, texture, time: 0 };
+    this.plate.mesh.visible = false;
+    this.group.add(this.plate.mesh);
 
     devInfo.duel = () => this.state;
     devActions['['] = () => this.devDraw();
     devActions[']'] = () => this.devThrow();
-    devActions[';'] = () => this.rivalAttack();
+    devActions[';'] = () => this.devRival();
   }
 
   get state(): string {
-    return `${this.mode} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)} inks=${this.inks.map((i) => i.state[0]).join('')}`;
+    const who = this.witch ? `witch=${this.witch.moving}${this.witch.warded ? '+ward' : ''}` : this.flat ? 'flat' : `witch:${witchLoad.state}`;
+    return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)} inks=${this.inks.map((i) => i.state[0]).join('')}`;
   }
 
   // ================================================================ Update
@@ -171,18 +206,39 @@ export class InkDuel {
     this.time += dt;
     this.modeTime += dt;
     this.noteTime -= dt;
+    this.headWorld.copy(head);
     this.group.worldToLocal(this.head.copy(head));
+    if (!this.witch && !this.flat) {
+      this.witch = Witch3D.create();
+      if (this.witch) this.placeWitch(this.witch);
+      else if (this.time > FLAT_AFTER) this.flat = true;
+    }
     const live = stage.playing || this.mode === 'won' || this.mode === 'lost';
     this.paper.visible = live;
+    this.rival.root.visible = this.flat;
+    this.frame.visible = this.bar.visible = this.flat;
+    if (this.witch) this.witch.root.visible = live && this.witch.melt < 1;
+    this.plate.mesh.visible = live && this.witch !== null && this.mode !== 'won' && this.emerged;
     if (!live) {
+      // Behind the menu or the story card: the fight starts when play does.
+      if (this.mode === 'ready') this.modeTime = 0;
       this.rival.update(dt);
       return;
     }
     this.record(hands);
     switch (this.mode) {
       case 'ready':
-        this.caption = 'Ink Duel! Pinch and draw in the air, then grab your drawing and throw it';
-        if (this.modeTime > 3) this.setMode('fight');
+        if (!this.witch && !this.flat) {
+          this.caption = 'Someone stirs behind the screen…';
+          this.modeTime = 0;
+          break;
+        }
+        if (this.witch) this.walkOut(this.witch);
+        this.caption =
+          this.witch && this.modeTime < WALK_TIME
+            ? 'Morwen the Ink Witch steps out of the screen!'
+            : 'Ink Duel! Pinch and draw in the air, then grab your drawing and throw it';
+        if (this.modeTime > (this.witch ? READY_TIME : 3)) this.setMode('fight');
         this.draw(hands);
         break;
       case 'fight':
@@ -192,17 +248,39 @@ export class InkDuel {
         this.say();
         break;
       case 'won':
-        this.caption = 'You win the duel! Your ink flew true.';
+        this.caption = this.witch ? 'You win the duel! Morwen melts back into ink.' : 'You win the duel! Your ink flew true.';
         this.rival.fall = Math.min(1, this.modeTime / 1.2);
-        if (this.modeTime > 3.5) this.done = true;
+        if (this.witch) {
+          // She falls, then dissolves into a cloud of ink.
+          this.witch.melt = Math.min(1, Math.max(0, (this.modeTime - 1.8) / 1.4));
+          if (this.witch.melt > 0 && this.witch.melt < 1 && Math.random() < dt * 40) {
+            this.witch.chestAt(this.v);
+            this.v.x += (Math.random() - 0.5) * 0.1;
+            this.v.y += (Math.random() - 0.6) * 0.2;
+            this.splashes.emit(this.v, this.w.set(0, 0.15 + Math.random() * 0.2, 0), { life: 0.9, gravity: -0.3, drag: 0.5, size: [0.014, 0.03], from: 0x2a1040, alpha: 0.8 });
+          }
+        }
+        if (this.modeTime > (this.witch ? 4 : 3.5)) this.done = true;
         break;
       case 'lost':
-        this.caption = 'Splat! The Rival wins this one. Rematch from the menu!';
+        this.caption = this.witch ? 'Splat! Morwen wins this one. Rematch from the menu!' : 'Splat! The Rival wins this one. Rematch from the menu!';
         if (this.modeTime > 3.5) this.done = true;
         break;
     }
     this.fly(dt);
     this.rival.update(dt);
+    if (this.witch) {
+      this.witch.update(dt, this.mode === 'won' ? null : this.mode === 'ready' && this.modeTime < WALK_TIME ? null : this.head);
+      this.plate.draw(this.rivalHealth / RIVAL_HEALTH);
+      this.plate.mesh.position.copy(this.witch.root.position).setY(this.witch.root.position.y + WITCH_HEIGHT + 0.07);
+      this.plate.mesh.lookAt(this.headWorld);
+      // Her hand let go: the ink is on its way.
+      if (this.witch.released) {
+        const hand = this.witch.released;
+        this.witch.released = null;
+        if (this.mode === 'fight') this.rivalAttack(this.witch.handAt(hand, new Vector3()), this.witch.moving === 'attack' ? 'bolt' : 'arc');
+      }
+    }
     this.drawHud(dt);
     this.splashes.update(dt);
     this.sparks.update(dt);
@@ -213,12 +291,68 @@ export class InkDuel {
     this.modeTime = 0;
   }
 
+  // ================================================================= Witch
+
+  /** She starts just behind the screen, facing out, and walks through it onto the hill. */
+  private placeWitch(witch: Witch3D): void {
+    const out = this.v.set(0, 0, 1).applyQuaternion(this.paper.quaternion).setY(0).normalize();
+    this.witchSpot.copy(this.paper.position).addScaledVector(out, WITCH_OUT);
+    this.witchFrom.copy(this.paper.position).addScaledVector(out, -0.1);
+    const y = this.groundAt(this.witchSpot);
+    this.witchSpot.y = y;
+    this.witchFrom.y = y;
+    witch.root.position.copy(this.witchFrom);
+    witch.root.rotation.y = Math.atan2(out.x, out.z);
+    witch.play('walk');
+    this.group.add(witch.root);
+  }
+
+  private walkOut(witch: Witch3D): void {
+    const k = Math.min(1, this.modeTime / WALK_TIME);
+    witch.root.position.lerpVectors(this.witchFrom, this.witchSpot, k);
+    // Ink spatters off the screen as she steps through it.
+    const through = 0.1 / (0.1 + WITCH_OUT);
+    if (!this.emerged && k > through) {
+      this.emerged = true;
+      witch.chestAt(this.v);
+      this.splashAt(this.v, 0x1a0c24);
+      playSplat(0.1);
+    }
+    if (k >= 1) witch.play('idle');
+  }
+
+  /**
+   * The ground's height under a stage point: a ray down onto the world's
+   * scenery (not the grass, not the duel's own things), nearest the floor.
+   */
+  private groundAt(p: Vector3): number {
+    const stageRoot = this.group.parent?.parent;
+    if (!stageRoot) return this.floor;
+    const props = this.group.parent!;
+    const from = props.localToWorld(this.w.set(p.x, this.floor + 0.25, p.z));
+    const ray = new Raycaster(from.clone(), new Vector3(0, -1, 0), 0, 1);
+    const targets = stageRoot.children.filter((c) => c !== props);
+    let best = this.floor;
+    let found = false;
+    for (const hit of ray.intersectObjects(targets, true)) {
+      if ((hit.object as InstancedMesh).isInstancedMesh || !(hit.object as Mesh).isMesh) continue;
+      const y = props.worldToLocal(hit.point.clone()).y;
+      if (y > this.floor + 0.12) continue;
+      if (!found || y > best) best = y;
+      found = true;
+    }
+    return found ? best : this.floor;
+  }
+
   private say(): void {
     const hanging = this.inks.some((i) => !i.rival && i.state === 'hanging');
     const held = this.inks.some((i) => i.state === 'held');
-    let text = hanging ? 'Pinch your drawing to grab it, then throw it at the Rival' : 'Pinch and draw a shape in the air';
+    const who = this.witch ? 'Morwen' : 'the Rival';
+    let text = hanging ? `Pinch your drawing to grab it, then throw it at ${who}` : 'Pinch and draw a shape in the air';
     if (held) text = 'Throw! Big drawings hit harder, small ones fly faster';
     if (this.rival.drawing > 0) text = 'The Rival is drawing… leave a drawing hanging in the air as a shield!';
+    if (this.witch?.moving === 'throw' || this.witch?.moving === 'attack') text = 'Morwen winds up to throw… hang a drawing in the air as a shield!';
+    if (this.witch?.warded) text = 'Her ward of runes is up: wait for it to fade, then throw!';
     if (this.noteTime > 0) text = this.note;
     this.caption = text;
   }
@@ -384,7 +518,7 @@ export class InkDuel {
       ink.pos.addScaledVector(ink.vel, dt);
       ink.mesh.position.copy(ink.pos);
       ink.mesh.rotateZ(ink.spin * dt);
-      if (Math.random() < dt * 40) this.sparks.emit(ink.pos, this.v.set(0, 0, 0), { life: 0.3, size: [0.008, 0.002], from: ink.rival ? 0x6a5a80 : 0xbfe4ff });
+      if (Math.random() < dt * 40) this.sparks.emit(ink.pos, this.v.set(0, 0, 0), { life: 0.3, size: [0.008, 0.002], from: ink.rival ? 0x8a50ff : 0xbfe4ff });
 
       if (ink.rival) {
         // Blocked by a drawing hanging in the air?
@@ -410,6 +544,10 @@ export class InkDuel {
         if (ink.age > 3.5) this.remove(ink);
         continue;
       }
+      if (this.witch && this.mode === 'fight' && this.strikeWitch(this.witch, ink)) {
+        this.remove(ink);
+        continue;
+      }
       const onPaper = this.paper.worldToLocal(this.group.localToWorld(this.v.copy(ink.pos)));
       if (onPaper.z <= 0.015) {
         this.hitScreen(ink, onPaper);
@@ -420,12 +558,42 @@ export class InkDuel {
     }
   }
 
+  /** Did a thrown drawing reach the witch: her ward, her head or her body? */
+  private strikeWitch(witch: Witch3D, ink: Ink): boolean {
+    if (witch.warded && ink.pos.distanceTo(witch.wardAt(this.w)) < witch.wardRadius() + 0.02) {
+      for (let i = 0; i < 16; i++) {
+        this.v.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(0.3 + Math.random() * 0.4);
+        this.sparks.emit(ink.pos, this.v, { life: 0.4, size: [0.012, 0.002], from: 0x8affb8 });
+      }
+      playSplat(0.05);
+      this.flash('Her ward of runes stops it! Wait for it to fade', 1.4);
+      return true;
+    }
+    const onHead = ink.pos.distanceTo(witch.headAt(this.w)) < 0.06;
+    if (!onHead && witch.distanceTo(ink.pos, this.w) > 0.07) return false;
+    const speed = ink.vel.length();
+    const energy = 0.5 * ink.mass * speed * speed;
+    const base = Math.min(40, Math.max(5, energy * DAMAGE_PER_JOULE));
+    const damage = Math.round(base * (onHead ? HEAD_BONUS : 1));
+    this.rivalHealth -= damage;
+    witch.flinch();
+    this.splashAt(ink.pos, 0x4aa8ff);
+    playBoom(0.06 + damage * 0.002);
+    this.showScore(ink.pos, damage, energy, ink.mass, speed, onHead);
+    if (this.rivalHealth <= 0) this.end(true);
+    return true;
+  }
+
   private hitScreen(ink: Ink, at: Vector3): void {
     const speed = ink.vel.length();
     const energy = 0.5 * ink.mass * speed * speed;
     this.splat(at);
     playSplat(0.08);
     if (this.mode !== 'fight') return;
+    if (this.witch) {
+      this.flash('Missed! Throw a little higher: ink falls on the way', 1.4);
+      return;
+    }
     if (this.rival.shielded(at)) {
       this.flash('Blocked by the Rival’s shield!', 1.2);
       return;
@@ -438,7 +606,7 @@ export class InkDuel {
     this.rivalHealth -= damage;
     this.rival.flinch();
     playBoom(0.06 + damage * 0.002);
-    this.showScore(at, damage, energy, ink.mass, speed);
+    this.showScore(this.group.worldToLocal(this.paper.localToWorld(at.clone())), damage, energy, ink.mass, speed, false);
     if (this.rivalHealth <= 0) this.end(true);
   }
 
@@ -446,11 +614,17 @@ export class InkDuel {
     this.won = won;
     this.setMode(won ? 'won' : 'lost');
     for (const ink of [...this.inks]) if (ink.rival) this.remove(ink);
+    // Beaten, she falls; winning, she casts a flourish of runes.
+    this.witch?.play(won ? 'death' : 'skill');
   }
 
   // ================================================================= Rival
 
   private rivalTurn(dt: number): void {
+    if (this.witch) {
+      this.witchTurn(dt, this.witch);
+      return;
+    }
     this.nextRival -= dt;
     if (this.nextRival <= 0 && this.rival.drawing === 0) {
       if (Math.random() < 0.25 && this.rivalHealth < RIVAL_HEALTH * 0.7) {
@@ -470,20 +644,45 @@ export class InkDuel {
     }
   }
 
-  /** The Rival's drawing leaves the screen and arcs at the player's face. */
-  private rivalAttack(): void {
+  /**
+   * Morwen's turn: mostly she hurls ink in an arc. Hurt, she flicks fast
+   * straight bolts more often and raises her ward of runes.
+   */
+  private witchTurn(dt: number, witch: Witch3D): void {
+    this.nextRival -= dt;
+    if (this.nextRival > 0 || witch.busy) return;
+    const hurt = this.rivalHealth < RIVAL_HEALTH * 0.7;
+    const r = Math.random();
+    if (hurt && r < 0.25) {
+      witch.play('skill');
+      this.nextRival = 3.6;
+    } else if (r < (hurt ? 0.6 : 0.3)) {
+      witch.play('attack');
+      this.nextRival = hurt ? 2.2 : 2.8;
+    } else {
+      witch.play('throw');
+      this.nextRival = (hurt ? 3 : 3.8) + Math.random();
+    }
+  }
+
+  /**
+   * Ink leaves the Rival (her hand, or the puppet's quill) and flies at the
+   * player's face: an arc that falls onto you, or a fast, flatter bolt.
+   */
+  private rivalAttack(from?: Vector3, kind: 'arc' | 'bolt' = 'arc'): void {
     const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-    const start = this.group.worldToLocal(this.paper.localToWorld(this.rival.quillAt(new Vector3())));
+    const start = from ?? this.group.worldToLocal(this.paper.localToWorld(this.rival.quillAt(new Vector3())));
     const ink = this.newInk(true, start);
-    ink.points = shape.map(([x, y]) => new Vector3(x * 1.4, y * 1.4, 0));
+    const k = kind === 'bolt' ? 0.9 : 1.4;
+    ink.points = shape.map(([x, y]) => new Vector3(x * k, y * k, 0));
     ink.mass = this.inkLength(ink) * INK_DENSITY;
     this.rebuild(ink);
     // Aim to reach the head in T seconds under gravity: v = d/T + ½gT upward.
-    const T = 1.35;
+    const T = kind === 'bolt' ? 0.75 : 1.35;
     ink.vel.copy(this.head).sub(start).divideScalar(T);
     ink.vel.x += (Math.random() - 0.5) * 0.15;
     ink.vel.y += 0.5 * GRAVITY * T;
-    ink.spin = (Math.random() - 0.5) * 5;
+    ink.spin = (Math.random() - 0.5) * (kind === 'bolt' ? 12 : 5);
     ink.state = 'flying';
     playThrow();
   }
@@ -512,22 +711,33 @@ export class InkDuel {
     }
   }
 
-  private showScore(at: Vector3, damage: number, energy: number, mass: number, speed: number): void {
+  /** The damage and the energy behind it, floating up from where it hit (group space). */
+  private showScore(at: Vector3, damage: number, energy: number, mass: number, speed: number, head: boolean): void {
     const { canvas, texture, mesh } = this.score;
     const g = canvas.getContext('2d')!;
     g.clearRect(0, 0, 256, 128);
     g.textAlign = 'center';
+    g.lineJoin = 'round';
     g.font = 'bold 64px Georgia, serif';
-    g.fillStyle = '#1a6fd0';
+    g.lineWidth = 8;
+    g.strokeStyle = 'rgba(255,255,255,0.9)';
+    g.strokeText(`${damage}!`, 128, 64);
+    g.fillStyle = head ? '#d0501a' : '#1a6fd0';
     g.fillText(`${damage}!`, 128, 64);
-    g.font = '22px Georgia, serif';
+    g.font = 'bold 21px Georgia, serif';
+    g.lineWidth = 5;
+    const sum = `½mv² = ½·${(mass * 1000).toFixed(0)}g·${speed.toFixed(1)}² = ${energy.toFixed(2)} J`;
+    g.strokeText(sum, 128, 104);
     g.fillStyle = '#2a2030';
-    g.fillText(`½mv² = ½·${(mass * 1000).toFixed(0)}g·${speed.toFixed(1)}² = ${energy.toFixed(2)} J`, 128, 104);
+    g.fillText(sum, 128, 104);
     texture.needsUpdate = true;
-    mesh.position.set(at.x, at.y + 0.06, 0.013);
+    // Above where it hit, and clear of her name plate.
+    const above = this.witch ? this.witch.root.position.y + WITCH_HEIGHT + 0.17 : at.y + 0.08;
+    mesh.position.set(at.x, Math.max(at.y + 0.08, above), at.z);
+    mesh.lookAt(this.headWorld);
     mesh.visible = true;
     this.score.time = 1.8;
-    this.flash(damage >= 25 ? 'Huge hit!' : 'Hit!', 1.2);
+    this.flash(head ? 'Right on the head! Half again the damage' : damage >= 25 ? 'Huge hit!' : 'Hit!', 1.2);
   }
 
   private drawHud(dt: number): void {
@@ -555,10 +765,19 @@ export class InkDuel {
     this.rebuild(ink);
   }
 
+  /** Dev: the Rival attacks now (the witch winds up and throws). */
+  private devRival(): void {
+    if (!this.witch) {
+      this.rivalAttack();
+      return;
+    }
+    if (!this.witch.busy) this.witch.play('throw');
+  }
+
   private devThrow(): void {
     const ink = this.inks.find((i) => !i.rival && i.state === 'hanging');
     if (!ink) return;
-    const target = this.group.worldToLocal(this.paper.localToWorld(this.rival.bodyAt(new Vector3())));
+    const target = this.witch ? this.witch.chestAt(new Vector3()) : this.group.worldToLocal(this.paper.localToWorld(this.rival.bodyAt(new Vector3())));
     const T = 0.45;
     ink.vel.copy(target).sub(ink.pos).divideScalar(T);
     ink.vel.y += 0.5 * GRAVITY * T;

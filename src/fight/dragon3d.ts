@@ -19,6 +19,7 @@ import {
 } from '@iwsdk/core';
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { blobStore } from '../blob-fallback.js';
 
 /**
  * The Shadow Dragon in 3D (European Dragon by Regina Cachoa, CC-BY): it
@@ -54,8 +55,24 @@ export async function diagnoseDragon(log: (line: string) => void): Promise<void>
   log(`fetched ${buffer.byteLength} bytes at ${ms()}`);
   // Does createImageBitmap answer at all? (a 1x1 PNG)
   const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
-  const bitmap = createImageBitmap(new Blob([png], { type: 'image/png' })).then(() => 'resolved', (e) => `rejected ${e}`);
-  log(`createImageBitmap: ${await Promise.race([bitmap, new Promise((r) => setTimeout(() => r('no answer in 3 s'), 3000))])}`);
+  const within = (p: Promise<string>) => Promise.race([p, new Promise<string>((r) => setTimeout(() => r('no answer in 3 s'), 3000))]);
+  log(`blob store at start-up: ${blobStore.ok ? 'ok' : 'broken (textures load as data URLs)'}`);
+  if (typeof createImageBitmap !== 'undefined') {
+    const bitmap = createImageBitmap(new Blob([png], { type: 'image/png' })).then(() => 'resolved', (e) => `rejected ${e}`);
+    log(`createImageBitmap: ${await within(bitmap)}`);
+    // Which part stalls: reading blobs, decoding, or both?
+    log(`createImageBitmap(ImageData): ${await within(createImageBitmap(new ImageData(1, 1)).then(() => 'resolved', (e) => `rejected ${e}`))}`);
+  }
+  log(`blob read: ${await within(new Blob([png]).arrayBuffer().then((b) => `resolved ${b.byteLength} bytes`, (e) => `rejected ${e}`))}`);
+  const viaImage = (src: string) =>
+    new Promise<string>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve('loaded');
+      img.onerror = () => resolve('error');
+      img.src = src;
+    });
+  log(`<img> data: URL: ${await within(viaImage(`data:image/png;base64,${btoa(String.fromCharCode(...png))}`))}`);
+  log(`<img> blob: URL: ${await within(viaImage(URL.createObjectURL(new Blob([png], { type: 'image/png' }))))}`);
   try {
     const loader = new GLTFLoader();
     loader.register((parser) => {
@@ -128,8 +145,10 @@ function fit(model: Object3D, length: number): void {
 
 /**
  * Paint the dragon's scales in a sweep of colour, like a jewelled dragon:
- * sapphire at the head, emerald, crimson along the body, gold at the tail,
- * multiplied over its scale texture so every scale still shows.
+ * sapphire, emerald, crimson and gold from one end to the other. Its scale
+ * texture is a dark grey, so multiplying would leave it near black: instead
+ * the texture's brightness is kept only as detail, so every scale still
+ * shows in full colour, with a faint glow of its own like a gem.
  */
 function rainbowScales(material: MeshStandardMaterial, minZ: number, maxZ: number): void {
   material.onBeforeCompile = (shader) => {
@@ -142,14 +161,17 @@ function rainbowScales(material: MeshStandardMaterial, minZ: number, maxZ: numbe
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
-        vec3 c0 = vec3(0.15, 0.45, 1.0);
-        vec3 c1 = vec3(0.1, 0.85, 0.45);
-        vec3 c2 = vec3(1.0, 0.18, 0.12);
-        vec3 c3 = vec3(1.0, 0.72, 0.1);
+        vec3 c0 = vec3(0.08, 0.32, 1.0);
+        vec3 c1 = vec3(0.04, 0.8, 0.38);
+        vec3 c2 = vec3(0.95, 0.1, 0.12);
+        vec3 c3 = vec3(1.0, 0.68, 0.06);
         float t = vAlong;
         vec3 tint = t < 0.33 ? mix(c0, c1, t / 0.33) : t < 0.66 ? mix(c1, c2, (t - 0.33) / 0.33) : mix(c2, c3, (t - 0.66) / 0.34);
-        diffuseColor.rgb *= tint * 2.1;`,
-      );
+        float scale = clamp(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.06, 0.3, 1.8);
+        diffuseColor.rgb = tint * 0.6 * scale;
+        vec3 gemGlow = tint * scale * 0.07;`,
+      )
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gemGlow;');
   };
   material.customProgramCacheKey = () => 'dragon-rainbow';
 }
@@ -196,7 +218,8 @@ export class Dragon3D {
         const c = (m as MeshStandardMaterial).clone();
         if ((c as MeshStandardMaterial).isMeshStandardMaterial) {
           this.materials.push({ material: c, emissive: c.emissive.clone() });
-          rainbowScales(c as MeshStandardMaterial, box.min.z, box.max.z);
+          // Only the hide: its teeth and eyes keep their own colours.
+          if (c.name === 'Low_Poly_Bake') rainbowScales(c as MeshStandardMaterial, box.min.z, box.max.z);
         }
         return c as Material;
       });

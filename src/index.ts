@@ -13,17 +13,21 @@ import { HandMenuSystem } from './hand-menu.js';
 import { PanelSystem } from './panel.js';
 import { ShadowStageSystem } from './stage.js';
 import { ArenaSystem } from './arena.js';
+import { checkBlobStore } from './blob-fallback.js';
 
-World.create(
-  document.getElementById('scene-container') as HTMLDivElement,
-  projectOptions,
-).then((world) => {
-  // The stage builds the paper the game draws on, so it must come first.
-  world.registerSystem(ShadowStageSystem);
-  world.registerSystem(ShadowGameSystem);
-  world.registerSystem(CreatureSystem);
-  world.registerSystem(HandMenuSystem);
-  world.registerSystem(PanelSystem);
-  // Yash's Arsenal, as he wrote it, opened from the menu's Arena button.
-  world.registerSystem(ArenaSystem);
-});
+// A browser that can't read Blobs gets its model textures another way (before anything loads).
+void checkBlobStore().then(() =>
+  World.create(
+    document.getElementById('scene-container') as HTMLDivElement,
+    projectOptions,
+  ).then((world) => {
+    // The stage builds the paper the game draws on, so it must come first.
+    world.registerSystem(ShadowStageSystem);
+    world.registerSystem(ShadowGameSystem);
+    world.registerSystem(CreatureSystem);
+    world.registerSystem(HandMenuSystem);
+    world.registerSystem(PanelSystem);
+    // Yash's Arsenal, as he wrote it, opened from the menu's Arena button.
+    world.registerSystem(ArenaSystem);
+  }),
+);

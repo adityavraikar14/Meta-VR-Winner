@@ -70,7 +70,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { DUEL_INDEX, friendName, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
+import { DUEL, DUEL_INDEX, friendName, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
@@ -402,9 +402,12 @@ export class ShadowGameSystem extends createSystem({
       this.bannerShown = true;
     });
     this.table = new TableFinder(paper);
-    // Dev: Y opens the Arena from the menu, as its button does.
+    // Dev: Y opens the Arena from the menu, as its button does; D starts the Ink Duel.
     devActions.y = () => {
       if (this.phase === 'title') this.menuAction({ do: 'arena' });
+    };
+    devActions.d = () => {
+      if (this.phase === 'title') this.menuAction({ do: 'duel' });
     };
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
     // Dev: F9 times each step of loading the dragon.
@@ -430,20 +433,23 @@ export class ShadowGameSystem extends createSystem({
     this.showTable();
 
     installLevelTester({
-      levels: () => PUZZLES.map((p, index) => ({
-        index,
-        id: p.id,
-        chapter: `Chapter ${p.world + 1} · ${WORLDS[p.world].name}`,
-        title: p.title,
-        kind: p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend',
-      })),
+      levels: () => [
+        ...PUZZLES.map((p, index) => ({
+          index,
+          id: p.id,
+          chapter: `Chapter ${p.world + 1} · ${WORLDS[p.world].name}`,
+          title: p.title,
+          kind: p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend',
+        })),
+        { index: DUEL_INDEX, id: DUEL.id, chapter: 'Side games', title: DUEL.title, kind: 'hands' },
+      ],
       current: () => this.puzzle?.id ?? '',
       go: (index) => {
         if (stage.arena) this.leaveArena();
         this.startPuzzle(index);
       },
       help: (id) => {
-        const p = PUZZLES.find((q) => q.id === id);
+        const p = [...PUZZLES, DUEL].find((q) => q.id === id);
         return p ? `${p.ask}<br><br><i>Keys:</i> ${levelKeys(id, p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend')}` : '';
       },
       status: () => `phase: ${this.phase} · ${stage.task?.caption ?? this.caption}`,
@@ -811,7 +817,7 @@ export class ShadowGameSystem extends createSystem({
 
     if (puzzle) {
       const firstOfWorld = PUZZLES.findIndex((p) => p.world === puzzle.world) === index;
-      const kicker = puzzle.id === 'duel' ? 'Side game · vs the Rival' : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
+      const kicker = puzzle.id === 'duel' ? 'Side game · vs Morwen the Ink Witch' : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
       this.drawBanner(firstOfWorld || puzzle.id === 'duel' ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
       this.setCaption(puzzle.ask);
     } else {

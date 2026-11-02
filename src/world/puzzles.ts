@@ -694,12 +694,12 @@ export const DUEL: Puzzle = {
   id: 'duel',
   world: 0,
   title: 'Ink Duel',
-  story: 'A rival shadow-puppeteer challenges you. Draw in the air, then throw your drawings!',
+  story: 'Morwen, the Ink Witch of the deep woods, steps out of the screen and challenges you. Draw in the air, then throw your drawings at her!',
   ask: 'Pinch and draw a shape in the air',
   handsOn: true,
   solved: 'What a duel!',
   build(root, kit) {
-    const duel = new InkDuel(root);
+    const duel = new InkDuel(root, kit.floor);
     root.add(duel.group);
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
@@ -711,7 +711,7 @@ export const DUEL: Puzzle = {
         task.caption = duel.caption;
         task.done = duel.done;
         task.mistakes = duel.mistakes;
-        DUEL.solved = duel.won ? 'You won the duel! Your ink flew true.' : 'The Rival won this time. Try again!';
+        DUEL.solved = duel.won ? 'You won the duel! Your ink flew true.' : 'Morwen won this time. Try again!';
       },
     };
   },

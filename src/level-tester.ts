@@ -32,11 +32,11 @@ const KEYS: Record<string, string> = {
   'smithy': 'F does the next smithing step: light, pump, heat, anvil, strike, quench',
   'healing-draught': '[ herbs in · ] lower the pot · ; raise it · / steep fully · ’ fill the vials',
   'strong-draught': '[ herbs in · ] lower the pot · ; raise it · / steep fully · ’ fill the vials',
-  'broken-bridge': 'L lay a strong truss · M lay a weak square one · T test · U undo',
-  'ore-train': 'L lay the basic truss (it will buckle!) · T test · U undo',
+  'broken-bridge': 'L lay a strong truss · M lay a weak square one · W an X-braced one · T test · U undo',
+  'ore-train': 'L lay the basic truss (it will buckle!) · W lay an X-braced one (it holds) · T test · U undo',
   'sky-lantern': '[ light the burner · ] cup a hand under the flame (press again to take it away: too hot scorches the paper)',
   'shadow-dragon': '[ gather light · ] throw it · ; dragon breathes · ’ dragon dives',
-  duel: '[ draw a shape · ] throw it · ; the rival attacks',
+  duel: '[ draw a shape · ] throw it at Morwen · ; Morwen throws'
 };
 
 export function levelKeys(id: string, kind: string): string {
@@ -83,7 +83,7 @@ export function installLevelTester(api: TesterApi): void {
     body.innerHTML = '';
     const intro = document.createElement('div');
     intro.className = 'help';
-    intro.textContent = 'Enter VR in the emulator first (Enter on the start screen), then pick a level. Mouse-drag looks around; the emulator panels move the hands.';
+    intro.textContent = 'Enter VR in the emulator first (Enter on the start screen), then pick a level, or use Page Down / Page Up to step through them (Home: first, End: the dragon). Mouse-drag looks around; the emulator panels move the hands.';
     body.appendChild(intro);
     let chapter = '';
     const current = api.current();
@@ -96,7 +96,7 @@ export function installLevelTester(api: TesterApi): void {
       }
       const b = document.createElement('button');
       b.className = `lv${level.id === current ? ' on' : ''}`;
-      b.innerHTML = `<span>${level.index + 1}</span>${level.title}`;
+      b.innerHTML = `<span>${level.index < 1000 ? level.index + 1 : '⚔'}</span>${level.title}`;
       b.onclick = () => {
         api.go(level.index);
         setTimeout(render, 300);
@@ -123,6 +123,14 @@ export function installLevelTester(api: TesterApi): void {
   };
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'l' && e.shiftKey) toggle.click();
+    // Page Down / Page Up step through the levels; Home is the first, End the dragon.
+    const story = api.levels().filter((l) => l.index < 1000);
+    const at = story.findIndex((l) => l.id === api.current());
+    const to = { PageDown: at + 1, PageUp: at - 1, Home: 0, End: story.length - 1 }[e.key];
+    if (to === undefined) return;
+    const level = story[Math.max(0, Math.min(story.length - 1, to))];
+    api.go(level.index);
+    console.log(`SHADOWPLAY tester go=${level.id}`);
   });
   // Keep the highlighted level and status fresh while open.
   setInterval(() => {

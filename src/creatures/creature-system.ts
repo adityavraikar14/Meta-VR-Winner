@@ -16,6 +16,7 @@ import {
 import { playTransform, setPurr } from '../audio.js';
 import { devInfo } from '../dev-tools.js';
 import { preloadDragon } from '../fight/dragon3d.js';
+import { preloadWitch } from '../fight/witch3d.js';
 import { flattenGroups, mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
@@ -100,8 +101,8 @@ export class CreatureSystem extends createSystem({}) {
     const paper = stage.paper;
     if (!paper) throw new Error('ShadowStageSystem must be registered first');
 
-    // The dragon and phoenix are big and only needed at the end: fetch them after the scenery.
-    void preloadNature().finally(() => preloadDragon());
+    // The dragon, phoenix and witch are big and only needed later: fetch them after the scenery.
+    void preloadNature().finally(() => preloadDragon().finally(() => preloadWitch()));
     this.stageRoot = buildStage();
     this.stageRoot.position.copy(STAGE_OFFSET);
     paper.add(this.stageRoot);

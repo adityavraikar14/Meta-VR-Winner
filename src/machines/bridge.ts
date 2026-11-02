@@ -189,6 +189,7 @@ export class Bridge {
     devActions.u = () => this.undo();
     devActions.l = () => this.devDesign('warren');
     devActions.m = () => this.devDesign('square');
+    devActions.w = () => this.devDesign('braced');
     this.render();
   }
 
@@ -734,8 +735,12 @@ export class Bridge {
 
   // =================================================================== Dev
 
-  /** Dev: lay down a known design (a Warren truss that holds, or squares that fold). */
-  private devDesign(kind: 'warren' | 'square'): void {
+  /**
+   * Dev: lay down a known design: a Warren truss that holds the first cart,
+   * squares that fold, or the squares X-braced into a Pratt truss, which
+   * carries even the ore cart.
+   */
+  private devDesign(kind: 'warren' | 'square' | 'braced'): void {
     if (this.mode !== 'build') return;
     this.members.length = 0;
     this.history.length = 0;
@@ -776,6 +781,8 @@ export class Bridge {
         [1, b1], [b1, b2], [b2, b3], [b3, 3],
         [d1, b1], [d2, b2], [d3, b3],
       ];
+      // Braced: crossed diagonals in every panel turn each square into triangles.
+      if (kind === 'braced') pairs.push([L, b1], [d1, b2], [b2, d3], [b3, R], [1, d1], [b1, d2], [d2, b3], [3, d3]);
       for (const [a, b] of pairs) this.members.push({ a, b });
     }
     for (const member of this.members) this.history.push({ member, joint: -1 });

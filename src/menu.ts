@@ -240,7 +240,7 @@ export class MainMenu {
   }
 
   private battles(): Slot[] {
-    this.draw('Side games', 'Battles', 'Ink Duel: draw in the air and throw your drawings at a rival puppeteer.  ·  Arena: Yash\u2019s hand-sign fight against a sentinel.', 'Bring draughts, wards and sun shards from your bag');
+    this.draw('Side games', 'Battles', 'Ink Duel: draw in the air and throw your drawings at Morwen, the Ink Witch.  ·  Arena: Yash\u2019s hand-sign fight against a sentinel.', 'Bring draughts, wards and sun shards from your bag');
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Duel', run: () => ({ do: 'duel' }) },
@@ -274,7 +274,7 @@ export class MainMenu {
 
 /** Who made what (full list with links in CREDITS.md). */
 const CREDITS: Array<[string, string]> = [
-  ['The Dragon and the Phoenix', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D (Sketchfab, CC BY 4.0)'],
+  ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
   ['The World', 'Plants, rocks, textures and the daylight sky: Poly Haven (CC0) · Leaves: ambientCG (CC0)'],
