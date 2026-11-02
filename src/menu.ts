@@ -1,6 +1,7 @@
 import type { Object3D, Vector3 } from '@iwsdk/core';
-import { isMuted, playClick, playPrompt, playTinkle, setMuted } from './audio.js';
+import { isMuted, playClick, playPrompt, playTinkle, playUnfold, setMuted } from './audio.js';
 import { craft, needsText, RECIPES } from './bag.js';
+import { JOURNAL, pagesFilled } from './journal.js';
 import { play, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
@@ -11,7 +12,7 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
  * buttons in front of it: Home (play, chapters, settings), a chapter
  * picker with stars and locks, and settings.
  */
-export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles';
+export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal';
 
 /** What the menu asks the game to do. */
 export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'arena' };
@@ -20,6 +21,8 @@ type Draw = (kicker: string, title: string, body: string, footer?: string) => vo
 
 /** Title that asks the screen to paint the inventory grid (the kicker carries its message). */
 export const INVENTORY = '\u0000inventory';
+/** Title that asks the screen to paint a journal page (the kicker carries its index). */
+export const JOURNAL_PAGE = '\u0000journal';
 
 interface Slot {
   label: string;
@@ -37,6 +40,7 @@ const LAYOUTS: Record<number, number[]> = {
   3: [-0.17, 0, 0.17],
   4: [-0.25, -0.083, 0.083, 0.25],
   5: [-0.3, -0.15, 0, 0.15, 0.3],
+  6: [-0.325, -0.195, -0.065, 0.065, 0.195, 0.325],
 };
 
 export class MainMenu {
@@ -51,7 +55,7 @@ export class MainMenu {
     private readonly viewer: Vector3,
     private readonly draw: Draw,
   ) {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const button = new PushButton(parent, '');
       button.show(false);
       this.buttons.push(button);
@@ -65,6 +69,11 @@ export class MainMenu {
 
   open(page: MenuPage): void {
     if (page === 'chapters' && this.page !== 'chapters') this.chapter = worldOf(resumeIndex());
+    // The journal opens at the newest story page you have earned.
+    if (page === 'journal' && this.page !== 'journal') {
+      const earned = JOURNAL.map((p, i) => (play.journal[p.id] && p.id !== 'duel' ? i : -1)).filter((i) => i >= 0);
+      this.journalPage = earned.length ? earned[earned.length - 1] : 0;
+    }
     this.page = page;
     this.layout();
   }
@@ -107,7 +116,9 @@ export class MainMenu {
             ? this.bag()
             : this.page === 'battles'
               ? this.battles()
-              : this.settings();
+              : this.page === 'journal'
+                ? this.journal()
+                : this.settings();
     const xs = LAYOUTS[this.slots.length];
     const eye = this.parent.localToWorld(this.viewer.clone());
     this.buttons.forEach((button, i) => {
@@ -141,6 +152,7 @@ export class MainMenu {
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
       { label: fresh ? 'Play' : next ? 'Continue' : 'Replay', run: () => ({ do: 'play' }), primary: true },
+      { label: 'Journal', run: () => this.go('journal') },
       { label: 'Bag', run: () => this.go('bag') },
       { label: 'Battles', run: () => this.go('battles') },
       { label: 'Settings', run: () => this.go('settings') },
@@ -245,6 +257,38 @@ export class MainMenu {
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Duel', run: () => ({ do: 'duel' }) },
       { label: 'Arena', run: () => ({ do: 'arena' }) },
+    ];
+  }
+
+  private journalPage = 0;
+
+  /** The Inventor's Journal: a page of real science per level, with your own numbers. */
+  private journal(): Slot[] {
+    const n = JOURNAL.length;
+    const page = JOURNAL[this.journalPage];
+    this.draw(String(this.journalPage), JOURNAL_PAGE, `${pagesFilled()} of ${n} pages filled`);
+    const step = (d: number) => () => {
+      this.journalPage = (this.journalPage + d + n) % n;
+      playUnfold();
+      this.layout();
+      return null;
+    };
+    const index = PUZZLES.findIndex((p) => p.id === page.id);
+    const earned = play.journal[page.id] !== undefined;
+    return [
+      { label: 'Back', run: () => this.go('home'), primary: true },
+      { label: 'Prev', run: step(-1) },
+      {
+        label: earned ? 'Replay' : 'Locked',
+        run: () => {
+          if (!earned) {
+            playPrompt();
+            return null;
+          }
+          return index < 0 ? { do: 'duel' } : { do: 'chapter', index };
+        },
+      },
+      { label: 'Next', run: step(1) },
     ];
   }
 

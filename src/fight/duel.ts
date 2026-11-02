@@ -130,6 +130,8 @@ export class InkDuel {
   private readonly witchFrom = new Vector3();
   private readonly witchSpot = new Vector3();
   private emerged = false;
+  /** How the duel went, for the Inventor's Journal. */
+  private readonly tally = { hits: 0, heads: 0, blocked: 0, best: { energy: 0, mass: 0, speed: 0 } };
   private readonly head = new Vector3();
   private readonly headWorld = new Vector3();
   private readonly v = new Vector3();
@@ -329,14 +331,14 @@ export class InkDuel {
     const stageRoot = this.group.parent?.parent;
     if (!stageRoot) return this.floor;
     const props = this.group.parent!;
-    const from = props.localToWorld(this.w.set(p.x, this.floor + 0.25, p.z));
+    const from = stageRoot.localToWorld(this.w.set(p.x, this.floor + 0.25, p.z));
     const ray = new Raycaster(from.clone(), new Vector3(0, -1, 0), 0, 1);
     const targets = stageRoot.children.filter((c) => c !== props);
     let best = this.floor;
     let found = false;
     for (const hit of ray.intersectObjects(targets, true)) {
       if ((hit.object as InstancedMesh).isInstancedMesh || !(hit.object as Mesh).isMesh) continue;
-      const y = props.worldToLocal(hit.point.clone()).y;
+      const y = stageRoot.worldToLocal(hit.point.clone()).y;
       if (y > this.floor + 0.12) continue;
       if (!found || y > best) best = y;
       found = true;
@@ -527,6 +529,7 @@ export class InkDuel {
           this.splashAt(ink.pos, 0x14101a);
           playSplat(0.06);
           this.flash('Blocked!', 1);
+          this.tally.blocked++;
           this.remove(ink);
           shield.age = Math.max(shield.age, HANG_TIME - 1.5);
           continue;
@@ -576,6 +579,7 @@ export class InkDuel {
     const base = Math.min(40, Math.max(5, energy * DAMAGE_PER_JOULE));
     const damage = Math.round(base * (onHead ? HEAD_BONUS : 1));
     this.rivalHealth -= damage;
+    this.count(energy, ink.mass, speed, onHead);
     witch.flinch();
     this.splashAt(ink.pos, 0x4aa8ff);
     playBoom(0.06 + damage * 0.002);
@@ -604,10 +608,29 @@ export class InkDuel {
     }
     const damage = Math.round(Math.min(40, Math.max(5, energy * DAMAGE_PER_JOULE)));
     this.rivalHealth -= damage;
+    this.count(energy, ink.mass, speed, false);
     this.rival.flinch();
     playBoom(0.06 + damage * 0.002);
     this.showScore(this.group.worldToLocal(this.paper.localToWorld(at.clone())), damage, energy, ink.mass, speed, false);
     if (this.rivalHealth <= 0) this.end(true);
+  }
+
+  private count(energy: number, mass: number, speed: number, head: boolean): void {
+    const t = this.tally;
+    t.hits++;
+    if (head) t.heads++;
+    if (energy > t.best.energy) t.best = { energy, mass, speed };
+  }
+
+  /** Your best throws, for the Inventor's Journal (only a win fills the page). */
+  journal(): string[] {
+    if (!this.won) return [];
+    const { hits, heads, blocked, best } = this.tally;
+    return [
+      `Best throw: ½ · ${(best.mass * 1000).toFixed(0)} g · (${best.speed.toFixed(1)} m/s)² = ${best.energy.toFixed(2)} J`,
+      `${hits} hits, ${heads} on the head · ${this.hearts} of ${PLAYER_HEARTS} hearts left`,
+      `${blocked} of her throws stopped by your hanging drawings`,
+    ];
   }
 
   private end(won: boolean): void {

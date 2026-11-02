@@ -413,6 +413,7 @@ const oldWell: Puzzle = {
     const f = kit.floor;
     const whim = new HorseWhim(f, WHIM_AT, WELL_AT, WELL_NEED);
     root.add(whim.group);
+    stage.runNotes = () => whim.journal();
     for (const [x, z, r] of whimFootprint(WHIM_AT, WELL_AT)) kit.block(x, z, r);
     return {
       start: new Vector3(-0.08, f, 0.12),
@@ -468,6 +469,7 @@ const deepShaft: Puzzle = {
     const f = kit.floor;
     const whim = new HorseWhim(f, WHIM_AT, WELL_AT, DEEP_NEED);
     root.add(whim.group);
+    stage.runNotes = () => whim.journal();
     for (const [x, z, r] of whimFootprint(WHIM_AT, WELL_AT)) kit.block(x, z, r);
     return {
       start: new Vector3(-0.08, f, 0.12),
@@ -512,6 +514,7 @@ const oreTrain: Puzzle = {
     // cross-braces or a second truss above the road carry it.
     const bridge = new Bridge(kit.floor, BRIDGE_AT, { budget: 28, cartMass: 1.65 });
     root.add(bridge.group);
+    stage.runNotes = () => bridge.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -538,6 +541,7 @@ const brokenBridge: Puzzle = {
   build(root, kit) {
     const bridge = new Bridge(kit.floor, BRIDGE_AT);
     root.add(bridge.group);
+    stage.runNotes = () => bridge.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -564,6 +568,7 @@ const shadowDragon: Puzzle = {
   build(root, kit) {
     const battle = new DragonBattle(root);
     root.add(battle.group);
+    stage.runNotes = () => battle.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -590,6 +595,7 @@ const healingDraught: Puzzle = {
   build(root, kit) {
     const brew = new Brew(kit.floor);
     root.add(brew.group);
+    stage.runNotes = () => brew.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -620,6 +626,7 @@ const strongDraught: Puzzle = {
   build(root, kit) {
     const brew = new Brew(kit.floor, { ready: 0.9 });
     root.add(brew.group);
+    stage.runNotes = () => brew.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -646,6 +653,7 @@ const skyLantern: Puzzle = {
   build(root, kit) {
     const sky = new SkyLantern(kit.floor);
     root.add(sky.group);
+    stage.runNotes = () => sky.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -672,6 +680,7 @@ const smithy: Puzzle = {
   build(root, kit) {
     const forge = new Forge(kit.floor);
     root.add(forge.group);
+    stage.runNotes = () => forge.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {
@@ -701,6 +710,7 @@ export const DUEL: Puzzle = {
   build(root, kit) {
     const duel = new InkDuel(root, kit.floor);
     root.add(duel.group);
+    stage.runNotes = () => duel.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
     return {

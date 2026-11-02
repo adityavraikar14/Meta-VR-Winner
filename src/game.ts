@@ -26,6 +26,8 @@ import { add as addResource, RESOURCE_ORDER } from './bag.js';
 import { diagnoseDragon } from './fight/dragon3d.js';
 import { installLevelTester, levelKeys } from './level-tester.js';
 import { drawInventory } from './inventory-art.js';
+import { drawJournal } from './journal-art.js';
+import { friendRunLines, JOURNAL, noteRun, pagesFilled } from './journal.js';
 import { devActions, devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
 import {
@@ -58,7 +60,7 @@ import {
   normalizeMask,
 } from './matcher.js';
 import { IntroShow } from './intro.js';
-import { INVENTORY, MainMenu, type MenuAction, resumeIndex } from './menu.js';
+import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
 import { TableFinder } from './table.js';
@@ -390,7 +392,13 @@ export class ShadowGameSystem extends createSystem({
 
     loadProgress();
     this.menu = new MainMenu(paper, VIEWER, (kicker, title, body, footer) => {
-      if (title === INVENTORY) {
+      if (title === JOURNAL_PAGE) {
+        drawJournal(this.bannerCanvas, Number(kicker));
+        this.bannerTexture.needsUpdate = true;
+        // A journal spread fills most of the screen, like the bag.
+        this.banner.scale.setScalar(1.22);
+        this.banner.position.y = 0.06;
+      } else if (title === INVENTORY) {
         drawInventory(this.bannerCanvas, kicker);
         this.bannerTexture.needsUpdate = true;
         // The inventory fills most of the screen, so its slots and counts read easily.
@@ -423,6 +431,10 @@ export class ShadowGameSystem extends createSystem({
     // Dev: E opens the Credits page from the menu.
     devActions.e = () => {
       if (this.phase === 'title') this.menu.open('credits');
+    };
+    // Dev: S opens the Inventor's Journal from the menu.
+    devActions.s = () => {
+      if (this.phase === 'title') this.menu.open('journal');
     };
     devInfo.table = () => ({
       height: stage.tableHeight,
@@ -824,8 +836,8 @@ export class ShadowGameSystem extends createSystem({
       this.drawBanner(
         'You escaped the Lantern',
         'Free at last',
-        'The Great Lantern carries you home. Your hands made light, friends, a bridge and an axe. Thank you for playing.',
-        `${totalStars()} ★ collected`,
+        'The Great Lantern carries you home. Your hands made light, friends, a bridge and an axe, and your Journal holds the science of it all. Thank you for playing.',
+        `${totalStars()} of ${PUZZLES.length * 3} ★  ·  ${pagesFilled()} of ${JOURNAL.length} Journal pages`,
       );
       this.setCaption('Free play: make any friend’s shadow, or open the menu on your palm');
     }
@@ -1111,13 +1123,22 @@ export class ShadowGameSystem extends createSystem({
           ? 1 + ((stage.task?.mistakes ?? 0) === 0 ? 1 : 0) + (this.matchTime < HANDS_ON_FAST ? 1 : 0)
         : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
     play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
+    // The Inventor's Journal: the level's own numbers, or your friend's body from its shadow.
+    const machine = stage.runNotes?.() ?? null;
+    const runLines = machine ?? (puzzle.warmup
+      ? ['Your first shadow came to life']
+      : puzzle.walk
+        ? [`Crossed in ${Math.round(this.matchTime)} s`, this.shadowWorld.falls ? `Your friend fell ${this.shadowWorld.falls} time${this.shadowWorld.falls > 1 ? 's' : ''} on the way` : 'Not one fall on the way']
+        : friendRunLines(this.creatureSize, this.bodySize));
+    // A lost duel fills no page.
+    const newPage = runLines.length > 0 && noteRun(puzzle.id, runLines);
     // Resume from the next level if the player leaves now.
     play.puzzleIndex = this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
     saveProgress();
     play.puzzleIndex = this.puzzleIndex;
 
     const row = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-    this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected`);
+    this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected${newPage ? '  ·  New page in your Journal!' : ''}`);
     this.bannerShown = true;
     this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');
     this.setPhase('cleared');

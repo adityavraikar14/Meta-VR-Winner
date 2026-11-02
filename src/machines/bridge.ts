@@ -97,6 +97,8 @@ export class Bridge {
   private drags: Array<Drag | null> = [null, null];
   private deleting: Array<{ member: number; at: Vector3 } | null> = [null, null];
   private failure = '';
+  /** The hardest any timber worked during the test, as a share of its limit. */
+  private peak = 0;
   private cartX = CART_START;
   private cartY = DECK_Y;
   private cartFall = { vy: 0, spin: 0, falling: false };
@@ -191,6 +193,16 @@ export class Bridge {
     devActions.m = () => this.devDesign('square');
     devActions.w = () => this.devDesign('braced');
     this.render();
+  }
+
+  /** Your bridge under the cart, for the Inventor's Journal. */
+  journal(): string[] {
+    const peak = Math.round(this.peak * 100);
+    return [
+      `${this.members.length} timbers of ${this.budget} carried a ${this.cartMass} kg cart`,
+      `Hardest-working timber: ${peak}% of its limit`,
+      peak < 60 ? 'Plenty to spare: a stiff, safe bridge' : peak < 90 ? 'Well matched to the load' : 'Close to the limit: an engineer would add a brace',
+    ];
   }
 
   get state(): string {
@@ -412,6 +424,7 @@ export class Bridge {
     this.cartX = CART_START;
     this.cartFall = { vy: 0, spin: 0, falling: false };
     this.failure = '';
+    this.peak = 0;
     this.setMode('settle');
     playClick();
   }
@@ -433,6 +446,7 @@ export class Bridge {
 
     // Timber groans in proportion to how hard it is working.
     const worst = truss.members.reduce((w, m) => (m.broken ? w : Math.max(w, Math.abs(truss.usage(m)))), 0);
+    if (this.mode === 'roll') this.peak = Math.max(this.peak, worst);
     this.creakIn -= dt * (0.5 + worst * 3);
     if (this.creakIn <= 0 && worst > 0.35 && this.mode !== 'passed') {
       this.creakIn = 0.4 + Math.random() * 0.5;

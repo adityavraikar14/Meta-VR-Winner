@@ -4,10 +4,16 @@ import {
   BufferGeometry,
   CanvasTexture,
   CatmullRomCurve3,
+  Color,
   CylinderGeometry,
+  DoubleSide,
   Group,
+  InstancedMesh,
+  Matrix4,
   Mesh,
+  MeshLambertMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   Points,
   PointsMaterial,
   RepeatWrapping,
@@ -307,6 +313,106 @@ export function giantLeafPlant(height: number, count: number, plantSeed: number)
   leaves.userData.shared = true;
   group.add(leaves);
   return group;
+}
+
+// ---------------------------------------------------------- Falling leaves
+
+let leafTexture: CanvasTexture | null = null;
+
+/** One pale leaf with a darker midrib and veins; each falling leaf tints it its own colour. */
+function leafSprite(): CanvasTexture {
+  if (leafTexture) return leafTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 96;
+  const g = canvas.getContext('2d')!;
+  const fill = g.createLinearGradient(0, 0, 64, 0);
+  fill.addColorStop(0, '#d8d8d8');
+  fill.addColorStop(0.5, '#ffffff');
+  fill.addColorStop(1, '#c8c8c8');
+  g.fillStyle = fill;
+  g.beginPath();
+  g.moveTo(32, 4);
+  g.bezierCurveTo(62, 26, 58, 66, 32, 88);
+  g.bezierCurveTo(6, 66, 2, 26, 32, 4);
+  g.fill();
+  g.strokeStyle = 'rgba(70, 60, 30, 0.55)';
+  g.lineWidth = 2.4;
+  g.beginPath();
+  g.moveTo(32, 6);
+  g.lineTo(32, 94);
+  g.stroke();
+  g.lineWidth = 1.2;
+  for (let y = 22; y < 80; y += 12) {
+    g.beginPath();
+    g.moveTo(32, y);
+    g.lineTo(14, y - 10);
+    g.moveTo(32, y);
+    g.lineTo(50, y - 10);
+    g.stroke();
+  }
+  leafTexture = new CanvasTexture(canvas);
+  leafTexture.colorSpace = SRGBColorSpace;
+  return leafTexture;
+}
+
+/**
+ * Leaves drifting down through the room. A falling leaf does not drop
+ * straight: it glides side to side like a pendulum, tilting into each swing
+ * and turning slowly as it goes (the flutter of a falling leaf). All of it
+ * runs in the vertex shader from the shared clock, so it costs nothing per
+ * frame; each leaf loops back to the top once it reaches the floor.
+ */
+export function fallingLeaves(count: number, min: Vector3, max: Vector3, colors: number[], seedValue = 9): InstancedMesh {
+  seed(seedValue);
+  const material = new MeshLambertMaterial({ map: leafSprite(), alphaTest: 0.5, side: DoubleSide });
+  const leaves = new InstancedMesh(new PlaneGeometry(0.04, 0.06), material, count);
+  const at = new Matrix4();
+  const color = new Color();
+  for (let i = 0; i < count; i++) {
+    at.makeTranslation(min.x + (max.x - min.x) * random(), max.y, min.z + (max.z - min.z) * random());
+    leaves.setMatrixAt(i, at);
+    leaves.setColorAt(i, color.setHex(colors[Math.floor(random() * colors.length)]));
+  }
+  const height = (max.y - min.y).toFixed(3);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = clock;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      // The leaf's turn (a tilt into each swing, then a slow spin) is worked out with
+      // the normal, which three.js handles first, and reused for the position.
+      .replace(
+        '#include <beginnormal_vertex>',
+        `#include <beginnormal_vertex>
+        float k = instanceMatrix[3].x * 13.0 + instanceMatrix[3].z * 7.0;
+        float swing = sin(uTime * (1.5 + 0.4 * sin(k * 1.7)) + k);
+        float tilt = swing * 0.8;
+        float spin = uTime * 0.5 * sin(k * 0.9) + k;
+        mat3 turn = mat3(cos(spin), 0.0, -sin(spin), 0.0, 1.0, 0.0, sin(spin), 0.0, cos(spin))
+          * mat3(cos(tilt), sin(tilt), 0.0, -sin(tilt), cos(tilt), 0.0, 0.0, 0.0, 1.0);
+        objectNormal = turn * objectNormal;`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        float fall = fract(uTime * 0.045 * (0.75 + 0.25 * sin(k)) + fract(k * 0.137));
+        vec3 p = turn * (transformed * smoothstep(0.0, 0.04, fall) * (1.0 - smoothstep(0.93, 1.0, fall)));
+        p.xz += vec2(cos(k), sin(k)) * swing * 0.14;
+        p.y -= fall * ${height};
+        transformed = p;`,
+      );
+    // A leaf lets light through: even its shaded side keeps some of its colour.
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      totalEmissiveRadiance += diffuseColor.rgb * 0.35;`,
+    );
+  };
+  material.customProgramCacheKey = () => `falling-leaves-${height}`;
+  leaves.name = 'FallingLeaves';
+  leaves.frustumCulled = false;
+  leaves.userData.keep = true;
+  return leaves;
 }
 
 // -------------------------------------------------------------- Fireflies

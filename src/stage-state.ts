@@ -57,6 +57,8 @@ export const stage = {
   playing: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */
   task: null as { caption: string; done: boolean; mistakes: number } | null,
+  /** The level's own numbers for its Inventor's Journal page, read when it is cleared. */
+  runNotes: null as (() => string[]) | null,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
   grow: null as { from: Vector3 | null } | null,
 };

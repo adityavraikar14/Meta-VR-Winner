@@ -402,6 +402,18 @@ export function playGrow(): void {
   [196, 293.66, 392, 587.33].forEach((f, i) => tone(ctx, f, now + 0.25 + i * 0.16, 2.2, 0.035));
 }
 
+/** A pop-up page unfolding: two quick flaps of paper, rising. */
+export function playUnfold(): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (const [at, from, to] of [[0, 1300, 3400], [0.17, 1000, 2600]] as const) {
+    const flap = noise(ctx, now + at, 0.24, 'bandpass', from, 1.1, 0.04);
+    flap.frequency.setValueAtTime(from, now + at);
+    flap.frequency.exponentialRampToValueAtTime(to, now + at + 0.22);
+  }
+}
+
 /** The ratchet's pawl dropping off one tooth: a small dry tick of iron on iron. */
 export function playPawl(volume = 0.03): void {
   const ctx = audio();

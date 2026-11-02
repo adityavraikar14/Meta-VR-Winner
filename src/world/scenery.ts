@@ -1,5 +1,5 @@
 import { BufferAttribute, Group, Mesh, RingGeometry, Vector3 } from '@iwsdk/core';
-import { bambooFrame, fireflies, giantLeafPlant, vine } from './jungle.js';
+import { bambooFrame, fallingLeaves, fireflies, giantLeafPlant, vine } from './jungle.js';
 import { crystals, driftwoodFrame, mineFrame } from './themes.js';
 import {
   ground,
@@ -202,6 +202,8 @@ function junglePlantsInRoom(room: Group): void {
   room.add(hangingVine(0.88, 1.55, 2.4, 0.95, 4));
   room.add(hangingVine(0.15, 1.95, 2.4, 0.7, 5));
   room.add(fireflies(70, new Vector3(-1.5, 0.5, -0.8), new Vector3(1.5, 2.1, 2.3)));
+  // Now and then a leaf drifts down from the canopy, green with a few turning gold.
+  room.add(fallingLeaves(44, new Vector3(-1.4, 0.0, -0.6), new Vector3(1.4, 2.4, 2.2), [0x5f9e3a, 0x7cb342, 0x8fbf4a, 0xc9a227, 0xd9822b]));
 }
 
 // ----------------------------------------------------------------- River
@@ -272,6 +274,8 @@ function riverbankInRoom(room: Group): void {
     { model: 'calathea', node: 'calathea_orbifolia_01_a', x: -1.35, z: -0.1, scale: 2.0, turn: 0.6 },
   ]);
   room.add(fireflies(50, new Vector3(-1.5, 0.4, -0.8), new Vector3(1.5, 1.9, 2.3), { color: '170,210,255', seed: 8 }));
+  // Autumn by the water: a few gold and russet leaves.
+  room.add(fallingLeaves(16, new Vector3(-1.4, 0.0, -0.6), new Vector3(1.4, 2.2, 2.2), [0xd9a02b, 0xc8641e, 0xa8401e, 0xe0c060], 4));
 }
 
 /** A ring of river pebbles lining the pond, following the dip of the bank. */

@@ -348,6 +348,18 @@ export class HorseWhim implements Harness {
     return `${this.phase} lift=${this.lifted.toFixed(3)} pull=${this.ratio.toFixed(2)} size=${this.size.toFixed(2)}`;
   }
 
+  /** Your horse against the load, for the Inventor's Journal. */
+  journal(): string[] {
+    const strength = this.size * this.size;
+    const need = this.need * this.need;
+    const drumTurns = this.lifted / (DRUM_R + ROPE_R) / (Math.PI * 2);
+    return [
+      `Your horse: ${this.size.toFixed(2)}× size, so ${strength.toFixed(2)}× the strength`,
+      `The bucket needed ${need.toFixed(2)}×: ${Math.max(0, Math.round((strength / need - 1) * 100))}% strength to spare`,
+      `${(drumTurns / RATIO).toFixed(1)} laps of the horse wound the drum ${drumTurns.toFixed(1)} turns`,
+    ];
+  }
+
   /** Stage-local spot where a horse of this size is hitched, and the way it faces. */
   harnessSpot(size: number): { at: Vector3; ahead: Vector3 } {
     const a = this.horseAngle(size);

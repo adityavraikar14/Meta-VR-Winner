@@ -26,6 +26,8 @@ export const play = {
   items: [] as string[],
   /** Resources gathered in the worlds (wood, stone, iron, herbs, crystal, embers). */
   bag: {} as Record<string, number>,
+  /** Inventor's Journal: each cleared level's "your run" lines, by puzzle id. */
+  journal: {} as Record<string, string[]>,
 };
 
 const SAVE_KEY = 'shadowplay.progress.v1';
@@ -39,6 +41,7 @@ export function loadProgress(): void {
     if (saved.stars && typeof saved.stars === 'object') play.stars = saved.stars;
     if (Array.isArray(saved.items)) play.items = saved.items;
     if (saved.bag && typeof saved.bag === 'object') play.bag = saved.bag;
+    if (saved.journal && typeof saved.journal === 'object') play.journal = saved.journal;
   } catch {
     // Storage blocked or corrupt: start a fresh story.
   }
@@ -48,7 +51,7 @@ export function saveProgress(): void {
   try {
     localStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag }),
+      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal }),
     );
   } catch {
     // Not saved; the story still plays.
@@ -61,6 +64,7 @@ export function resetProgress(): void {
   play.stars = {};
   play.items = [];
   play.bag = {};
+  play.journal = {};
   saveProgress();
 }
 

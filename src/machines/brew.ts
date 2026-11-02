@@ -89,6 +89,8 @@ export class Brew {
   private crackleIn = 0;
   private trammelHand = -1;
   private finishIn = -1;
+  /** The hottest the pot got, for the Inventor's Journal. */
+  private hottest = 18;
   private trammelGrab = 0;
 
   private readonly pot = new Group();
@@ -261,6 +263,15 @@ export class Brew {
     playIgnite();
   }
 
+  /** Your brew, for the Inventor's Journal. */
+  journal(): string[] {
+    return [
+      `Strength ${Math.round(this.potency * 100)}% · spoiled ${Math.round(this.spoiled * 100)}%`,
+      `Hottest with the herbs in: ${Math.round(this.hottest)} °C${this.hottest >= 99.5 ? ' (it boiled!)' : ''}`,
+      `${this.filled} vial${this.filled === 1 ? '' : 's'} filled`,
+    ];
+  }
+
   get state(): string {
     return `h=${this.height.toFixed(2)} T=${this.temperature.toFixed(0)} vol=${this.volume.toFixed(2)} potency=${this.potency.toFixed(2)} spoiled=${this.spoiled.toFixed(2)} herbs=${[...this.herbs].join('+')} vials=${this.filled}`;
   }
@@ -318,6 +329,7 @@ export class Brew {
       this.temperature = 100;
     }
     this.temperature = Math.min(100, this.temperature + dT * dt);
+    if (this.herbs.size > 0) this.hottest = Math.max(this.hottest, this.temperature);
     const kelvin = this.temperature + 273.15;
     if (this.herbs.size > 0) {
       // Extraction and breakdown, each with its own activation energy.

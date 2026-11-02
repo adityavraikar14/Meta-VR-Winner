@@ -63,6 +63,8 @@ export class SkyLantern {
   private scorch = 0;
   private delivered = false;
   private finishIn = -1;
+  /** The hottest the air inside got, for the Inventor's Journal. */
+  private hottest = T_ROOM;
   private crackleIn = 0;
   private time = 0;
   private note = '';
@@ -153,9 +155,19 @@ export class SkyLantern {
     return `cup=${this.cupped > 0} T=${Math.round(this.tIn)}K lift=${(this.liftRatio() * 100).toFixed(0)}% h=${this.height.toFixed(3)} lit=${this.lit} scorch=${this.scorch.toFixed(2)} done=${this.done}`;
   }
 
+  /** Your lantern's flight, for the Inventor's Journal. */
+  journal(): string[] {
+    const lift = this.liftRatio(this.hottest);
+    return [
+      `Air inside: ${Math.round(this.hottest)} K (${Math.round(this.hottest - 273)} °C) · outside ${T_ROOM} K`,
+      `Lift: ${Math.round(lift * 100)}% of its weight · ${Math.round((1 - T_ROOM / this.hottest) * 100)}% of the air's weight gone`,
+      this.scorch > 0.05 ? `Paper scorched ${Math.round(this.scorch * 100)}%: a little too hot` : 'No scorch marks: well judged',
+    ];
+  }
+
   /** Lift over weight: above 1 it rises. */
-  private liftRatio(): number {
-    const lift = VOLUME * G * RHO_AIR * (1 - T_ROOM / this.tIn);
+  private liftRatio(tIn = this.tIn): number {
+    const lift = VOLUME * G * RHO_AIR * (1 - T_ROOM / tIn);
     const weight = (MASS_EMPTY + MASS_STONE) * G;
     return lift / weight;
   }
@@ -191,6 +203,7 @@ export class SkyLantern {
     const sheltered = this.cupped > 0;
     const flameT = this.lit ? (sheltered ? T_FLAME : 360) : T_ROOM;
     this.tIn += ((flameT - this.tIn) / (sheltered ? 5 : 7)) * dt;
+    this.hottest = Math.max(this.hottest, this.tIn);
     if (this.tIn > T_SCORCH) {
       this.scorch += dt * 0.35;
       if (this.noteTime <= 0) this.say('Too hot! The paper is scorching: take your hand away for a moment', 1.6);

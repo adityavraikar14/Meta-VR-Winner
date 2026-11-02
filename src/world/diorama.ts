@@ -1,7 +1,7 @@
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
-import { playAwaken, setAmbience, tickAmbience } from '../audio.js';
+import { playAwaken, playUnfold, setAmbience, tickAmbience } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { Pickups } from './pickups.js';
@@ -34,6 +34,8 @@ export class Diorama {
   /** Seconds since the world started growing (Infinity: fully grown). */
   private growTime = Infinity;
   private growFrom = new Vector3();
+  /** Seconds since this level's props began to unfold, like a pop-up book page (Infinity: settled). */
+  private unfoldTime = Infinity;
   private readonly props = new Group();
   private worldIndex = -1;
   /** Scenery asset version the current decoration was built with. */
@@ -135,9 +137,16 @@ export class Diorama {
     this.attempting = false;
     this.blockers = [];
     stage.task = null;
+    stage.runNotes = null;
     stage.music = null;
+    // Build at full size (scenes measure the stage as they are made), then unfold.
+    if (this.growTime >= 4) this.props.scale.set(1, 1, 1);
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
+    if (puzzle && this.growTime >= 4) {
+      this.unfoldTime = 0;
+      playUnfold();
+    }
     mergeStatic(this.props);
     // Resources to gather, around the edges of the story's levels.
     this.pickups = null;
@@ -203,6 +212,11 @@ export class Diorama {
     if (this.growTime < 4) {
       this.growTime += dt;
       this.applyGrowth();
+    } else if (this.unfoldTime < UNFOLD_TIME) {
+      // A new level's props stand up from the ground, overshooting a little, like a pop-up page.
+      this.unfoldTime += dt;
+      const k = backOut(clamp01(this.unfoldTime / UNFOLD_TIME));
+      this.props.scale.set(1, Math.max(0.001, k), 1);
     }
     // The photo-real scenery arrived: swap the stand-in for it.
     if (this.worldIndex >= 0 && nature.version !== this.decorVersion) this.decorate(this.worldIndex);
@@ -239,6 +253,9 @@ export class Diorama {
     }
   }
 }
+
+/** Seconds for a level's props to unfold. */
+const UNFOLD_TIME = 0.75;
 
 function clamp01(x: number): number {
   return Math.min(1, Math.max(0, x));

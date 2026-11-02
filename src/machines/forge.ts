@@ -134,6 +134,10 @@ export class Forge {
   private crackleIn = 0;
   private ouchIn = 0;
   private finishTime = -1;
+  /** For the Inventor's Journal: the hottest the bar got, blows on it, and the heat it was quenched from. */
+  private hottest = 0;
+  private blows = 0;
+  private quenchedFrom = 0;
   private readonly glowColor = new Color();
   private readonly tmp = new Vector3();
   private readonly tmp2 = new Vector3();
@@ -263,6 +267,15 @@ export class Forge {
     }
   }
 
+  /** Your smithing, for the Inventor's Journal. */
+  journal(): string[] {
+    return [
+      `Hottest the iron got: ${Math.round(this.hottest)} °C · ${this.blows} hammer blows`,
+      `Quenched from ${Math.round(this.quenchedFrom)} °C: hard steel`,
+      this.mistakes ? `${this.mistakes} slip${this.mistakes > 1 ? 's' : ''}: a blow too hot or too cold` : 'Not one blow wasted',
+    ];
+  }
+
   get state(): string {
     const face = this.hammer.place === 'held' ? ` face=${this.hammerFace.toArray().map((n) => n.toFixed(3)).join(',')}` : '';
     return `${this.step} coal=${Math.round(this.coal)} air=${this.air.toFixed(2)} bar=${Math.round(this.barHeat)}@${this.bar.place} shaped=${this.shaped.toFixed(2)} hard=${this.hardened} hammer=${this.hammer.place}${face}`;
@@ -299,6 +312,7 @@ export class Forge {
     // The anvil draws some heat out through the small contact patch: a few blows per heat.
     else if (where === 'anvil') this.barHeat = stepHeat(this.barHeat, dt, ROOM, 0.1);
     else this.barHeat = stepHeat(this.barHeat, dt, ROOM, 0);
+    this.hottest = Math.max(this.hottest, this.barHeat);
     if (where === 'water' && this.barHeat > 110 && Math.random() < dt * (this.barHeat / 60)) this.puffSteam(1);
 
     this.strike(dt);
@@ -578,6 +592,7 @@ export class Forge {
       return;
     }
     const t = this.barHeat;
+    this.blows++;
     this.barHeat -= 6;
     glow(t, this.glowColor);
     const hot = this.glowColor.getHex();
@@ -653,7 +668,10 @@ export class Forge {
       playHiss(0.05 + 0.06 * Math.min(1, this.barHeat / 1000), 0.8 + this.barHeat / 600);
       this.puffSteam(Math.round(this.barHeat / 25));
     }
-    if (this.shaped >= 1 && this.barHeat >= HARDEN) this.hardened = true;
+    if (this.shaped >= 1 && this.barHeat >= HARDEN) {
+      this.hardened = true;
+      this.quenchedFrom = this.barHeat;
+    }
   }
 
   // ================================================================ Drawing

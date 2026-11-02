@@ -106,6 +106,8 @@ export class DragonBattle {
   private modeTime = 0;
   private time = 0;
   private health = PLAYER_HEALTH;
+  /** How the fight went, for the Inventor's Journal. */
+  private readonly tally = { light: 0, fire: 0, sword: 0, deflected: 0, blocked: 0 };
   private dragonHealth = DRAGON_HEALTH;
   private readonly paper = new Group();
   private readonly dragon = new ShadowDragon();
@@ -201,6 +203,16 @@ export class DragonBattle {
     devActions["'"] = () => {
       if (this.dragon3d && this.diveTime === 0) this.diveTime = 0.001;
     };
+  }
+
+  /** How you beat the dragon, for the Inventor's Journal. */
+  journal(): string[] {
+    const t = this.tally;
+    return [
+      `Won in ${Math.round(this.time)} s with ${this.health} of ${PLAYER_HEALTH} hearts left`,
+      `${t.light} strikes of light · ${t.sword} sword cuts · ${t.fire} hits with its own fire`,
+      `${t.deflected} fireballs bounced back · ${t.blocked} bites blocked`,
+    ];
   }
 
   get state(): string {
@@ -507,7 +519,11 @@ export class DragonBattle {
     const body = pos.distanceTo(heart) < dragon.radius;
     if (!weak && !body) return false;
     this.burstAt(pos, 30, power >= 1 ? 0xd8f0ff : 0xffc060);
-    if (this.mode === 'fight') this.wound(weak ? power : power * 0.4);
+    if (this.mode === 'fight') {
+      if (power >= 1) this.tally.light++;
+      else this.tally.fire++;
+      this.wound(weak ? power : power * 0.4);
+    }
     return true;
   }
 
@@ -619,6 +635,7 @@ export class DragonBattle {
           blade.cooldown = 0.6;
           playClang(0.6, 0.07);
           this.burstAt(point, 34, 0xbfe8ff);
+          this.tally.sword++;
           this.wound(0.75);
           if (this.diveTime > 0) this.diveTime = Math.max(this.diveTime, DIVE_IN + DIVE_HOLD);
           break;
@@ -659,6 +676,7 @@ export class DragonBattle {
       const shielded = hands.some((hand) => hand.tracked && matches(hand.ext, [1, 1, 1, 1], 0.4));
       if (shielded) {
         playClang(0.3, 0.06);
+        this.tally.blocked++;
         this.flash('Blocked! Your shield of light holds', 1.4);
       } else {
         playBoom(0.08);
@@ -734,6 +752,7 @@ export class DragonBattle {
           if (n.dot(f.vel) > -0.1 * f.vel.length()) return;
           f.vel.addScaledVector(n, -2 * f.vel.dot(n)).multiplyScalar(1.25);
           f.reflected = true;
+          this.tally.deflected++;
           playClang(0.2, 0.05);
           this.burstAt(f.pos, 18, 0xbfe4ff);
           this.flash('Deflected!', 1);
