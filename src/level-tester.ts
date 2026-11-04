@@ -4,8 +4,73 @@ import { stage } from './stage-state.js';
  * A level tester for playing without a headset (dev builds only): a small
  * panel on the page listing every chapter and level. Click a level to jump
  * straight into it; each one shows its controls and the keys that do what
- * a hand would. Toggle the panel with the L key or its own button.
+ * a hand would. Toggle the panel with Shift+L or its own button.
+ *
+ * It also sets the emulator up for this game: hands, not controllers (the
+ * game is played with bare hands), and a seated view of the whole diorama.
+ * Shift+V, or the view buttons, move the emulated head between a few seats.
  */
+
+/** Emulator head poses: name, position (m) and pitch (degrees, down is negative). */
+const VIEWS: { name: string; at: [number, number, number]; pitch: number }[] = [
+  { name: 'Seat', at: [0, 1.6, 0], pitch: -18 },
+  { name: 'Close', at: [0, 1.45, -0.22], pitch: -30 },
+  { name: 'Top', at: [0, 1.95, -0.5], pitch: -75 },
+  { name: 'Wide', at: [0, 1.75, 0.4], pitch: -20 },
+];
+
+interface EmulatedDevice {
+  position: { set(x: number, y: number, z: number): unknown };
+  quaternion: { set(x: number, y: number, z: number, w: number): unknown };
+  primaryInputMode: 'controller' | 'hand';
+  /**
+   * In 'manual' mode the emulator's own panels drive the device every frame;
+   * in 'programmatic' mode they follow it, picking up changes on notifyStateChange.
+   */
+  controlMode?: 'manual' | 'programmatic';
+  notifyStateChange?(): void;
+}
+
+/** The emulated headset the dev server injects (the one its own controls drive). */
+function emulatedDevice(): EmulatedDevice | null {
+  const injected = (window as unknown as { IWER_DEVICE?: EmulatedDevice }).IWER_DEVICE;
+  if (injected) return injected;
+  const xr = navigator.xr as unknown as Record<symbol, { device?: EmulatedDevice }> | undefined;
+  if (!xr) return null;
+  const key = Object.getOwnPropertySymbols(xr).find((s) => s.description === '@iwer/xr-system');
+  return (key && xr[key].device) || null;
+}
+
+/** Change the emulated device so its panels keep the change instead of restoring their own state. */
+function driveEmulator(change: (device: EmulatedDevice) => void): void {
+  const device = emulatedDevice();
+  if (!device) return;
+  const manual = device.controlMode === 'manual';
+  if (manual) device.controlMode = 'programmatic';
+  change(device);
+  device.notifyStateChange?.();
+  if (manual) device.controlMode = 'manual';
+}
+
+let view = 0;
+
+function setView(index: number): void {
+  view = (index + VIEWS.length) % VIEWS.length;
+  const { at, pitch } = VIEWS[view];
+  const half = (pitch * Math.PI) / 360;
+  driveEmulator((device) => {
+    device.position.set(at[0], at[1], at[2]);
+    device.quaternion.set(Math.sin(half), 0, 0, Math.cos(half));
+  });
+  console.log(`SHADOWPLAY tester view=${VIEWS[view].name}`);
+}
+
+function useHands(): void {
+  if (emulatedDevice()?.primaryInputMode === 'hand') return;
+  driveEmulator((device) => {
+    device.primaryInputMode = 'hand';
+  });
+}
 
 export interface TesterLevel {
   index: number;
@@ -64,6 +129,9 @@ export function installLevelTester(api: TesterApi): void {
   #sp-tester .lv.on { background: #7a4a1c; border-color: #ffd27a; }
   #sp-tester .help { margin-top: 10px; padding: 8px; border-radius: 8px; background: rgba(255, 210, 140, 0.08); color: #f3e6c8; }
   #sp-tester .status { margin-top: 6px; color: #9aa3b0; font-size: 11px; }
+  #sp-tester .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  #sp-tester .row b { font-size: 12px; color: #d9a96a; margin-right: 2px; }
+  #sp-tester .row button.on { background: #7a4a1c; border-color: #ffd27a; }
   #sp-tester.closed .body { display: none; }`;
   document.head.appendChild(style);
 
@@ -84,8 +152,34 @@ export function installLevelTester(api: TesterApi): void {
     body.innerHTML = '';
     const intro = document.createElement('div');
     intro.className = 'help';
-    intro.textContent = 'Enter VR in the emulator first (Enter on the start screen), then pick a level, or use Page Down / Page Up to step through them (Home: first, End: the dragon). Mouse-drag looks around; the emulator panels move the hands.';
+    intro.textContent = 'Enter VR in the emulator first (Enter on the start screen), then pick a level, or use Page Down / Page Up to step through them (Home: first, End: the dragon). Mouse-drag looks around; Shift+V changes the view; the emulator panels move the hands.';
     body.appendChild(intro);
+    // Where the emulated head sits, and hands (the game has no controller input).
+    const views = document.createElement('div');
+    views.className = 'row';
+    views.innerHTML = '<b>View</b>';
+    VIEWS.forEach((v, i) => {
+      const b = document.createElement('button');
+      b.textContent = v.name;
+      if (i === view) b.className = 'on';
+      b.onclick = () => {
+        setView(i);
+        render();
+      };
+      views.appendChild(b);
+    });
+    const device = emulatedDevice();
+    if (device && device.primaryInputMode !== 'hand') {
+      const hands = document.createElement('button');
+      hands.textContent = 'Use hands';
+      hands.title = 'The emulator is in controller mode; this game is played with bare hands.';
+      hands.onclick = () => {
+        useHands();
+        render();
+      };
+      views.appendChild(hands);
+    }
+    body.appendChild(views);
     let chapter = '';
     const current = api.current();
     for (const level of api.levels()) {
@@ -124,6 +218,11 @@ export function installLevelTester(api: TesterApi): void {
   };
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'l' && e.shiftKey) toggle.click();
+    if (e.key.toLowerCase() === 'v' && e.shiftKey) {
+      setView(view + 1);
+      if (!panel.classList.contains('closed')) render();
+      return;
+    }
     // Page Down / Page Up step through the levels; Home is the first, End the dragon.
     const story = api.levels().filter((l) => l.index < 1000);
     const at = story.findIndex((l) => l.id === api.current());
@@ -142,5 +241,13 @@ export function installLevelTester(api: TesterApi): void {
       if (status) status.textContent = api.status();
     }
   }, 1000);
+  // Start every load in hand mode, seated, looking at the whole diorama.
+  const settle = (tries: number) => {
+    if (emulatedDevice()) {
+      useHands();
+      setView(0);
+    } else if (tries > 0) setTimeout(() => settle(tries - 1), 250);
+  };
+  settle(40);
   void stage;
 }
