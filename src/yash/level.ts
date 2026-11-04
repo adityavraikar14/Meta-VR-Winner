@@ -167,7 +167,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.handleEvents();
 
     this.opponent.calm = this.tutorial.calm;
-    this.tutorial.update(dt, time, this.head, this.forward, () => this.opponent.fireNow());
+    this.tutorial.update(dt, time, this.head, this.headQuat, this.forward, this.hands, () => this.opponent.fireNow());
     this.arsenal.update(dt, this.forward, this.head);
     this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
     this.bursts.update(dt);
@@ -444,12 +444,18 @@ export class ArsenalLevelSystem extends createSystem({}) {
     );
   }
 
-  /** Starts the tutorial from a clean slate: nothing held, the sentinel full and in front. */
-  private startTutorial(): void {
+  /** A clean slate for a fight: nothing held, no tutorial, the sentinel full and in front. */
+  private startFight(): void {
+    this.tutorial.stop();
     this.arsenal.clear();
     this.recognizer.reset();
     this.opponent.reset();
     this.placed = false;
+  }
+
+  /** Starts the tutorial from a clean slate. */
+  private startTutorial(): void {
+    this.startFight();
     this.tutorial.start();
   }
 
