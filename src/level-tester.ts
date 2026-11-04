@@ -35,6 +35,7 @@ const KEYS: Record<string, string> = {
   'broken-bridge': 'L lay a strong truss · M lay a weak square one · W an X-braced one · T test · U undo',
   'ore-train': 'L lay the basic truss (it will buckle!) · W lay an X-braced one (it holds) · T test · U undo',
   'sky-lantern': '[ light the burner · ] cup a hand under the flame (press again to take it away: too hot scorches the paper)',
+  'gate-lock': '[ hold gentle tension (press again to let go) · ] set the binding pin · ; overset it · ’ release the lever (resets)',
   'shadow-dragon': '[ gather light · ] throw it · ; dragon breathes · ’ dragon dives',
   duel: '[ draw a shape · ] throw it at Morwen · ; Morwen throws'
 };

@@ -21,7 +21,8 @@ export type Diagram =
   | 'arrhenius'
   | 'balloon'
   | 'reflection'
-  | 'projectile';
+  | 'projectile'
+  | 'pins';
 
 export interface JournalPage {
   /** The level's id. */
@@ -139,6 +140,13 @@ export const JOURNAL: JournalPage[] = [
     formula: 'lift = V·g·ρ·(1 − T_out ÷ T_in)',
     body: 'Hot air is thinner than cold, so a bag of it weighs less than the air it pushes aside (Archimedes). The lantern’s 1.1 litres of air weigh 1.3 g; heated to 412 K, 29% of that weight is gone: 0.38 g of lift for 0.35 g of paper and stone.',
     diagram: 'balloon',
+  },
+  {
+    id: 'gate-lock',
+    topic: 'The Pin-Tumbler Lock',
+    formula: 'opens when every gap meets the shear line',
+    body: 'Each stack is a key pin and a driver pin, pushed down by a spring. The plug turns only when every gap between them sits at the shear line. No lock is made perfectly, so under a gentle twist one pin binds at a time. Linus Yale Jr. patented this cylinder lock in 1861.',
+    diagram: 'pins',
   },
   {
     id: 'shadow-dragon',

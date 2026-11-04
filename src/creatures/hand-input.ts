@@ -1,5 +1,5 @@
 import { Vector3 } from '@iwsdk/core';
-import { createExtension, type Extension, readExtension } from '../hand-pose.js';
+import { createExtension, type Extension, FINGERS, readExtension } from '../hand-pose.js';
 import { stage } from '../stage-state.js';
 
 /** WebXR joint indices used for interaction. */
@@ -10,6 +10,8 @@ const MIDDLE_KNUCKLE = 11;
 const PINKY_KNUCKLE = 21;
 /** Fingertips that can poke and pet: index, middle, ring. */
 export const TOUCH_TIPS = [9, 14, 19] as const;
+/** Time constant for smoothing finger states, seconds. */
+const EXT_SMOOTH = 0.05;
 const INDEX_TIP = 9;
 
 /** Pinch closes below this thumb-index gap and opens above the second. */
@@ -115,8 +117,15 @@ export class HandInput {
       this.joint(joints, MIDDLE_KNUCKLE, this.b);
       hand.palm.addVectors(this.a, this.b).multiplyScalar(0.5);
 
-      const ext = readExtension(joints, hand.ext);
-      hand.pointing = ext.index > 0.8 && ext.middle < 0.35 && ext.ring < 0.35 && ext.pinky < 0.35;
+      // Finger states, low-passed over ~50 ms: tracking flicker cannot make or break a sign.
+      const raw = readExtension(joints, this.extension);
+      const ext = hand.ext;
+      const k = wasTracked ? Math.min(1, dt / EXT_SMOOTH) : 1;
+      for (const finger of FINGERS) ext[finger] += (raw[finger] - ext[finger]) * k;
+      // Pointing, with hysteresis: it takes a clear point to start and a clear change to stop.
+      hand.pointing = hand.pointing
+        ? ext.index > 0.65 && ext.middle < 0.5 && ext.ring < 0.5 && ext.pinky < 0.5
+        : ext.index > 0.8 && ext.middle < 0.35 && ext.ring < 0.35 && ext.pinky < 0.35;
 
       for (let t = 0; t < TOUCH_TIPS.length; t++) {
         const tip = hand.tips[t];

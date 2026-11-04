@@ -10,6 +10,7 @@ import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
 import { Brew } from '../machines/brew.js';
 import { Forge } from '../machines/forge.js';
+import { PinLock } from '../machines/lock.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
 import { stage } from '../stage-state.js';
 import { decorateJungle, decorateMine, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
@@ -557,6 +558,33 @@ const brokenBridge: Puzzle = {
   },
 };
 
+const gateLock: Puzzle = {
+  id: 'gate-lock',
+  world: 4,
+  title: 'The Dragon’s Gate',
+  story: 'An iron gate bars the last climb to the dragon. Its lock is old and its key long lost: open it the way a locksmith would, by feel.',
+  ask: 'Press the tension lever gently, then lift each pin with your fingertip',
+  handsOn: true,
+  solved: 'Click, click, click, click: the plug turns and the gate swings open.',
+  build(root, kit) {
+    const lock = new PinLock(kit.floor);
+    root.add(lock.group);
+    stage.runNotes = () => lock.journal();
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        lock.update(dt, hands);
+        task.caption = lock.caption;
+        task.done = lock.done;
+        task.mistakes = lock.mistakes;
+      },
+    };
+  },
+};
+
 const shadowDragon: Puzzle = {
   id: 'shadow-dragon',
   world: 4,
@@ -748,5 +776,6 @@ export const PUZZLES: Puzzle[] = [
   healingDraught,
   strongDraught,
   skyLantern,
+  gateLock,
   shadowDragon,
 ];

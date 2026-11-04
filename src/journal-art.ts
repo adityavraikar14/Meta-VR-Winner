@@ -393,6 +393,40 @@ const DRAW: Record<Diagram, (g: CanvasRenderingContext2D) => void> = {
     label(g, 'same angle in and out', 265, 390, 18, BLUE);
   },
 
+  pins(g) {
+    // A cutaway lock: housing above, plug below, four stacks crossing the red shear line.
+    const top = 100;
+    const shear = 250;
+    const bottom = 330;
+    wash(g, [[60, shear], [470, shear], [470, bottom], [60, bottom]], 'rgba(201, 138, 28, 0.22)');
+    pen(g, [[60, top], [470, top], [470, bottom], [60, bottom]], 2.6, SEPIA, true);
+    g.setLineDash([8, 6]);
+    pen(g, [[50, shear], [480, shear]], 2.4, RED);
+    g.setLineDash([]);
+    label(g, 'shear line', 400, shear - 14, 16, RED);
+    label(g, 'housing', 112, top + 22, 16);
+    label(g, 'plug (turns)', 125, bottom - 18, 16);
+    const keys = [44, 62, 36, 54];
+    [130, 215, 300, 385].forEach((x, i) => {
+      const set = i === 1;
+      const kTop = set ? shear : shear + 12;
+      // Key pin (brass, pointed), driver (steel), spring above.
+      const kBottom = kTop + keys[i];
+      wash(g, [[x - 13, kTop], [x + 13, kTop], [x + 13, kBottom], [x, kBottom + 12], [x - 13, kBottom]], 'rgba(201, 150, 40, 0.75)');
+      pen(g, [[x - 13, kTop], [x + 13, kTop], [x + 13, kBottom], [x, kBottom + 12], [x - 13, kBottom]], 2, SEPIA, true);
+      const dBottom = set ? shear - 2 : kTop;
+      wash(g, [[x - 13, dBottom - 42], [x + 13, dBottom - 42], [x + 13, dBottom], [x - 13, dBottom]], 'rgba(150, 160, 175, 0.8)');
+      pen(g, [[x - 13, dBottom - 42], [x + 13, dBottom - 42], [x + 13, dBottom], [x - 13, dBottom]], 2, SEPIA, true);
+      const spring: Array<[number, number]> = [];
+      for (let y = top; y <= dBottom - 42; y += 6) spring.push([x + (((y - top) / 6) % 2 ? 10 : -10), y]);
+      pen(g, spring, 1.6, '#6a7280');
+      label(g, String(i + 1), x, top - 14, 16, SEPIA, 'center', false);
+    });
+    label(g, 'set: its gap is on the line', 215, 372, 16, BLUE);
+    arrow(g, 300, 395, 300, 352, BLUE, 2);
+    label(g, 'lift from below', 360, 398, 16, BLUE, 'left');
+  },
+
   projectile(g) {
     // A throw from your hand to the witch, falling under gravity on the way.
     const pts: Array<[number, number]> = [];

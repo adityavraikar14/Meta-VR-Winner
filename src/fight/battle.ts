@@ -52,6 +52,7 @@ const SIGNS: Record<SignName, { label: string; fingers: [number, number, number,
 };
 const SIGN_NAMES = Object.keys(SIGNS) as SignName[];
 const SIGN_HOLD = 0.3;
+const FINGER_NAMES = ['index', 'middle', 'ring', 'little'];
 
 const PLAYER_HEALTH = 3;
 const DRAGON_HEALTH = 4;
@@ -124,6 +125,8 @@ export class DragonBattle {
   private sequence: SignName[] = [];
   private signStep = 0;
   private signHeld = 0;
+  /** Seconds spent nearly making the wanted sign, for a finger hint. */
+  private signTrying = 0;
   private signHand = 1;
   private readonly signIcons: Array<{ mesh: Mesh; material: MeshBasicMaterial }> = [];
   private orbHand = -1;
@@ -364,12 +367,24 @@ export class DragonBattle {
 
   private signs(dt: number, hands: readonly HandState[]): void {
     if (this.orbHand >= 0 || this.flying || this.signStep >= 3) return;
-    const want = SIGNS[this.sequence[this.signStep]].fingers;
+    const name = this.sequence[this.signStep];
     let made = -1;
-    hands.forEach((hand, h) => {
-      if (hand.tracked && matches(hand.ext, want)) made = made < 0 || h === this.signHand ? h : made;
-    });
+    let near: { finger: number; error: number } | null = null;
+    for (let h = 0; h < hands.length; h++) {
+      const hand = hands[h];
+      if (!hand.tracked) continue;
+      // The sign counts only if it is the nearest of all signs to the hand, not just roughly like it.
+      if (closestSign(hand.ext) === name && matches(hand.ext, SIGNS[name].fingers, 0.4)) made = made < 0 || h === this.signHand ? h : made;
+      const miss = worstFinger(hand.ext, SIGNS[name].fingers);
+      if (!near || miss.error < near.error) near = miss;
+    }
     this.signHeld = made >= 0 ? this.signHeld + dt : Math.max(0, this.signHeld - dt * 2);
+    // Trying and not quite there: say which finger is wrong.
+    this.signTrying = made < 0 && near && near.error < 0.75 ? this.signTrying + dt : 0;
+    if (this.signTrying > 2.5 && near) {
+      const up = SIGNS[name].fingers[near.finger] === 1;
+      this.flash(`${SIGNS[name].label}: ${up ? 'straighten' : 'curl'} your ${FINGER_NAMES[near.finger]} finger`, 1.2);
+    }
     if (made >= 0 && this.signHeld >= SIGN_HOLD) {
       this.signHand = made;
       playSign(this.signStep);
@@ -923,6 +938,36 @@ function segmentDistance(p: Vector3, a: Vector3, b: Vector3): number {
 function matches(ext: Extension, want: readonly number[], slack = 0.45): boolean {
   const fingers = [ext.index, ext.middle, ext.ring, ext.pinky];
   return fingers.every((value, i) => Math.abs(value - want[i]) < slack);
+}
+
+/** The sign nearest the hand's finger states (summed squared error). */
+function closestSign(ext: Extension): SignName {
+  const fingers = [ext.index, ext.middle, ext.ring, ext.pinky];
+  let best: SignName = 'open';
+  let bestError = Infinity;
+  for (const name of SIGN_NAMES) {
+    const error = SIGNS[name].fingers.reduce((sum, want, i) => sum + (fingers[i] - want) ** 2, 0);
+    if (error < bestError) {
+      bestError = error;
+      best = name;
+    }
+  }
+  return best;
+}
+
+/** The finger furthest from a sign, and how far (0..1). */
+function worstFinger(ext: Extension, want: readonly number[]): { finger: number; error: number } {
+  const fingers = [ext.index, ext.middle, ext.ring, ext.pinky];
+  let finger = 0;
+  let error = 0;
+  fingers.forEach((value, i) => {
+    const e = Math.abs(value - want[i]);
+    if (e > error) {
+      error = e;
+      finger = i;
+    }
+  });
+  return { finger, error };
 }
 
 function radial(inner: string, outer: string): CanvasTexture {
