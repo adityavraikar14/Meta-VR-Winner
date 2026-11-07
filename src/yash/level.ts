@@ -32,10 +32,12 @@ import {
   SIGN_LABELS,
 } from './gestures.js';
 import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
-import { MAX_HP, Opponent } from './opponent.js';
+import { DragonBoss } from './dragon-boss.js';
+import { WitchBoss } from './witch-boss.js';
+import { Boss, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
 import { HandSkeleton, SimHands } from './sim-hands.js';
-import { Tutorial } from './tutorial.js';
+import { PokeButton, Tutorial } from './tutorial.js';
 import { WebcamHands } from './webcam-hands.js';
 import { Bursts, Label, makeRing, setRing, TextPanel } from './visuals.js';
 
@@ -48,6 +50,8 @@ interface XRHandFrame {
 const ICON_DISTANCE = 0.55;
 const ICON_DROP = 0.3;
 const ICON_GAP = 0.15;
+const ICONS_PER_ROW = 4;
+const ICON_ROW_GAP = 0.065;
 /** "Show your hands" appears after the hands are gone this long. */
 const SHOW_HANDS_AFTER = 0.8;
 /** A held item stays where a lost hand was last seen for this long, instead of jumping away. */
@@ -58,6 +62,16 @@ const READOUT_LEFT = 0.36;
 const READOUT_DOWN = 0.2;
 const READOUT_REFRESH = 0.2;
 const HURT_TIME = 0.45;
+/** The boss button floats within arm's reach, low on the right, away from where a blaster aims. */
+const BOSS_BUTTON_RIGHT = 0.26;
+const BOSS_BUTTON_AHEAD = 0.4;
+const BOSS_BUTTON_DROP = 0.12;
+/** The boss button names who comes next, by the current boss's name. */
+const NEXT_BOSS_LABEL: Record<string, string> = {
+  sentinel: '🐉 Fight the dragon',
+  dragon: '🧙 Fight Morwen',
+  morwen: '🔮 Back to the sentinel',
+};
 const UP = new Vector3(0, 1, 0);
 
 export class ArsenalLevelSystem extends createSystem({}) {
@@ -74,6 +88,12 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private events: GestureEvent[] = [];
   private bursts!: Bursts;
   private opponent!: Opponent;
+  /** Made the first time each is fought, so their models only load when needed. */
+  private dragon: DragonBoss | null = null;
+  private witch: WitchBoss | null = null;
+  /** Who the fight is against right now. */
+  private boss!: Boss;
+  private bossButton!: PokeButton;
   private arsenal!: Arsenal;
   /** Stand-in hands for the test panel; real tracked hands always win. */
   private sim = new SimHands();
@@ -119,7 +139,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.opponent = new Opponent(this.root, this.bursts, () => {
       this.hurtLeft = HURT_TIME;
     });
+    this.boss = this.opponent;
     this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
+    this.bossButton = new PokeButton(NEXT_BOSS_LABEL.sentinel, () => this.nextBoss());
+    this.root.add(this.bossButton.root);
     this.arsenal.onEvent = (event) => this.tutorial.notify(event);
     this.root.add(this.tutorial.root);
     this.skeletons = { left: new HandSkeleton(0xffd9b8), right: new HandSkeleton(0xffd9b8) };
@@ -150,7 +173,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const dt = Math.min(delta, 0.05);
     this.readHead();
     if (!this.placed && this.head.y > 0.3) {
-      this.opponent.place(this.head, this.forward);
+      this.boss.place(this.head, this.forward);
       this.placed = true;
     }
     this.readHands(dt, time);
@@ -166,10 +189,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
     this.handleEvents();
 
-    this.opponent.calm = this.tutorial.calm;
-    this.tutorial.update(dt, time, this.head, this.headQuat, this.forward, this.hands, () => this.opponent.fireNow());
+    this.boss.calm = this.tutorial.calm;
+    this.tutorial.update(dt, time, this.head, this.headQuat, this.forward, this.hands, () => this.boss.fireNow());
     this.arsenal.update(dt, this.forward, this.head);
-    this.opponent.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
+    this.boss.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
+    // A boss beaten, or its model unavailable: back to the sentinel.
+    if (this.boss !== this.opponent && (this.boss.finished || this.boss.failed)) {
+      this.selectBoss(this.opponent);
+    }
+    this.updateBossButton(dt);
     this.bursts.update(dt);
     this.updateHud(dt, anyHand);
   }
@@ -347,7 +375,12 @@ export class ArsenalLevelSystem extends createSystem({}) {
     ITEMS.forEach((item, i) => {
       const icon = this.icons[item];
       icon.sprite.visible = armed;
-      icon.sprite.position.copy(center).addScaledVector(this.right, (i - (ITEMS.length - 1) / 2) * ICON_GAP);
+      // Two rows: the first four, then the rest just below.
+      const row = i < ICONS_PER_ROW ? 0 : 1;
+      const inRow = row === 0 ? Math.min(ITEMS.length, ICONS_PER_ROW) : ITEMS.length - ICONS_PER_ROW;
+      const col = row === 0 ? i : i - ICONS_PER_ROW;
+      icon.sprite.position.copy(center).addScaledVector(this.right, (col - (inRow - 1) / 2) * ICON_GAP);
+      icon.sprite.position.y -= row * ICON_ROW_GAP;
       const active = armed && r.candidate === item;
       icon.sprite.material.opacity = active ? 1 : 0.75;
       icon.resize(active ? 0.055 : 0.042);
@@ -359,12 +392,17 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.handsLabel.sprite.visible = this.noHandsFor > SHOW_HANDS_AFTER;
     this.handsLabel.sprite.position.copy(this.head).addScaledVector(this.look, 0.7);
 
-    const o = this.opponent;
+    const o = this.boss;
+    const loading = o.loadingText !== null;
     this.statusLabel.set(
-      o.alive ? `Sentinel ${o.hp}/${MAX_HP} · hits taken ${o.hitsTaken}` : `Defeated! (${o.defeats})`,
-      o.alive ? '#ffffff' : '#ffe27a',
+      o.loadingText !== null
+        ? o.loadingText
+        : o.alive
+          ? `${o.title} ${o.hp}/${o.maxHp} · hits taken ${o.hitsTaken}`
+          : `${o.title} defeated! (${o.defeats})`,
+      o.alive || loading ? '#ffffff' : '#ffe27a',
     );
-    this.statusLabel.sprite.position.copy(o.center).setY(o.center.y + 0.7);
+    this.statusLabel.sprite.position.copy(o.center).setY(o.center.y + o.labelRise);
 
     const panel = this.headsetReadout;
     if (panel) {
@@ -392,6 +430,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const splash = document.getElementById('splash');
     const button = document.getElementById('splash-play') as HTMLButtonElement | null;
     const tutorialButton = document.getElementById('splash-tutorial') as HTMLButtonElement | null;
+    const dragonButton = document.getElementById('splash-dragon') as HTMLButtonElement | null;
+    const witchButton = document.getElementById('splash-witch') as HTMLButtonElement | null;
     const note = document.getElementById('splash-note');
     if (!splash || !button) return;
     const noHeadset = () => {
@@ -418,6 +458,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
           button.disabled = false;
           button.textContent = 'Enter the Arsenal';
           if (tutorialButton) tutorialButton.disabled = false;
+          if (dragonButton) dragonButton.disabled = false;
+          if (witchButton) witchButton.disabled = false;
         }
       });
     const launch = () => {
@@ -430,11 +472,27 @@ export class ArsenalLevelSystem extends createSystem({}) {
       this.startTutorial();
       this.world.launchXR();
     };
+    const launchDragon = () => {
+      sfx.unlock();
+      this.tutorial.stop();
+      this.fightDragon();
+      this.world.launchXR();
+    };
+    const launchWitch = () => {
+      sfx.unlock();
+      this.tutorial.stop();
+      this.fightWitch();
+      this.world.launchXR();
+    };
     button.addEventListener('click', launch);
     tutorialButton?.addEventListener('click', launchTutorial);
+    dragonButton?.addEventListener('click', launchDragon);
+    witchButton?.addEventListener('click', launchWitch);
     this.cleanupFuncs.push(
       () => button.removeEventListener('click', launch),
       () => tutorialButton?.removeEventListener('click', launchTutorial),
+      () => dragonButton?.removeEventListener('click', launchDragon),
+      () => witchButton?.removeEventListener('click', launchWitch),
       this.world.visibilityState.subscribe((state) => {
         // Put the sentinel in front of wherever the player is when the view changes.
         this.placed = false;
@@ -447,10 +505,55 @@ export class ArsenalLevelSystem extends createSystem({}) {
   /** A clean slate for a fight: nothing held, no tutorial, the sentinel full and in front. */
   private startFight(): void {
     this.tutorial.stop();
+    this.selectBoss(this.opponent);
+  }
+
+  /** Switches who the fight is against, from a clean slate. */
+  private selectBoss(boss: Boss): void {
+    this.boss.setActive(false);
+    this.boss = boss;
+    this.arsenal.foe = boss;
     this.arsenal.clear();
     this.recognizer.reset();
-    this.opponent.reset();
+    boss.setActive(true);
+    boss.reset();
     this.placed = false;
+    this.bossButton.setText(NEXT_BOSS_LABEL[boss.name] ?? NEXT_BOSS_LABEL.sentinel);
+  }
+
+  /** Sentinel, then the dragon, then Morwen, then back to the sentinel. */
+  private nextBoss(): void {
+    if (this.boss === this.opponent) this.fightDragon();
+    else if (this.boss === this.dragon) this.fightWitch();
+    else this.selectBoss(this.opponent);
+  }
+
+  private fightDragon(): void {
+    this.dragon ??= new DragonBoss(this.root, this.bursts, () => {
+      this.hurtLeft = HURT_TIME;
+    });
+    this.selectBoss(this.dragon);
+    sfx.roar();
+  }
+
+  private fightWitch(): void {
+    this.witch ??= new WitchBoss(this.root, this.bursts, () => {
+      this.hurtLeft = HURT_TIME;
+    });
+    this.selectBoss(this.witch);
+  }
+
+  /** Lets hands choose the boss, in the free fight; floats low on the right, within reach. */
+  private updateBossButton(dt: number): void {
+    const show = !this.tutorial.active;
+    this.bossButton.root.visible = show;
+    if (!show) return;
+    this.tmp
+      .copy(this.head)
+      .addScaledVector(this.right, BOSS_BUTTON_RIGHT)
+      .addScaledVector(this.forward, BOSS_BUTTON_AHEAD);
+    this.tmp.y -= BOSS_BUTTON_DROP;
+    this.bossButton.update(dt, this.tmp, this.headQuat, this.right, this.forward, this.hands);
   }
 
   /** Starts the tutorial from a clean slate. */
@@ -467,7 +570,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
         break;
       case 'move':
         // Webcam or headset hands: Push throws and Shoot fires directly instead of moving fake hands.
-        if (!this.sim.active && this.arsenal.held && command.move === 'push') this.arsenal.throwHeld(this.look);
+        if (!this.sim.active && this.arsenal.held && (command.move === 'push' || command.move === 'draw')) {
+          this.arsenal.throwHeld(this.look);
+        }
         else if (!this.sim.active && this.arsenal.held?.item === 'gun' && command.move === 'shoot') this.arsenal.fireGun();
         else this.sim.startMove(command.move);
         break;
@@ -484,7 +589,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
       case 'clear':
         this.arsenal.clear();
         this.recognizer.reset();
-        this.opponent.reset();
+        this.boss.reset();
+        break;
+      case 'boss':
+        this.nextBoss();
         break;
       case 'recenter':
         this.placed = false;
@@ -564,11 +672,11 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
     const a = this.arsenal;
     lines.push(
-      `held: ${a.held ? a.held.item : '–'} · flying ${a.projectiles.length} · shots ${a.shots} · wall ${a.wallLeft > 0 ? `${a.wallHp}/${WALL_HP} hp, ${a.wallLeft.toFixed(1)}s` : '–'}`,
+      `held: ${a.held ? a.held.item : '–'}${a.shield ? ' + shield' : ''} · flying ${a.projectiles.length} · shots ${a.shots} · wall ${a.wallLeft > 0 ? `${a.wallHp}/${WALL_HP} hp, ${a.wallLeft.toFixed(1)}s` : '–'}`,
       ...(a.held?.item === 'gun' && (L.tracked || R.tracked)
         ? [`trigger: thumb ${(this.hands[a.held.side].thumbDrop * 100).toFixed(1)} cm from fingers (fires < 3.0)`]
         : []),
-      `sentinel ${this.opponent.hp}/${MAX_HP} · hits taken ${this.opponent.hitsTaken} · defeated ${this.opponent.defeats}`,
+      `${this.boss.name} ${this.boss.hp}/${this.boss.maxHp} · hits taken ${this.boss.hitsTaken} · defeated ${this.boss.defeats}`,
     );
     return lines.join('\n');
   }

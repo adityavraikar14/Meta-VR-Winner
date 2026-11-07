@@ -8,8 +8,12 @@
  *   ball   grows on the open palm; push or throw the palm forward to launch it.
  *   wall   rises in front of the player and blocks orbs for a few seconds.
  *   gun    rides the pointing index finger with a crosshair; drop the thumb to fire.
+ *   shield a disc of light on the open palm, blocking whatever it covers. It can
+ *          share the hands with a sword, and nothing else.
+ *   sling  a wooden slingshot in the V hand; pinch the pouch with the other
+ *          hand, pull back and let go. The longer the pull, the harder the shot.
  */
-import { Group, Mesh, Quaternion, Sprite, Vector3 } from '@iwsdk/core';
+import { Group, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Sprite, Vector3 } from '@iwsdk/core';
 import { isFist, Item } from './gestures.js';
 import { HandState, Side } from './hands.js';
 import type { Foe } from './opponent.js';
@@ -21,6 +25,9 @@ import {
   makeBeam,
   makeCrosshair,
   makeGun,
+  makeShield,
+  makeSlingshot,
+  makeStone,
   makeSpear,
   makeSword,
   makeWall,
@@ -28,6 +35,11 @@ import {
   SWORD_LENGTH,
   WALL_HEIGHT,
   WALL_WIDTH,
+  SHIELD_RADIUS,
+  SLING_TIP_SPREAD,
+  SLING_TIP_UP,
+  SlingRig,
+  STONE_RADIUS,
   WallRig,
 } from './visuals.js';
 
@@ -120,7 +132,30 @@ const AIM_HISTORY = 12;
 const INDEX_KNUCKLE = 6;
 const INDEX_TIP = 9;
 
+/** The shield floats this far out from the palm. */
+const SHIELD_LIFT = 0.06;
+const SHIELD_FLASH = 0.15;
+
+/** Slingshot: a pinch closer than this grabs the pouch, wider than this lets go. */
+const PINCH_GRAB = 0.025;
+const PINCH_RELEASE = 0.045;
+/** The pinching fingers must be this close to the pouch to take it. */
+const GRAB_REACH = 0.1;
+/** A pull this long is full power; shorter than MIN_DRAW and letting go doesn't shoot. */
+const FULL_DRAW = 0.35;
+const MIN_DRAW = 0.05;
+const STONE_MIN_SPEED = 5;
+const STONE_MAX_SPEED = 13;
+const STONE_GRAVITY = 3;
+const STONE_MIN_DAMAGE = 2;
+const STONE_MAX_DAMAGE = 6;
+/** Seconds before the next stone sits in the pouch. */
+const RELOAD = 0.35;
+/** Fingertip joints: thumb, index. */
+const THUMB_TIP = 4;
+
 const Y = new Vector3(0, 1, 0);
+const Z = new Vector3(0, 0, 1);
 
 /** Where a hand is, for holding items: a tracked hand, or a controller / default spot. */
 export interface Anchor {
@@ -138,11 +173,32 @@ export type AnchorFn = (side: Side, out: Anchor) => Anchor;
 /** Things the player did with an item, for the tutorial to watch for. */
 export type ArsenalEvent =
   | { type: 'swing'; item: 'sword' | 'spear' }
-  | { type: 'launch'; item: 'ball' | 'spear' }
+  | { type: 'launch'; item: 'ball' | 'spear' | 'stone' }
   | { type: 'blocked' };
 
+/** Items held in a hand: everything but the wall (placed) and the shield (worn alongside). */
+type HeldItem = Exclude<Item, 'wall' | 'shield'>;
+
+interface SlingState {
+  rig: SlingRig;
+  grabbed: boolean;
+  reload: number;
+  /** The fork's midpoint, between the V's fingertips. */
+  fork: Vector3;
+  pouch: Vector3;
+}
+
+interface Shield {
+  side: Side;
+  root: Group;
+  disc: MeshBasicMaterial;
+  center: Vector3;
+  normal: Vector3;
+  flash: number;
+}
+
 interface Held {
-  item: Exclude<Item, 'wall'>;
+  item: HeldItem;
   side: Side;
   object: Group;
   age: number;
@@ -150,10 +206,12 @@ interface Held {
   /** Tip position last frame, to measure tip speed. */
   lastTip: Vector3;
   hasLastTip: boolean;
+  sling?: SlingState;
 }
 
 interface Projectile {
-  item: 'ball' | 'spear';
+  item: 'ball' | 'spear' | 'stone';
+  damage: number;
   object: Group;
   velocity: Vector3;
   gravity: number;
@@ -164,6 +222,8 @@ interface Projectile {
 
 export class Arsenal {
   held: Held | null = null;
+  /** Worn on one hand; only a sword may be held alongside it. */
+  shield: Shield | null = null;
   readonly projectiles: Projectile[] = [];
   /** Seconds left on the wall, 0 when there is none. */
   wallLeft = 0;
@@ -175,6 +235,13 @@ export class Arsenal {
   private wallRight = new Vector3();
   private wallNormal = new Vector3();
   private anchor: Anchor = { position: new Vector3(), pointing: new Vector3(), hand: null, recent: null };
+  /** Separate anchors for the shield's hand and the slingshot's drawing hand. */
+  private shieldAnchor: Anchor = { position: new Vector3(), pointing: new Vector3(), hand: null, recent: null };
+  private drawAnchor: Anchor = { position: new Vector3(), pointing: new Vector3(), hand: null, recent: null };
+  private tipA = new Vector3();
+  private tipB = new Vector3();
+  private pinchAt = new Vector3();
+  private basis = new Matrix4();
   private target = new Quaternion();
   private axis = new Vector3();
   private tip = new Vector3();
@@ -208,7 +275,8 @@ export class Arsenal {
   constructor(
     private root: Group,
     private bursts: Bursts,
-    private foe: Foe,
+    /** The boss being fought; the level swaps it when the fight changes. */
+    public foe: Foe,
     private anchorOf: AnchorFn,
   ) {
     this.wall = makeWall();
@@ -223,13 +291,28 @@ export class Arsenal {
 
   summon(item: Item, side: Side | null, head: Vector3, forward: Vector3): void {
     sfx.summon(item);
+    if (item === 'shield') {
+      // A shield keeps a sword, and only a sword.
+      if (this.held && this.held.item !== 'sword') this.drop();
+      this.raiseShield(side ?? 'left');
+      return;
+    }
+    if (item !== 'sword') this.dropShield();
     if (item === 'wall') {
       this.raiseWall(head, forward);
       return;
     }
     this.drop();
-    const object =
-      item === 'sword' ? makeSword() : item === 'spear' ? makeSpear() : item === 'gun' ? makeGun() : makeBall();
+    const sling = item === 'sling' ? makeSlingshot() : null;
+    const object = sling
+      ? sling.root
+      : item === 'sword'
+        ? makeSword()
+        : item === 'spear'
+          ? makeSpear()
+          : item === 'gun'
+            ? makeGun()
+            : makeBall();
     if (item === 'ball') object.scale.setScalar(0.01);
     this.aimReady = false;
     this.triggerDown = false;
@@ -242,7 +325,10 @@ export class Arsenal {
       cooldown: 0,
       lastTip: new Vector3(),
       hasLastTip: false,
+      sling: sling ? { rig: sling, grabbed: false, reload: 0, fork: new Vector3(), pouch: new Vector3() } : undefined,
     };
+    // Sword and shield in the same hand: the shield moves to the other one.
+    if (this.shield && this.shield.side === this.held.side) this.shield.side = other(this.held.side);
     this.anchorOf(this.held.side, this.anchor);
     this.bursts.spawn(this.anchor.position, 0x9fe8ff, 0.2);
   }
@@ -255,8 +341,15 @@ export class Arsenal {
     this.crosshair.visible = this.laser.visible = false;
   }
 
+  dropShield(): void {
+    if (!this.shield) return;
+    this.dispose(this.shield.root);
+    this.shield = null;
+  }
+
   clear(): void {
     this.drop();
+    this.dropShield();
     for (const p of this.projectiles) this.dispose(p.object);
     this.projectiles.length = 0;
     this.wallLeft = 0;
@@ -270,6 +363,10 @@ export class Arsenal {
   throwHeld(direction: Vector3): void {
     const held = this.held;
     if (!held || held.item === 'sword' || held.item === 'gun') return;
+    if (held.sling) {
+      this.fireStone(held.sling, direction, 1);
+      return;
+    }
     if (held.item === 'ball') held.age = Math.max(held.age, BALL_GROW);
     this.dir.copy(direction).normalize().multiplyScalar(7);
     this.launch(held, this.dir);
@@ -280,6 +377,11 @@ export class Arsenal {
    * loses health, and shatters when it has none left.
    */
   absorb(point: Vector3, radius: number): boolean {
+    if (this.inShield(point, radius)) {
+      this.shield!.flash = SHIELD_FLASH;
+      this.onEvent?.({ type: 'blocked' });
+      return true;
+    }
     if (!this.inWall(point, radius)) return false;
     this.wallHp--;
     this.wallFlash = WALL_FLASH;
@@ -291,6 +393,15 @@ export class Arsenal {
       sfx.wallBreak();
     }
     return true;
+  }
+
+  private inShield(point: Vector3, radius: number): boolean {
+    const shield = this.shield;
+    if (!shield) return false;
+    this.dir.copy(point).sub(shield.center);
+    const along = this.dir.dot(shield.normal);
+    const across = Math.sqrt(Math.max(0, this.dir.lengthSq() - along * along));
+    return Math.abs(along) < radius + 0.06 && across < SHIELD_RADIUS + radius;
   }
 
   private inWall(point: Vector3, radius: number): boolean {
@@ -312,6 +423,7 @@ export class Arsenal {
     this.head.copy(head);
     this.lastForward.copy(forward);
     if (this.held) this.updateHeld(this.held, dt, forward);
+    if (this.shield) this.updateShield(this.shield, dt);
     this.updateProjectiles(dt);
     this.updateWall(dt);
     if (this.tracerLeft > 0) {
@@ -433,6 +545,10 @@ export class Arsenal {
       this.updateGun(held, anchor, dt);
       return;
     }
+    if (held.sling) {
+      this.updateSling(held, held.sling, anchor, dt);
+      return;
+    }
 
     // The hand vanished mid-throw: throw along the way it was moving.
     const recent = anchor.recent;
@@ -503,7 +619,7 @@ export class Arsenal {
 
   private launch(held: Held, velocity: Vector3): void {
     const item = held.item;
-    if (item === 'sword' || item === 'gun') return;
+    if (item === 'sword' || item === 'gun' || item === 'sling') return;
     const from = held.object.position;
     let speed = velocity.length();
     speed = Math.min(MAX_LAUNCH, Math.max(MIN_LAUNCH, speed));
@@ -518,6 +634,7 @@ export class Arsenal {
       object: held.object,
       velocity: this.dir.clone().multiplyScalar(speed),
       gravity: item === 'ball' ? BALL_GRAVITY : SPEAR_GRAVITY,
+      damage: item === 'ball' ? BALL_DAMAGE : SPEAR_DAMAGE,
       age: 0,
       stuck: 0,
     });
@@ -546,22 +663,151 @@ export class Arsenal {
         this.tip.copy(object.position).addScaledVector(this.dir, SPEAR_TIP);
         if (this.foe.cutOrbs(this.tip, 0.05) > 0) sfx.slice();
         if (this.foe.touches(this.tip, 0.03)) {
-          this.foe.damage(SPEAR_DAMAGE, this.tip);
+          this.foe.damage(p.damage, this.tip);
           p.stuck = STUCK_TIME;
           continue;
         }
       } else {
         object.rotation.y += dt * 6;
-        if (this.foe.cutOrbs(object.position, BALL_RADIUS) > 0) sfx.block();
-        if (this.foe.touches(object.position, BALL_RADIUS)) {
-          this.foe.damage(BALL_DAMAGE, object.position);
-          this.bursts.spawn(object.position, 0x6fd6ff, 0.5);
+        const radius = p.item === 'stone' ? STONE_RADIUS : BALL_RADIUS;
+        if (this.foe.cutOrbs(object.position, radius) > 0) sfx.block();
+        if (this.foe.touches(object.position, radius)) {
+          this.foe.damage(p.damage, object.position);
+          this.bursts.spawn(object.position, p.item === 'stone' ? 0xffd890 : 0x6fd6ff, p.item === 'stone' ? 0.25 : 0.5);
           this.removeProjectile(i);
           continue;
         }
       }
       if (p.age > PROJECTILE_LIFE || object.position.y < -1) this.removeProjectile(i);
     }
+  }
+
+  private raiseShield(side: Side): void {
+    this.dropShield();
+    // Sword and shield in the same hand: the shield goes to the other one.
+    if (this.held?.item === 'sword' && this.held.side === side) side = other(side);
+    const rig = makeShield();
+    this.root.add(rig.root);
+    this.shield = { side, root: rig.root, disc: rig.disc, center: new Vector3(), normal: new Vector3(0, 0, -1), flash: 0 };
+    this.updateShield(this.shield, 0);
+    this.bursts.spawn(this.shield.center, 0x9fe8ff, 0.3);
+  }
+
+  /** The shield rides the palm, facing where the palm faces. */
+  private updateShield(shield: Shield, dt: number): void {
+    const anchor = this.anchorOf(shield.side, this.shieldAnchor);
+    const hand = anchor.hand ?? anchor.recent;
+    if (hand) {
+      shield.normal.copy(hand.normal);
+      shield.center.copy(hand.palm).addScaledVector(hand.normal, SHIELD_LIFT);
+    } else {
+      shield.normal.copy(anchor.pointing);
+      shield.center.copy(anchor.position).addScaledVector(anchor.pointing, 0.15);
+    }
+    shield.root.position.copy(shield.center);
+    shield.root.quaternion.setFromUnitVectors(Z, shield.normal);
+    shield.flash = Math.max(0, shield.flash - dt);
+    shield.disc.opacity = shield.flash > 0 ? 0.75 : 0.32;
+  }
+
+  /**
+   * The slingshot sits in the hand like the sword: grip in the palm, fork up,
+   * arms spread across the player's view. A band of light runs from each arm's
+   * tip to the pouch. Pinch the pouch with the other hand, pull back, let go.
+   */
+  private updateSling(held: Held, sling: SlingState, anchor: Anchor, dt: number): void {
+    const hand = anchor.hand ?? anchor.recent;
+    // Fork up: along the knuckles of a fist round the grip (as for the sword),
+    // otherwise (a V or open hand) the way the fingers point.
+    if (hand && isFist(hand)) this.axis.copy(hand.knuckles);
+    else this.axis.copy(anchor.pointing);
+    this.target.setFromUnitVectors(Y, this.axis);
+    const frame = sling.rig.frame;
+    frame.position.copy(anchor.position);
+    if (held.age <= dt) frame.quaternion.copy(this.target);
+    else frame.quaternion.slerp(this.target, 1 - Math.exp(-HOLD_SMOOTHING * dt));
+    // Then turn it about its own up axis so the arms spread across the view.
+    this.axis.copy(Y).applyQuaternion(frame.quaternion);
+    this.mid.crossVectors(this.axis, this.lastForward);
+    if (this.mid.lengthSq() > 1e-4) {
+      this.mid.normalize();
+      this.dir.crossVectors(this.mid, this.axis).normalize();
+      this.basis.makeBasis(this.mid, this.axis, this.dir);
+      frame.quaternion.setFromRotationMatrix(this.basis);
+    }
+    this.tipA.set(-SLING_TIP_SPREAD, SLING_TIP_UP, 0).applyQuaternion(frame.quaternion).add(frame.position);
+    this.tipB.set(SLING_TIP_SPREAD, SLING_TIP_UP, 0).applyQuaternion(frame.quaternion).add(frame.position);
+    sling.fork.copy(this.tipA).add(this.tipB).multiplyScalar(0.5);
+    sling.reload = Math.max(0, sling.reload - dt);
+
+    // The other hand's pinch takes the pouch and lets it go.
+    const draw = this.anchorOf(other(held.side), this.drawAnchor);
+    const puller = draw.hand;
+    if (puller) {
+      puller.joint(THUMB_TIP, this.pinchAt).add(puller.joint(INDEX_TIP, this.tip)).multiplyScalar(0.5);
+    }
+    if (!sling.grabbed) {
+      if (puller && sling.reload === 0 && puller.pinch < PINCH_GRAB && this.pinchAt.distanceTo(sling.fork) < GRAB_REACH) {
+        sling.grabbed = true;
+        sfx.slingStretch();
+      }
+    } else if (!puller || puller.pinch > PINCH_RELEASE) {
+      sling.grabbed = false;
+      const pull = sling.pouch.distanceTo(sling.fork);
+      if (pull > MIN_DRAW) {
+        this.dir.copy(sling.fork).sub(sling.pouch);
+        this.fireStone(sling, this.dir, Math.min(1, pull / FULL_DRAW));
+      }
+    }
+    sling.pouch.copy(sling.grabbed ? this.pinchAt : sling.fork);
+
+    const rig = sling.rig;
+    this.stretch(rig.bands[0], this.tipA, sling.pouch);
+    this.stretch(rig.bands[1], this.tipB, sling.pouch);
+    rig.pouch.position.copy(sling.pouch);
+    rig.stone.position.copy(sling.pouch);
+    rig.stone.visible = sling.reload === 0;
+
+    // While drawn, dots show where the stone would fly.
+    const pull = sling.grabbed ? sling.pouch.distanceTo(sling.fork) : 0;
+    const aiming = pull > MIN_DRAW;
+    if (aiming) {
+      const speed = STONE_MIN_SPEED + (STONE_MAX_SPEED - STONE_MIN_SPEED) * Math.min(1, pull / FULL_DRAW);
+      this.dir.copy(sling.fork).sub(sling.pouch).normalize().multiplyScalar(speed);
+      rig.dots.forEach((dot, i) => {
+        const t = (i + 1) * 0.06;
+        dot.position.copy(sling.fork).addScaledVector(this.dir, t);
+        dot.position.y -= 0.5 * STONE_GRAVITY * t * t;
+      });
+    }
+    for (const dot of rig.dots) dot.visible = aiming;
+  }
+
+  /** Lets a stone fly from the pouch towards `direction`; `power` 0–1 sets speed and damage. */
+  private fireStone(sling: SlingState, direction: Vector3, power: number): void {
+    if (sling.reload > 0) return;
+    const from = sling.fork.clone();
+    this.dir.copy(direction).normalize();
+    if (this.foe.alive) {
+      this.toFoe.copy(this.foe.center).sub(from).normalize();
+      if (this.dir.dot(this.toFoe) > AIM_ASSIST) this.dir.lerp(this.toFoe, AIM_PULL).normalize();
+    }
+    const object = makeStone();
+    object.position.copy(from);
+    this.root.add(object);
+    const speed = STONE_MIN_SPEED + (STONE_MAX_SPEED - STONE_MIN_SPEED) * power;
+    this.projectiles.push({
+      item: 'stone',
+      object,
+      velocity: this.dir.clone().multiplyScalar(speed),
+      gravity: STONE_GRAVITY,
+      damage: Math.round(STONE_MIN_DAMAGE + (STONE_MAX_DAMAGE - STONE_MIN_DAMAGE) * power),
+      age: 0,
+      stuck: 0,
+    });
+    sling.reload = RELOAD;
+    sfx.slingSnap(power);
+    this.onEvent?.({ type: 'launch', item: 'stone' });
   }
 
   private raiseWall(head: Vector3, forward: Vector3): void {
@@ -610,4 +856,8 @@ export class Arsenal {
       mesh.material?.dispose();
     });
   }
+}
+
+function other(side: Side): Side {
+  return side === 'left' ? 'right' : 'left';
 }

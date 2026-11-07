@@ -18,7 +18,7 @@ import type { Sign } from './gestures.js';
 import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 
 export type SimPose = 'relaxed' | Exclude<Sign, 'none'>;
-export type SimMove = 'push' | 'swing' | 'shoot';
+export type SimMove = 'push' | 'swing' | 'shoot' | 'draw';
 
 /** Head-relative frame: x to the right, y up, z forward (metres / directions). */
 type V3 = readonly [number, number, number];
@@ -32,6 +32,8 @@ interface HandPose {
   fist: boolean;
   /** Finger gun: index straight, other fingers curled, thumb up. */
   point?: boolean;
+  /** V sign: index and middle straight, ring and pinky curled. */
+  vee?: boolean;
 }
 
 const RELAXED_LEFT: HandPose = { wrist: [-0.17, -0.38, 0.28], normal: [0, -1, 0], fingers: [0.1, 0, 1], fist: false };
@@ -64,7 +66,22 @@ const POSES: Record<SimPose, Record<Side, HandPose>> = {
     // Fingertip on the line from beside the eye to the sentinel, as a player would line it up.
     right: { wrist: [0.05, -0.21, 0.18], normal: [-1, 0, 0], fingers: [0, 0, 1], fist: false, point: true },
   },
+  shield: {
+    left: { wrist: [-0.15, -0.3, 0.33], normal: [0, 0, 1], fingers: [0, 1, 0], fist: false },
+    right: RELAXED_RIGHT,
+  },
+  sling: {
+    // The fork held up and out, palm to the right, fingers spread up and forward.
+    left: { wrist: [-0.06, -0.26, 0.3], normal: [1, 0, 0], fingers: [0.05, 0.7, 1], fist: false, vee: true },
+    right: RELAXED_RIGHT,
+  },
 };
+
+/** Draw: reach the pouch and pinch it, pull back towards the chest, then let go. */
+const DRAW_REACH = 0.3;
+const DRAW_PULL = 0.9;
+const DRAW_LET_GO = 1.15;
+const DRAW_LENGTH = 0.3;
 
 /** Shoot: the thumb stays dropped this long. */
 const SHOOT_DOWN = 0.12;
@@ -132,7 +149,9 @@ export class SimHands {
   }
 
   startMove(move: SimMove): void {
-    if (!this.active) this.setPose(move === 'swing' ? 'sword' : move === 'shoot' ? 'gun' : 'relaxed');
+    if (!this.active) {
+      this.setPose(move === 'swing' ? 'sword' : move === 'shoot' ? 'gun' : move === 'draw' ? 'sling' : 'relaxed');
+    }
     this.move = move;
     this.moveTime = 0;
   }
@@ -167,10 +186,14 @@ export class SimHands {
     let swing = -1;
     let openSpear = false;
     let thumbDown = false;
+    let draw = -1;
     if (this.move) {
       this.moveTime += dt;
       const t = this.moveTime;
-      if (this.move === 'shoot') {
+      if (this.move === 'draw') {
+        draw = t;
+        if (t > DRAW_LET_GO + 0.2) this.move = null;
+      } else if (this.move === 'shoot') {
         thumbDown = t < SHOOT_DOWN;
         if (t > SHOOT_TIME) this.move = null;
       } else if (this.move === 'push') {
@@ -199,10 +222,39 @@ export class SimHands {
       }
       this.toWorld(pose.normal, this.normal, false).normalize();
       this.toWorld(pose.fingers, this.fingers, false).normalize();
-      this.writeHand(hands[side], pose.fist && !openSpear, pose.point === true, thumbDown);
+      this.writeHand(hands[side], pose.fist && !openSpear, pose.point === true, thumbDown, pose.vee === true, false);
+      if (draw >= 0 && side === 'right') this.drawHand(hands, draw);
       hands[side].tracked = true;
       hands[side].lostFor = 0;
       hands[side].update(time);
+    }
+  }
+
+  /**
+   * The drawing hand, pinching the slingshot's pouch: it reaches the fork
+   * between the left hand's raised fingers, pulls back, then lets go.
+   */
+  private drawHand(hands: Record<Side, HandState>, t: number): void {
+    const left = hands.left;
+    // The fork: the slingshot's arm tips, about 13 cm along the V hand from the palm.
+    const fork = left.palm.clone().addScaledVector(left.pointing, 0.13);
+    const pull = t < DRAW_REACH ? 0 : Math.min(1, (t - DRAW_REACH) / (DRAW_PULL - DRAW_REACH));
+    const target = fork.addScaledVector(this.forward, -DRAW_LENGTH * pull);
+    // A right hand, palm to the left, fingers forward, pinching (or opening once let go).
+    this.normal.copy(this.right).negate();
+    this.fingers.copy(this.forward);
+    this.wrist.copy(target);
+    const right = hands.right;
+    this.writeHand(right, false, false, false, false, t < DRAW_LET_GO);
+    // Move the whole hand so the pinch lands on the target.
+    const j = right.joints;
+    const dx = target.x - (j[4 * 3] + j[9 * 3]) / 2;
+    const dy = target.y - (j[4 * 3 + 1] + j[9 * 3 + 1]) / 2;
+    const dz = target.z - (j[4 * 3 + 2] + j[9 * 3 + 2]) / 2;
+    for (let i = 0; i < j.length; i += 3) {
+      j[i] += dx;
+      j[i + 1] += dy;
+      j[i + 2] += dz;
     }
   }
 
@@ -216,7 +268,14 @@ export class SimHands {
   }
 
   /** Lays out the 25 joints from the wrist, palm normal and finger direction. */
-  private writeHand(hand: HandState, fist: boolean, point: boolean, thumbDown: boolean): void {
+  private writeHand(
+    hand: HandState,
+    fist: boolean,
+    point: boolean,
+    thumbDown: boolean,
+    vee: boolean,
+    pinch: boolean,
+  ): void {
     const j = hand.joints;
     const put = (i: number, p: Vector3) => {
       j[i * 3] = p.x;
@@ -247,7 +306,7 @@ export class SimHands {
       put(k, this.v);
     }
     for (let f = 0; f < 4; f++) {
-      const curled = point ? f > 0 : fist;
+      const curled = point ? f > 0 : vee ? f > 1 : fist;
       const base = 5 + f * 5;
       this.v.copy(this.wrist).addScaledVector(d, 0.03).addScaledVector(t, KNUCKLE_ACROSS[f] * 0.6);
       put(base, this.v);
@@ -267,6 +326,14 @@ export class SimHands {
         put(base + 3, this.v);
         this.v.addScaledVector(d, -0.018 * length);
         put(base + 4, this.v);
+      }
+    }
+    if (pinch) {
+      // Thumb joints run from the base of the thumb to the index fingertip.
+      const tip = hand.joint(9, this.w);
+      for (let k = 1; k <= 4; k++) {
+        this.v.copy(this.wrist).addScaledVector(t, 0.02).addScaledVector(d, 0.03).lerp(tip, k / 4);
+        put(k, this.v);
       }
     }
   }

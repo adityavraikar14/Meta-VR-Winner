@@ -20,7 +20,8 @@ export type DebugCommand =
   | { type: 'webcam'; cameraId?: string }
   | { type: 'swapHands' }
   | { type: 'tutorial' }
-  | { type: 'skipStep' };
+  | { type: 'skipStep' }
+  | { type: 'boss' };
 
 export interface DebugApi {
   command(command: DebugCommand): void;
@@ -46,6 +47,8 @@ const SIGN_BUTTONS: ButtonSpec[] = [
   { label: SIGN_LABELS.ball, key: '4', command: { type: 'pose', pose: 'ball' }, pose: 'ball' },
   { label: SIGN_LABELS.wall, key: '5', command: { type: 'pose', pose: 'wall' }, pose: 'wall' },
   { label: SIGN_LABELS.gun, key: '7', command: { type: 'pose', pose: 'gun' }, pose: 'gun' },
+  { label: SIGN_LABELS.shield, key: '8', command: { type: 'pose', pose: 'shield' }, pose: 'shield' },
+  { label: SIGN_LABELS.sling, key: '9', command: { type: 'pose', pose: 'sling' }, pose: 'sling' },
   { label: '🖐️ Relaxed', key: '6', command: { type: 'pose', pose: 'relaxed' }, pose: 'relaxed' },
 ];
 
@@ -53,6 +56,7 @@ const MOVE_BUTTONS: ButtonSpec[] = [
   { label: '🫸 Push / throw', key: 't', command: { type: 'move', move: 'push' } },
   { label: '↘️ Swing', key: 'g', command: { type: 'move', move: 'swing' } },
   { label: '💥 Shoot (thumb drop)', key: 'f', command: { type: 'move', move: 'shoot' } },
+  { label: '🎯 Draw & release', key: 'z', command: { type: 'move', move: 'draw' } },
   { label: '🚫 Hands off', key: '0', command: { type: 'handsOff' } },
 ];
 
@@ -64,6 +68,7 @@ const WEBCAM_BUTTONS: ButtonSpec[] = [
 const TUTORIAL_BUTTONS: ButtonSpec[] = [
   { label: '🎓 Tutorial start/stop', key: 'j', command: { type: 'tutorial' } },
   { label: '⏭ Skip step', key: 'k', command: { type: 'skipStep' } },
+  { label: '🐉 Next boss', key: 'l', command: { type: 'boss' } },
 ];
 
 const UTILITY_BUTTONS: ButtonSpec[] = [
@@ -144,7 +149,7 @@ export function mountDebugPanel(api: DebugApi): () => void {
     body.append(h, grid);
   };
 
-  section('Tutorial', TUTORIAL_BUTTONS);
+  section('Tutorial and boss', TUTORIAL_BUTTONS);
   section('Hand signs (held until changed)', SIGN_BUTTONS);
   section('Moves', MOVE_BUTTONS);
 
@@ -167,7 +172,7 @@ export function mountDebugPanel(api: DebugApi): () => void {
   const tip = document.createElement('div');
   tip.style.cssText = 'margin-top:4px;color:#8fb6e0';
   tip.textContent =
-    'Then: Push / throw launches a ball or spear, Swing cuts orbs with a sword or spear, Shoot fires the blaster (aim with the index finger).';
+    'Then: Push / throw launches a ball or spear, Swing cuts orbs with a sword or spear, Shoot fires the blaster (aim with the index finger), Draw & release fires the slingshot.';
   body.appendChild(tip);
 
   // Webcam: real fingers from a camera, for testing without a headset.

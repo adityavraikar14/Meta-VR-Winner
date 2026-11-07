@@ -6,6 +6,8 @@ import {
   AdditiveBlending,
   BoxGeometry,
   CanvasTexture,
+  CircleGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -16,6 +18,7 @@ import {
   LineSegments,
   Mesh,
   MeshBasicMaterial,
+  NormalBlending,
   Object3D,
   PlaneGeometry,
   RingGeometry,
@@ -246,6 +249,305 @@ export function makeOrb(): Group {
   const shell = new Mesh(new SphereGeometry(ORB_RADIUS, 12, 8), glow(0xff5a2a, 0.85));
   orb.add(core, shell);
   return orb;
+}
+
+/**
+ * A soft, lumpy glow drawn from several overlapping radial gradients, so a
+ * flame or a hex reads as a living, uneven thing rather than a perfect disc.
+ */
+function lumpyGlow(stops: Array<[number, string]>, lumps: number, seed: number): CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  let s = seed;
+  const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < lumps; i++) {
+    const a = rand() * Math.PI * 2;
+    const d = rand() * 18;
+    const x = 64 + Math.cos(a) * d;
+    const y = 64 + Math.sin(a) * d;
+    const r = 34 + rand() * 26;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    for (const [at, color] of stops) grad.addColorStop(at, color);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+/** A round soft dot, for sparks and smoke puffs. */
+function softDot(inner: string, outer: string): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, inner);
+  grad.addColorStop(0.45, outer);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+const textures: Record<string, CanvasTexture> = {};
+function texture(name: string, make: () => CanvasTexture): CanvasTexture {
+  return (textures[name] ??= make());
+}
+
+function glowSprite(map: CanvasTexture, size: number, additive = true): Sprite {
+  const sprite = new Sprite(
+    new SpriteMaterial({ map, transparent: true, depthWrite: false, blending: additive ? AdditiveBlending : NormalBlending }),
+  );
+  sprite.scale.setScalar(size);
+  sprite.userData.base = size;
+  return sprite;
+}
+
+/**
+ * The dragon's fireball: a white-hot heart inside layers of flickering,
+ * uneven flame. Its trail (see fireTrails) does the rest.
+ */
+export function makeFireball(): Group {
+  const ball = new Group();
+  ball.name = 'Fireball';
+  const halo = glowSprite(texture('fire-halo', () => lumpyGlow([[0, 'rgba(255,90,20,0.55)'], [0.6, 'rgba(200,30,0,0.25)'], [1, 'rgba(0,0,0,0)']], 5, 11)), 0.42);
+  const flame = glowSprite(texture('fire-flame', () => lumpyGlow([[0, 'rgba(255,220,120,0.9)'], [0.45, 'rgba(255,120,20,0.6)'], [1, 'rgba(0,0,0,0)']], 7, 23)), 0.26);
+  const core = glowSprite(texture('fire-core', () => softDot('rgba(255,255,235,1)', 'rgba(255,220,140,0.9)')), 0.11);
+  ball.add(halo, flame, core);
+  ball.userData.parts = { halo, flame, core, t: Math.random() * 10 };
+  return ball;
+}
+
+/** Morwen's hex: sickly green witch-fire around a bright venom-green heart. */
+export function makeInkShot(): Group {
+  const hex = new Group();
+  hex.name = 'Hex';
+  const halo = glowSprite(texture('hex-halo', () => lumpyGlow([[0, 'rgba(90,255,80,0.45)'], [0.6, 'rgba(20,120,30,0.25)'], [1, 'rgba(0,0,0,0)']], 6, 31)), 0.4);
+  const flame = glowSprite(texture('hex-flame', () => lumpyGlow([[0, 'rgba(200,255,120,0.85)'], [0.45, 'rgba(60,220,60,0.6)'], [1, 'rgba(0,0,0,0)']], 8, 47)), 0.24);
+  const core = glowSprite(texture('hex-core', () => softDot('rgba(240,255,210,1)', 'rgba(150,255,90,0.9)')), 0.09);
+  // A wisp of dark ink inside the glow, so it reads as a witch's brew, not a lamp.
+  const ink = glowSprite(texture('hex-ink', () => lumpyGlow([[0, 'rgba(5,25,5,0.85)'], [0.5, 'rgba(10,40,10,0.4)'], [1, 'rgba(0,0,0,0)']], 4, 59)), 0.17, false);
+  hex.add(halo, flame, ink, core);
+  hex.userData.parts = { halo, flame, core, t: Math.random() * 10 };
+  return hex;
+}
+
+/** Flicker and spin a fireball or hex (both are built from the same parts). */
+export function flickerShot(object: Group, dt: number): void {
+  const parts = object.userData.parts as { halo: Sprite; flame: Sprite; core: Sprite; t: number } | undefined;
+  if (!parts) return;
+  parts.t += dt;
+  const t = parts.t;
+  const k = 1 + 0.12 * Math.sin(t * 23) + 0.08 * Math.sin(t * 37 + 1.3);
+  parts.flame.scale.setScalar(parts.flame.userData.base * k);
+  parts.halo.scale.setScalar(parts.halo.userData.base * (1 + 0.06 * Math.sin(t * 13)));
+  parts.flame.material.rotation += dt * 5;
+  parts.halo.material.rotation -= dt * 2.5;
+  parts.halo.material.opacity = 0.8 + 0.2 * Math.sin(t * 17);
+  parts.core.material.opacity = 0.85 + 0.15 * Math.sin(t * 41);
+}
+
+interface Particle {
+  sprite: Sprite;
+  material: SpriteMaterial;
+  velocity: Vector3;
+  age: number;
+  life: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * A pool of short-lived sprites streaming off a moving shot: embers or
+ * sparks that shrink and fade, or smoke that swells and thins.
+ */
+export class Trail {
+  private particles: Particle[] = [];
+  private next = 0;
+  private start = new Color();
+  private end = new Color();
+
+  constructor(
+    parent: Object3D,
+    count: number,
+    map: CanvasTexture,
+    start: number,
+    end: number,
+    private life: number,
+    private size: [number, number],
+    /** Upward drift, m/s: heat rises. */
+    private rise: number,
+    private jitter: number,
+    additive: boolean,
+    private opacity: number,
+  ) {
+    this.start.setHex(start);
+    this.end.setHex(end);
+    for (let i = 0; i < count; i++) {
+      const material = new SpriteMaterial({ map, transparent: true, depthWrite: false, blending: additive ? AdditiveBlending : NormalBlending });
+      const sprite = new Sprite(material);
+      sprite.visible = false;
+      parent.add(sprite);
+      this.particles.push({ sprite, material, velocity: new Vector3(), age: 0, life: 1, from: 0, to: 0 });
+    }
+  }
+
+  /** Emits one particle at `at`, drifting a little back along `velocity`. */
+  emit(at: Vector3, velocity: Vector3): void {
+    const p = this.particles[this.next];
+    this.next = (this.next + 1) % this.particles.length;
+    const j = this.jitter;
+    p.sprite.position.set(at.x + (Math.random() - 0.5) * j, at.y + (Math.random() - 0.5) * j, at.z + (Math.random() - 0.5) * j);
+    p.velocity.copy(velocity).multiplyScalar(-0.08);
+    p.velocity.x += (Math.random() - 0.5) * 0.2;
+    p.velocity.y += this.rise + (Math.random() - 0.5) * 0.2;
+    p.velocity.z += (Math.random() - 0.5) * 0.2;
+    p.age = 0;
+    p.life = this.life * (0.7 + Math.random() * 0.6);
+    p.from = this.size[0] * (0.8 + Math.random() * 0.4);
+    p.to = this.size[1];
+    p.material.rotation = Math.random() * Math.PI * 2;
+    p.sprite.visible = true;
+  }
+
+  update(dt: number): void {
+    for (const p of this.particles) {
+      if (!p.sprite.visible) continue;
+      p.age += dt;
+      const k = p.age / p.life;
+      if (k >= 1) {
+        p.sprite.visible = false;
+        continue;
+      }
+      p.sprite.position.addScaledVector(p.velocity, dt);
+      p.sprite.scale.setScalar(p.from + (p.to - p.from) * k);
+      p.material.color.copy(this.start).lerp(this.end, k);
+      p.material.opacity = this.opacity * (1 - k);
+    }
+  }
+}
+
+function emberTexture(): CanvasTexture {
+  return texture('ember', () => softDot('rgba(255,255,255,1)', 'rgba(255,255,255,0.6)'));
+}
+
+function smokeTexture(): CanvasTexture {
+  return texture('smoke', () => lumpyGlow([[0, 'rgba(255,255,255,0.5)'], [0.6, 'rgba(255,255,255,0.2)'], [1, 'rgba(0,0,0,0)']], 4, 71));
+}
+
+/** Embers and smoke behind the dragon's fireballs. */
+export function fireTrails(parent: Object3D): Trail[] {
+  return [
+    new Trail(parent, 90, emberTexture(), 0xffd070, 0xff2a00, 0.45, [0.09, 0.015], 0.25, 0.05, true, 1),
+    new Trail(parent, 50, smokeTexture(), 0x5a4a40, 0x1a1614, 0.8, [0.08, 0.24], 0.35, 0.04, false, 0.45),
+  ];
+}
+
+/** Green sparks and dark smoke behind Morwen's hexes. */
+export function hexTrails(parent: Object3D): Trail[] {
+  return [
+    new Trail(parent, 90, emberTexture(), 0xd8ff8a, 0x1f9e2a, 0.4, [0.06, 0.01], 0.05, 0.08, true, 1),
+    new Trail(parent, 50, smokeTexture(), 0x163a12, 0x050a05, 0.75, [0.07, 0.2], 0.12, 0.04, false, 0.55),
+  ];
+}
+
+export const SHIELD_RADIUS = 0.2;
+
+/** The shield: a round disc of light with a bright rim, facing +Z. */
+export function makeShield(): { root: Group; disc: MeshBasicMaterial } {
+  const root = new Group();
+  root.name = 'Shield';
+  const disc = glow(0x7fd8ff, 0.32);
+  disc.side = DoubleSide;
+  const face = new Mesh(new CircleGeometry(SHIELD_RADIUS, 40), disc);
+  const rim = new Mesh(new TorusGeometry(SHIELD_RADIUS, 0.012, 8, 48), new MeshBasicMaterial({ color: 0xbff0ff }));
+  const boss = new Mesh(new SphereGeometry(0.035, 12, 8), new MeshBasicMaterial({ color: 0xe6f8ff }));
+  boss.scale.z = 0.4;
+  const ring = new Mesh(new TorusGeometry(SHIELD_RADIUS * 0.55, 0.006, 6, 40), glow(0xbff0ff, 0.7));
+  root.add(face, rim, ring, boss);
+  return { root, disc };
+}
+
+export const STONE_RADIUS = 0.03;
+
+/** A slingshot stone, with a faint glow so it can be followed in flight. */
+export function makeStone(): Group {
+  const stone = new Group();
+  stone.name = 'Stone';
+  const rock = new Mesh(new IcosahedronGeometry(STONE_RADIUS, 0), new MeshBasicMaterial({ color: 0x8a8378 }));
+  const shine = new Mesh(new SphereGeometry(STONE_RADIUS * 1.8, 8, 6), glow(0xffd890, 0.25));
+  rock.add(shine);
+  stone.add(rock);
+  return stone;
+}
+
+/** Slingshot frame, in its own space: grip at the origin, fork up +Y, arms spread along X. */
+export const SLING_TIP_UP = 0.13;
+export const SLING_TIP_SPREAD = 0.05;
+
+export interface SlingRig {
+  root: Group;
+  /** The wooden Y frame, held in the hand. */
+  frame: Group;
+  bands: [Mesh, Mesh];
+  pouch: Mesh;
+  stone: Group;
+  /** Dots showing where a shot would go, while drawing. */
+  dots: Mesh[];
+}
+
+/** A wooden Y-shaped slingshot frame with a wrapped grip. */
+function makeSlingFrame(): Group {
+  const frame = new Group();
+  frame.name = 'SlingFrame';
+  const wood = new MeshBasicMaterial({ color: 0x7a4f2c });
+  const grip = new Mesh(new CylinderGeometry(0.014, 0.016, 0.12, 10), wood);
+  grip.position.y = -0.02;
+  const wrap = new Mesh(new CylinderGeometry(0.0165, 0.0175, 0.07, 10), new MeshBasicMaterial({ color: 0x3a2618 }));
+  wrap.position.y = -0.03;
+  const knot = new Mesh(new SphereGeometry(0.017, 10, 8), wood);
+  knot.position.y = 0.045;
+  frame.add(grip, wrap, knot);
+  // Two arms from the fork's knot out to the tips, where the bands are tied.
+  const base = new Vector3(0, 0.045, 0);
+  for (const side of [-1, 1]) {
+    const tip = new Vector3(side * SLING_TIP_SPREAD, SLING_TIP_UP, 0);
+    const along = tip.clone().sub(base);
+    const arm = new Mesh(new CylinderGeometry(0.009, 0.012, along.length(), 8), wood);
+    arm.position.copy(base).add(tip).multiplyScalar(0.5);
+    arm.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), along.normalize());
+    const cap = new Mesh(new SphereGeometry(0.011, 8, 6), new MeshBasicMaterial({ color: 0xd8b25a }));
+    cap.position.copy(tip);
+    frame.add(arm, cap);
+  }
+  return frame;
+}
+
+/** The slingshot: a wooden frame, two bands of light, a pouch and the stone in it. */
+export function makeSlingshot(): SlingRig {
+  const root = new Group();
+  root.name = 'Slingshot';
+  const frame = makeSlingFrame();
+  const bands: [Mesh, Mesh] = [makeBeam(0.004, 0xffc860, 0.95), makeBeam(0.004, 0xffc860, 0.95)];
+  const pouch = new Mesh(new SphereGeometry(0.022, 10, 6), new MeshBasicMaterial({ color: 0x6b4426 }));
+  pouch.scale.set(1.3, 0.7, 1);
+  const stone = makeStone();
+  const dotMaterial = glow(0xffe2a0, 0.6);
+  const dotGeometry = new SphereGeometry(0.008, 6, 4);
+  const dots: Mesh[] = [];
+  for (let i = 0; i < 14; i++) {
+    const dot = new Mesh(dotGeometry, dotMaterial);
+    dot.visible = false;
+    dots.push(dot);
+  }
+  root.add(frame, bands[0], bands[1], pouch, stone, ...dots);
+  return { root, frame, bands, pouch, stone, dots };
 }
 
 const RING_SEGMENTS = 48;

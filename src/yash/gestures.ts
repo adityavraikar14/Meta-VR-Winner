@@ -12,12 +12,14 @@
  *   ball  one open hand, palm up
  *   wall  both open palms pushed forward, side by side
  *   gun   a finger gun: index pointing, the other three fingers curled
+ *   shield one open palm pushed forward (two palms is the wall)
+ *   sling a V sign: index and middle up, the other two curled; they are the fork
  */
 import { Vector3 } from '@iwsdk/core';
 import type { HandState, Side } from './hands.js';
 
-export type Item = 'sword' | 'spear' | 'ball' | 'wall' | 'gun';
-export const ITEMS: readonly Item[] = ['sword', 'spear', 'ball', 'wall', 'gun'];
+export type Item = 'sword' | 'spear' | 'ball' | 'wall' | 'gun' | 'shield' | 'sling';
+export const ITEMS: readonly Item[] = ['sword', 'spear', 'ball', 'wall', 'gun', 'shield', 'sling'];
 /** Each item's sign shares its name; `arm` is the base sign every recipe starts with. */
 export type Sign = 'none' | 'arm' | Item;
 
@@ -29,6 +31,8 @@ export const SIGN_LABELS: Record<Exclude<Sign, 'none'>, string> = {
   ball: '🫴 Palm up',
   wall: '🙌 Palms forward',
   gun: '👉 Finger gun',
+  shield: '✋ One palm forward',
+  sling: '✌️ V sign',
 };
 
 export const ITEM_LABELS: Record<Item, string> = {
@@ -37,6 +41,8 @@ export const ITEM_LABELS: Record<Item, string> = {
   ball: '🔮 Power ball',
   wall: '🧱 Wall',
   gun: '🔫 Blaster',
+  shield: '🛡️ Shield',
+  sling: '🎯 Slingshot',
 };
 
 /** The signs that summon each item, in order. */
@@ -46,6 +52,8 @@ export const RECIPES: Record<Item, readonly Exclude<Sign, 'none'>[]> = {
   ball: ['arm', 'ball'],
   wall: ['arm', 'wall'],
   gun: ['arm', 'gun'],
+  shield: ['arm', 'shield'],
+  sling: ['arm', 'sling'],
 };
 
 /** Finger straightness (see HandState.straight) above which a finger is straight… */
@@ -103,6 +111,13 @@ export function isOpen(hand: HandState, slack = 0): boolean {
 }
 
 /** Finger gun: index straight, middle/ring/pinky curled (two of three is enough), none of them straight. */
+/** V sign: index and middle straight, ring and pinky curled (one is enough), neither straight. */
+export function isVSign(hand: HandState, slack = 0): boolean {
+  if (hand.straight[0] < STRAIGHT - slack || hand.straight[1] < STRAIGHT - slack) return false;
+  if (hand.straight[2] > STRAIGHT + slack || hand.straight[3] > STRAIGHT + slack) return false;
+  return hand.straight[2] < CURLED + slack || hand.straight[3] < CURLED + slack;
+}
+
 export function isPointing(hand: HandState, slack = 0): boolean {
   if (hand.straight[0] < STRAIGHT - slack) return false;
   let curled = 0;
@@ -222,6 +237,23 @@ function classifySign(
   for (const hand of [right, left]) {
     if (hand.tracked && isOpen(hand, ball) && hand.normal.dot(UP) > PALM_UP - ball) {
       out.sign = 'ball';
+      out.hand = hand.side;
+      return out;
+    }
+  }
+  // One open palm pushed forward: the shield (two would have been the wall, above).
+  const shield = slack('shield');
+  for (const hand of [left, right]) {
+    if (hand.tracked && isOpen(hand, shield) && hand.normal.dot(forward) > PALM_FORWARD - shield) {
+      out.sign = 'shield';
+      out.hand = hand.side;
+      return out;
+    }
+  }
+  const sling = slack('sling');
+  for (const hand of [left, right]) {
+    if (hand.tracked && isVSign(hand, sling)) {
+      out.sign = 'sling';
       out.hand = hand.side;
       return out;
     }

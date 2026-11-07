@@ -121,7 +121,7 @@ const POINT_SLACK = 0.12;
 const SEEN_KEY = 'arsenal.tutorial.seen';
 
 /** A floating label pressed by holding a pointing index fingertip on it. */
-class PokeButton {
+export class PokeButton {
   readonly root = new Group();
   private label = new Label(BUTTON_HEIGHT);
   private ring: Mesh = makeRing(0.016, 0xffd27a);
@@ -140,6 +140,10 @@ class PokeButton {
   reset(): void {
     this.held = 0;
     this.ring.visible = false;
+  }
+
+  setText(text: string): void {
+    this.label.set(text);
   }
 
   update(

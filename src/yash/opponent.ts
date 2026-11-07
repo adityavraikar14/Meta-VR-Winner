@@ -5,6 +5,7 @@
  * from thrown balls and spears, and respawns after it is defeated.
  */
 import { Group, Vector3 } from '@iwsdk/core';
+import { rayToSphere, ShotVolley } from './orbs.js';
 import { sfx } from './sfx.js';
 import { Bursts, FOE_RADIUS, FoeRig, makeFoe, makeOrb, ORB_RADIUS } from './visuals.js';
 
@@ -19,15 +20,8 @@ const TELEGRAPH = 1.0;
 /** Orbs are slow on purpose: about two seconds to react. */
 const ORB_SPEED = 1.5;
 /** Orbs aim this far below the eyes (the chest), within sword reach. */
-const AIM_DROP = 0.25;
-/** An orb this close to the aim point hits the player. */
-const PLAYER_RADIUS = 0.22;
+export const AIM_DROP = 0.25;
 const RESPAWN = 3;
-
-interface Orb {
-  object: Group;
-  velocity: Vector3;
-}
 
 type Mood = 'rest' | 'telegraph' | 'defeated';
 
@@ -55,40 +49,87 @@ export interface RayHit {
   orb: boolean;
 }
 
-export class Opponent implements Foe {
+/** A foe the level can run a fight against. */
+export interface Boss extends Foe {
+  /** For the readout. */
+  readonly name: string;
+  /** For the label above it. */
+  readonly title: string;
+  readonly hp: number;
+  readonly maxHp: number;
+  /** How far above its centre its label floats. */
+  readonly labelRise: number;
+  /** Shots that reached the player. */
+  hitsTaken: number;
+  defeats: number;
+  /** While calm (during the tutorial) it never attacks on its own; see fireNow. */
+  calm: boolean;
+  /** The fight is over and the level should move on. */
+  readonly finished: boolean;
+  /** Its model couldn't be loaded; the level should go back to the sentinel. */
+  readonly failed: boolean;
+  /** Shown instead of its health while its model loads; null once it's here. */
+  readonly loadingText: string | null;
+  place(head: Vector3, forward: Vector3): void;
+  reset(): void;
+  /** Winds up and fires now, even while calm. */
+  fireNow(): void;
+  setActive(active: boolean): void;
+  update(
+    dt: number,
+    time: number,
+    head: Vector3,
+    /** True when something (the wall) took the shot; it handles its own damage. */
+    absorbs: (point: Vector3, radius: number) => boolean,
+  ): void;
+}
+
+export class Opponent implements Boss {
+  readonly name = 'sentinel';
+  readonly title = 'Sentinel';
+  readonly maxHp = MAX_HP;
+  readonly labelRise = 0.7;
+  readonly finished = false;
+  readonly failed = false;
+  readonly loadingText = null;
   readonly center = new Vector3();
   hp = MAX_HP;
   /** Orbs that reached the player since the level started. */
   hitsTaken = 0;
   defeats = 0;
-  /** While calm (during the tutorial) it never attacks on its own; see fireNow. */
   calm = false;
 
   private rig: FoeRig;
-  private orbs: Orb[] = [];
-  private spare: Group[] = [];
+  private orbs: ShotVolley;
   private mood: Mood = 'rest';
   private timer = REST;
   private flash = 0;
   private shake = 0;
   private home = new Vector3();
   private aim = new Vector3();
-  private tmp = new Vector3();
-  private ray = new Vector3();
   private hit: RayHit = { distance: 0, point: new Vector3(), orb: false };
 
   constructor(
-    private parent: Group,
+    parent: Group,
     private bursts: Bursts,
     /** Called when an orb reaches the player. */
-    private onPlayerHit: () => void,
+    onPlayerHit: () => void,
   ) {
     this.rig = makeFoe();
     parent.add(this.rig.root);
+    this.orbs = new ShotVolley(parent, bursts, makeOrb, ORB_RADIUS, 0xffb070, () => {
+      this.hitsTaken++;
+      onPlayerHit();
+    });
   }
 
   get alive(): boolean {
     return this.mood !== 'defeated';
+  }
+
+  setActive(active: boolean): void {
+    this.rig.root.visible = active;
+    this.orbs.clear();
   }
 
   /** Places the sentinel straight ahead of the player. */
@@ -96,7 +137,7 @@ export class Opponent implements Foe {
     this.home.copy(forward).multiplyScalar(DISTANCE).add(head);
     this.home.y = head.y - DROP;
     this.center.copy(this.home);
-    this.clearOrbs();
+    this.orbs.clear();
     this.mood = 'rest';
     this.timer = REST;
   }
@@ -105,7 +146,7 @@ export class Opponent implements Foe {
     this.hp = MAX_HP;
     this.rig.root.visible = true;
     this.rig.root.scale.setScalar(1);
-    this.clearOrbs();
+    this.orbs.clear();
     this.mood = 'rest';
     this.timer = REST;
   }
@@ -125,26 +166,16 @@ export class Opponent implements Foe {
       this.mood = 'defeated';
       this.timer = RESPAWN;
       this.defeats++;
-      this.clearOrbs();
+      this.orbs.clear();
       this.bursts.spawn(this.center, 0xc58cff, 0.8, 0.8);
       sfx.defeated();
     }
   }
 
   cutOrbs(point: Vector3, radius: number): number {
-    let cut = 0;
-    for (let i = this.orbs.length - 1; i >= 0; i--) {
-      const orb = this.orbs[i];
-      if (orb.object.position.distanceTo(point) < ORB_RADIUS + radius) {
-        this.bursts.spawn(orb.object.position, 0xffb070, 0.3);
-        this.removeOrb(i);
-        cut++;
-      }
-    }
-    return cut;
+    return this.orbs.cut(point, radius);
   }
 
-  /** Winds up and fires one orb now, even while calm. */
   fireNow(): void {
     if (!this.alive || this.mood === 'telegraph') return;
     this.mood = 'telegraph';
@@ -156,17 +187,15 @@ export class Opponent implements Foe {
     let best = Infinity;
     let orb = false;
     const test = (center: Vector3, radius: number, isOrb: boolean) => {
-      const along = this.ray.copy(center).sub(origin).dot(direction);
-      if (along <= 0) return;
-      const miss = this.ray.copy(center).sub(origin).addScaledVector(direction, -along).length();
-      if (miss < radius + along * assist && along < best) {
+      const along = rayToSphere(origin, direction, center, radius, assist);
+      if (along > 0 && along < best) {
         best = along;
         orb = isOrb;
         this.hit.point.copy(center);
       }
     };
     if (this.alive) test(this.center, FOE_RADIUS, false);
-    for (const o of this.orbs) test(o.object.position, ORB_RADIUS, true);
+    this.orbs.forEach((position) => test(position, ORB_RADIUS, true));
     if (best === Infinity) return null;
     this.hit.distance = best;
     this.hit.orb = orb;
@@ -177,7 +206,6 @@ export class Opponent implements Foe {
     dt: number,
     time: number,
     head: Vector3,
-    /** True when something (the wall) took the orb; it handles its own damage. */
     absorbs: (point: Vector3, radius: number) => boolean,
   ): void {
     const root = this.rig.root;
@@ -197,7 +225,7 @@ export class Opponent implements Foe {
         this.timer = TELEGRAPH;
         sfx.telegraph();
       } else if (this.mood === 'telegraph' && this.timer <= 0) {
-        this.fire();
+        this.orbs.fire(this.center, this.aim, ORB_SPEED);
         this.mood = 'rest';
         this.timer = REST;
       }
@@ -223,50 +251,6 @@ export class Opponent implements Foe {
     else color.setRGB(0.29 + windUp * 0.6, 0.14 + windUp * 0.2, 0.44 - windUp * 0.2);
     this.rig.barFill.scale.x = Math.max(0.001, this.hp / MAX_HP);
 
-    this.updateOrbs(dt, absorbs);
-  }
-
-  private fire(): void {
-    const object = this.spare.pop() ?? makeOrb();
-    object.visible = true;
-    object.position.copy(this.center);
-    this.parent.add(object);
-    const velocity = this.tmp.copy(this.aim).sub(this.center).normalize().multiplyScalar(ORB_SPEED).clone();
-    this.orbs.push({ object, velocity });
-  }
-
-  private updateOrbs(dt: number, absorbs: (point: Vector3, radius: number) => boolean): void {
-    for (let i = this.orbs.length - 1; i >= 0; i--) {
-      const orb = this.orbs[i];
-      const p = orb.object.position;
-      p.addScaledVector(orb.velocity, dt);
-      orb.object.rotation.y += dt * 4;
-      if (absorbs(p, ORB_RADIUS)) {
-        this.bursts.spawn(p, 0x9fe8ff, 0.35);
-        sfx.block();
-        this.removeOrb(i);
-      } else if (p.distanceTo(this.aim) < PLAYER_RADIUS) {
-        this.hitsTaken++;
-        this.bursts.spawn(p, 0xff4030, 0.3);
-        sfx.hurt();
-        this.onPlayerHit();
-        this.removeOrb(i);
-      } else if (this.tmp.copy(p).sub(this.aim).dot(orb.velocity) > 0.5) {
-        // Flew past the player.
-        this.removeOrb(i);
-      }
-    }
-  }
-
-  private removeOrb(index: number): void {
-    const orb = this.orbs[index];
-    orb.object.visible = false;
-    this.parent.remove(orb.object);
-    this.spare.push(orb.object);
-    this.orbs.splice(index, 1);
-  }
-
-  private clearOrbs(): void {
-    for (let i = this.orbs.length - 1; i >= 0; i--) this.removeOrb(i);
+    this.orbs.update(dt, absorbs);
   }
 }

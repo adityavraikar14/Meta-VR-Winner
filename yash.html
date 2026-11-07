@@ -63,6 +63,8 @@
         flex-wrap: wrap;
         justify-content: center;
         gap: 14px;
+        /* Narrow enough to stay clear of the development test panel on the left. */
+        max-width: 560px;
       }
       #splash button.secondary {
         min-width: 180px;
@@ -94,6 +96,8 @@
       <div class="actions">
         <button id="splash-play" disabled>Loading…</button>
         <button id="splash-tutorial" class="secondary" disabled>🎓 Tutorial</button>
+        <button id="splash-dragon" class="secondary" disabled>🐉 Fight the Dragon</button>
+        <button id="splash-witch" class="secondary" disabled>🧙 Fight Morwen</button>
       </div>
       <p id="splash-note" hidden></p>
       <ul>
