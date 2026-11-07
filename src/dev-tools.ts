@@ -116,6 +116,8 @@ export function installDevTools(api: DevApi): void {
       console.log(`SHADOWPLAY pose ${event.shiftKey ? 'left' : 'right'}=${hand.poseId}`);
       return;
     }
+    // Shift+L and Shift+V belong to the Level Tester (panel, view).
+    if (event.shiftKey && /^[lv]$/i.test(event.key)) return;
     const action = devActions[event.key.toLowerCase()];
     if (action) {
       action();
