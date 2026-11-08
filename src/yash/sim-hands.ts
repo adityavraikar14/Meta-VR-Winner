@@ -372,7 +372,7 @@ export class HandSkeleton {
     this.root.name = 'SimHand';
   }
 
-  update(hand: HandState): void {
+  update(hand: Pick<HandState, 'joint'>): void {
     this.quat.identity();
     this.scale.set(1, 1, 1);
     for (let i = 0; i < JOINT_COUNT; i++) {

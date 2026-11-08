@@ -171,29 +171,44 @@ export class WebcamHands {
     hands: Record<Side, HandState>,
     seen: Record<Side, boolean>,
   ): void {
-    this.clock += dt;
-    if (!this.active || !this.landmarker) return;
-    this.detect();
-    this.right.set(-forward.z, 0, forward.x);
+    if (!this.poll(dt)) return;
     for (const side of SIDES) {
-      if (this.clock - this.seenAt[side] > STALE) continue;
       const hand = hands[side];
-      const src = this.joints[side];
-      for (let i = 0; i < JOINT_COUNT; i++) {
-        this.p
-          .copy(head)
-          .addScaledVector(this.right, src[i * 3])
-          .addScaledVector(this.up, src[i * 3 + 1])
-          .addScaledVector(forward, src[i * 3 + 2]);
-        hand.joints[i * 3] = this.p.x;
-        hand.joints[i * 3 + 1] = this.p.y;
-        hand.joints[i * 3 + 2] = this.p.z;
-      }
+      if (!this.write(side, head, forward, hand.joints)) continue;
       hand.tracked = true;
       hand.lostFor = 0;
       hand.update(time);
       seen[side] = true;
     }
+  }
+
+  /** Advances the clock and reads the newest camera frame; false while not running. */
+  poll(dt: number): boolean {
+    this.clock += dt;
+    if (!this.active || !this.landmarker) return false;
+    this.detect();
+    return true;
+  }
+
+  /**
+   * Writes one hand's 25 joints (x, y, z each), placed in front of `head`
+   * facing `forward` (level), into `out`; false if that hand isn't in view.
+   */
+  write(side: Side, head: Vector3, forward: Vector3, out: Float32Array): boolean {
+    if (this.clock - this.seenAt[side] > STALE) return false;
+    this.right.set(-forward.z, 0, forward.x);
+    const src = this.joints[side];
+    for (let i = 0; i < JOINT_COUNT; i++) {
+      this.p
+        .copy(head)
+        .addScaledVector(this.right, src[i * 3])
+        .addScaledVector(this.up, src[i * 3 + 1])
+        .addScaledVector(forward, src[i * 3 + 2]);
+      out[i * 3] = this.p.x;
+      out[i * 3 + 1] = this.p.y;
+      out[i * 3 + 2] = this.p.z;
+    }
+    return true;
   }
 
   /** Hands seen on the latest camera frame, for the status line. */

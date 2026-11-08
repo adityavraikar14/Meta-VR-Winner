@@ -29,7 +29,7 @@ import {
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-const WITCH_URL = 'gltf/witch.glb';
+const WITCH_URL = 'yash/story/gltf/witch.glb';
 /** The height her ward size was tuned for, metres. */
 const ORIGINAL_HEIGHT = 0.5;
 const ORIGINAL_WARD_RADIUS = 0.15;
