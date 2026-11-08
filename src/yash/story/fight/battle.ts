@@ -13,7 +13,8 @@ import {
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
-import { playBoom, playCharge, playClang, playFireball, playHiss, playRoar } from '../audio.js';
+import { playBoom, playCharge, playClang, playFireball, playHiss } from '../audio.js';
+import { sfx } from '../../sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
@@ -200,6 +201,8 @@ export class DragonBattle {
       this.dragon3d.update(dt, this.head);
     }
     if (!stage.playing && this.mode !== 'won') {
+      // The intro (and its roar) waits for the story card to close.
+      if (this.mode === 'intro') this.modeTime = 0;
       this.dragon.update(dt);
       return;
     }
@@ -215,7 +218,7 @@ export class DragonBattle {
           break;
         }
         this.caption = 'The Shadow Dragon bursts out! It guards the Great Lantern';
-        if (this.modeTime > 0.4 && this.modeTime - dt <= 0.4) playRoar();
+        if (this.modeTime > 0.4 && this.modeTime - dt <= 0.4) sfx.roar();
         if (this.modeTime > 3.2) this.setMode('fight');
         break;
       case 'fight':
@@ -338,9 +341,10 @@ export class DragonBattle {
     this.dragon.flinch();
     this.dragon3d?.flinch();
     playBoom(0.06 + 0.01 * damage);
+    sfx.dragonGrunt();
     if (this.dragonHealth <= 0.01) {
       this.setMode('won');
-      playRoar(0.14);
+      sfx.dragonDeath();
       this.player.reset();
       for (const f of this.fireballs) this.group.remove(f.sprite);
       this.fireballs.length = 0;
@@ -348,7 +352,7 @@ export class DragonBattle {
     }
     const enraged = this.dragonHealth <= DRAGON_HEALTH / 2 && before > DRAGON_HEALTH / 2;
     if (enraged) {
-      playRoar(0.1);
+      sfx.dragonRoar(1);
       this.flash('The dragon is enraged! Twin fireballs: keep your shield or wall up', 2.4);
     } else if (this.noteTime <= 0) {
       this.flash(weak ? 'A direct hit! The dragon reels' : 'It stings! Hit the head or heart for more', 1);
@@ -378,10 +382,11 @@ export class DragonBattle {
     if (this.nextBreath <= 0 && this.dragon3d && Math.random() < 0.4) {
       this.diveTime = 0.001;
       this.nextBreath = 3.5 + Math.random();
-      playRoar(0.09);
+      sfx.roar();
       this.flash('It dives at you! Slash it with your sword, or block with a shield', 2);
     } else if (this.nextBreath <= 0) {
       this.breathTime = 0.001;
+      sfx.dragonSnarl();
       // Angrier as it weakens.
       this.nextBreath = this.dragonHealth > DRAGON_HEALTH / 2 ? 4.2 + Math.random() : 2.8 + Math.random();
     }

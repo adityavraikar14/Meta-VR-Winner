@@ -19,6 +19,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { playBoom, playInk, playSplat, playThrow } from '../audio.js';
+import { sfx } from '../../sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
@@ -124,6 +125,9 @@ export class InkDuel {
   private noteTime = 0;
   /** The 3D witch, once her model has loaded. */
   private witch: Witch3D | null = null;
+  /** For her laughs: the ward going up, and her first wound past 70%. */
+  private wasWarded = false;
+  private laughedHurt = false;
   /** The flat puppet stands in (the model never arrived). */
   private flat = false;
   private readonly plate = new NamePlate('Morwen the Ink Witch');
@@ -240,7 +244,10 @@ export class InkDuel {
           this.witch && this.modeTime < WALK_TIME
             ? 'Morwen the Ink Witch steps out of the screen!'
             : 'Ink Duel! Pinch and draw in the air, then grab your drawing and throw it';
-        if (this.modeTime > (this.witch ? READY_TIME : 3)) this.setMode('fight');
+        if (this.modeTime > (this.witch ? READY_TIME : 3)) {
+          this.setMode('fight');
+          if (this.witch) sfx.witchAttackLaugh(0.3);
+        }
         this.draw(hands);
         break;
       case 'fight':
@@ -280,8 +287,15 @@ export class InkDuel {
       if (this.witch.released) {
         const hand = this.witch.released;
         this.witch.released = null;
-        if (this.mode === 'fight') this.rivalAttack(this.witch.handAt(hand, new Vector3()), this.witch.moving === 'attack' ? 'bolt' : 'arc');
+        if (this.mode === 'fight') {
+          this.rivalAttack(this.witch.handAt(hand, new Vector3()), this.witch.moving === 'attack' ? 'bolt' : 'arc');
+          // She laughs after every throw, whether or not it hits.
+          sfx.witchAttackLaugh();
+        }
       }
+      // The ward of runes has formed around her: a ghostly, echoing laugh.
+      if (this.witch.warded && !this.wasWarded && this.mode === 'fight') sfx.witchWardLaugh();
+      this.wasWarded = this.witch.warded;
     }
     this.drawHud(dt);
     this.splashes.update(dt);
@@ -583,6 +597,11 @@ export class InkDuel {
     witch.flinch();
     this.splashAt(ink.pos, 0x4aa8ff);
     playBoom(0.06 + damage * 0.002);
+    // Wounded at last: her long, maniacal cackle, once.
+    if (!this.laughedHurt && this.rivalHealth > 0 && this.rivalHealth < RIVAL_HEALTH * 0.7) {
+      this.laughedHurt = true;
+      sfx.witchCloseLaugh();
+    }
     this.showScore(ink.pos, damage, energy, ink.mass, speed, onHead);
     if (this.rivalHealth <= 0) this.end(true);
     return true;
@@ -639,6 +658,10 @@ export class InkDuel {
     for (const ink of [...this.inks]) if (ink.rival) this.remove(ink);
     // Beaten, she falls; winning, she casts a flourish of runes.
     this.witch?.play(won ? 'death' : 'skill');
+    if (this.witch) {
+      if (won) sfx.witchShriek();
+      else sfx.witchCloseLaugh();
+    }
   }
 
   // ================================================================= Rival
