@@ -228,7 +228,7 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [ ] P0 Quest 2 alignment pass with the checklist; fix what's off
 - [x] P0 Act I levels 4–6 (Long Shadow, The Low Tunnel, Twin Gaps), proven finishable
 - [x] P0 Spark look and sound: glow, trail, bounce sparks, tink pitched by impact speed
-- [x] P0 Stars (gate, all motes, par time) on the level card · [ ] best times per level
+- [x] P0 Stars (gate, all motes, par time) on the level card · [x] best times per level ("a new best (was …)")
 
 ### Day 3 — Fri Nov 13
 - [x] P0 Light shards: pinch to grab, move in 3D, depth clamped, wrist roll turns them (snapped to 15°), live ×D/d label, Drop button · [ ] budget
@@ -236,10 +236,10 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [x] P0 GitHub Pages workflow (`.github/workflows/deploy.yml`, tests must pass first) · [ ] Aditya: Settings → Pages → Source: GitHub Actions
 
 ### Day 4 — Sat Nov 14
-- [x] P0 New story order: Light & Shadow (spark), Structures (whim, bridges, build levels), Fire & Iron, Hot Air, The Dragon; creature errands retired · [ ] first run straight into Act I
+- [x] P0 New story order: Light & Shadow (spark), Structures (whim, bridges, build levels), Fire & Iron, Hot Air, The Dragon; creature errands retired · [x] first run: table → world grows → prologue → level 1, no menu
 - [x] P0 New intro, start page, home card and chapter names for ages 15–35 · [ ] remaining machine-level lines
 - [ ] P1 Workshop sandbox with three save slots (5.7)
-- [ ] P1 Daily Light (5.6)
+- [x] P1 Daily Light (5.6): seeded, every course proven by simulation (`npm run test:daily`: 120 days, 0 fallbacks), best time per day, day streak, Regular trophy
 
 ### Day 5 — Sun Nov 15
 - [x] P0 Sky backdrop (golden-hour dome; on for Quest 2, desktop and the emulator; Settings → Sky / Room view) · [ ] brighter UI palette
@@ -256,6 +256,11 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [ ] P0 Video: shot list, recording on Quest, edit
 - [ ] P0 Devpost text: tagline, description, hand interactions, team
 - [ ] P0 Submit (by Nov 18 evening IST)
+
+### Notes from building (Nov 12)
+- Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
+- Fixed: winning the Ink Duel saved the story as finished, so Continue restarted at level 1. Side games (duel, Daily Light) now keep the story's place.
+- The emulator's grey room is off (iwsdk.config.json); the sky dome shows in the emulator.
 
 ### Notes from building (Nov 11)
 - The bottom ~40% of the paper is hidden behind the diorama island, so spark courses live in the top half (floor at y = −0.15 m). A spark that drops below y = −0.24 m has fallen out of sight: a miss.

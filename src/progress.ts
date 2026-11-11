@@ -34,6 +34,10 @@ export const play = {
   feats: [] as string[],
   /** Trophies already announced (they are judged from the save; see trophies.ts). */
   trophies: [] as string[],
+  /** Best time (seconds) per spark level, and per day for the Daily Light ('daily-YYYYMMDD'). */
+  best: {} as Record<string, number>,
+  /** The Daily Light: the last day played and how many days in a row. */
+  daily: { last: '', streak: 0 },
 };
 
 let loaded = false;
@@ -59,6 +63,8 @@ export function loadProgress(): void {
     if (saved.arena && typeof saved.arena === 'object') play.arena = saved.arena;
     if (Array.isArray(saved.feats)) play.feats = saved.feats;
     if (Array.isArray(saved.trophies)) play.trophies = saved.trophies;
+    if (saved.best && typeof saved.best === 'object') play.best = saved.best;
+    if (saved.daily && typeof saved.daily === 'object') play.daily = { last: String(saved.daily.last ?? ''), streak: Number(saved.daily.streak ?? 0) };
   } catch {
     // Storage blocked or corrupt: start a fresh story.
   }
@@ -68,7 +74,7 @@ export function saveProgress(): void {
   try {
     localStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal, arena: play.arena, feats: play.feats, trophies: play.trophies }),
+      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal, arena: play.arena, feats: play.feats, trophies: play.trophies, best: play.best, daily: play.daily }),
     );
   } catch {
     // Not saved; the story still plays.
@@ -85,6 +91,8 @@ export function resetProgress(): void {
   play.arena = {};
   play.feats = [];
   play.trophies = [];
+  play.best = {};
+  play.daily = { last: '', streak: 0 };
   saveProgress();
 }
 

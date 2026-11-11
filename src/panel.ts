@@ -8,7 +8,7 @@
 import { createSystem, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { loadProgress, play, totalStars } from './progress.js';
 import { stage } from './stage-state.js';
-import { DUEL, DUEL_INDEX, PUZZLES, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, PUZZLES, WORLDS } from './world/puzzles.js';
 import { TROPHIES, trophiesEarned } from './trophies.js';
 import { sfx } from './yash/sfx.js';
 
@@ -97,6 +97,9 @@ export class PanelSystem extends createSystem({}) {
       const levels = PUZZLES.map((p, index) => ({ index, id: p.id, title: p.title, world: p.world }));
       group(`Chapter ${w + 1} · ${world.name}`, levels.filter((l) => l.world === w));
     });
-    group('Side games', [{ index: DUEL_INDEX, id: DUEL.id, title: DUEL.title }]);
+    group('Side games', [
+      { index: DAILY_INDEX, id: 'daily', title: 'Daily Light (today’s course)' },
+      { index: DUEL_INDEX, id: DUEL.id, title: DUEL.title },
+    ]);
   }
 }

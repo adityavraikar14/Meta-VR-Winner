@@ -38,6 +38,7 @@ export const TROPHIES: Trophy[] = [
   { id: 'armourer', icon: '⚔️', title: 'Armourer', how: 'Beat the dragon with the Arsenal', earned: () => play.feats.includes('dragon-arsenal') },
   { id: 'ink', icon: '🖋️', title: 'Ink Master', how: 'Win the Ink Duel', earned: () => play.journal.duel !== undefined },
   { id: 'slayer', icon: '🐉', title: 'Boss Slayer', how: 'Beat the dragon and Morwen in the Arena', earned: () => !!play.arena.dragon && !!play.arena.witch },
+  { id: 'regular', icon: '📅', title: 'Regular', how: 'Play the Daily Light three days running', earned: () => play.daily.streak >= 3 },
   { id: 'scholar', icon: '📖', title: 'Scholar', how: 'Fill twelve Journal pages', earned: () => JOURNAL.filter((p) => play.journal[p.id]).length >= 12 },
   { id: 'perfect', icon: '⭐', title: 'Perfectionist', how: 'Three stars on eight levels', earned: () => Object.values(play.stars).filter((s) => s >= 3).length >= 8 },
 ];

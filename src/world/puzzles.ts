@@ -7,6 +7,7 @@ import type { HandState } from '../creatures/hand-input.js';
 import { ArsenalDragonBattle } from '../fight/arsenal-battle.js';
 import { DragonBattle } from '../fight/battle.js';
 import { PowerChoice } from '../fight/power-choice.js';
+import { dailyLevel, dateKey, noteDaily } from '../run/daily.js';
 import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
 import { ShadowRun } from '../run/shadow-run.js';
 import { InkDuel } from '../fight/duel.js';
@@ -16,6 +17,7 @@ import { Brew } from '../machines/brew.js';
 import { Forge } from '../machines/forge.js';
 import { PinLock } from '../machines/lock.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
+import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { decorateJungle, decorateMine, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
 import { berries, goldStar } from './props.js';
@@ -772,12 +774,32 @@ export const DUEL: Puzzle = {
 };
 
 /** The puzzle at a story index, the duel, or null (free play). */
+/** The Daily Light: a side game like the duel, a new proven course each day. */
+export const DAILY_INDEX = 1001;
+let daily: { key: string; puzzle: Puzzle } | null = null;
+
+/** Today's Daily Light puzzle (rebuilt when the date changes). */
+export function dailyPuzzle(): Puzzle {
+  const key = dateKey();
+  if (daily?.key !== key) daily = { key, puzzle: runPuzzle(dailyLevel(key)) };
+  return daily.puzzle;
+}
+
+/** Side games (the duel, the Daily Light) sit outside the story and never move its saved place. */
+export function isSideGame(index: number): boolean {
+  return index >= DUEL_INDEX;
+}
+
 export function puzzleAt(index: number): Puzzle | null {
-  return index === DUEL_INDEX ? DUEL : PUZZLES[index] ?? null;
+  if (index === DUEL_INDEX) return DUEL;
+  if (index === DAILY_INDEX) return dailyPuzzle();
+  return PUZZLES[index] ?? null;
 }
 
 /** A Shadow Run level: the spark on the screen, your hands' shadows as its ground. */
 function runPuzzle(level: RunLevel): Puzzle {
+  // The clear card's line: the time, and whether it beat your best.
+  let line = 'Through the gate.';
   return {
     id: level.id,
     world: level.world ?? 0,
@@ -785,9 +807,12 @@ function runPuzzle(level: RunLevel): Puzzle {
     story: level.story,
     ask: level.ask,
     handsOn: true,
-    solved: 'Through the gate.',
+    get solved() {
+      return line;
+    },
     build(root, kit) {
       const run = new ShadowRun(root, level);
+      let recorded = false;
       stage.runNotes = () => run.journal();
       const task: { caption: string; done: boolean; mistakes: number; stars?: number } = { caption: level.ask, done: false, mistakes: 0 };
       stage.task = task;
@@ -800,6 +825,22 @@ function runPuzzle(level: RunLevel): Puzzle {
           task.mistakes = run.sim.retries;
           task.done = run.done;
           if (run.done) task.stars = run.stars;
+          if (run.done && !recorded) {
+            recorded = true;
+            const time = run.sim.time;
+            const key = level.bestKey ?? level.id;
+            const before = play.best[key];
+            if (before === undefined || time < before) play.best[key] = time;
+            line = before === undefined
+              ? `Through the gate in ${time.toFixed(1)} s.`
+              : time < before
+                ? `${time.toFixed(1)} s: a new best (was ${before.toFixed(1)} s).`
+                : `${time.toFixed(1)} s. Your best is ${before.toFixed(1)} s.`;
+            if (level.id === 'daily') {
+              const streak = noteDaily();
+              line += streak > 1 ? `  Day streak: ${streak}. A new course at midnight.` : '  A new course at midnight.';
+            }
+          }
         },
       };
     },

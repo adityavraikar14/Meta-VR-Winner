@@ -47,6 +47,8 @@ export interface RunLevel {
   /** A build level: light shards to place, the spark dropped with a button, a star for hands-off. */
   build?: boolean;
   shards?: ShardSpec[];
+  /** Where its best time is kept (default: its id). */
+  bestKey?: string;
 }
 
 /**

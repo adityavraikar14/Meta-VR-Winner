@@ -6,9 +6,9 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
 } from '@iwsdk/core';
-import { playAwaken, playChirp, playPrompt, playRoar, playTinkle } from './audio.js';
+import { playAwaken, playPrompt, playRoar, playTinkle } from './audio.js';
 import {
-  bird, deer, dragon, ease, ellipse, fox, GROUND, grass, H, hand, INK, lantern, star, W,
+  dragon, ease, ellipse, GROUND, grass, H, hand, INK, lantern, star, W,
 } from './puppets.js';
 
 /** Redraws per second; the show is soft and slow, so this is plenty. */
@@ -116,7 +116,9 @@ const SCENES: Scene[] = [
 
 /**
  * The opening shadow-puppet show: five short scenes drawn on the paper,
- * narrated in the caption bar, before the first chapter.
+ * narrated in the caption bar, before the first chapter. The Lantern held
+ * the Shadow Dragon; it broke free and the Lantern shattered into sparks;
+ * a spark can only stand on shadow; your hands cast the only shadows left.
  */
 export class IntroShow {
   private canvas: HTMLCanvasElement;

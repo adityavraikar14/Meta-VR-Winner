@@ -4,7 +4,9 @@ import {
   ExtrudeGeometry,
   type Group,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  RingGeometry,
   Shape,
   Sprite,
   SpriteMaterial,
@@ -58,6 +60,14 @@ const FARTHEST = 0.8;
 const SNAP = (15 * Math.PI) / 180;
 const KNUCKLE_INDEX = 6;
 const KNUCKLE_PINKY = 21;
+/** The pinch cursor's ring: open at this thumb-to-index gap (m) and wider, closed at a full pinch. */
+const CURSOR_OPEN_GAP = 0.08;
+const CURSOR_RADIUS = 0.016;
+/** Where the player's eyes are in paper space, for turning the cursor towards them. */
+const VIEWER = new Vector3(0, 0.12, 1.0);
+const CURSOR_IDLE = 0xf4f8ff;
+const CURSOR_REACH = 0x5fd3ff;
+const CURSOR_HELD = 0xffc94d;
 
 export class Shard {
   readonly mesh: Mesh;
@@ -65,6 +75,8 @@ export class Shard {
   readonly position = new Vector3();
   angle = 0;
   held = -1;
+  /** A pinch is close enough to take it (it glows). */
+  hover = false;
   /** This frame's shadow on the screen, and its scale (D ÷ d). */
   readonly shadow: Poly = { xs: [], ys: [], vx: 0, vy: 0, e: 0.25, mu: 0.02, tag: TAG_SHARD };
   scale = 1;
@@ -123,10 +135,12 @@ export class Shard {
     if (this.held < 0) this.shadow.vx = this.shadow.vy = 0;
   }
 
-  place(): void {
+  place(time = 0): void {
     this.mesh.position.copy(this.position);
     this.mesh.rotation.set(0, 0, this.angle);
-    this.material.emissiveIntensity = this.held >= 0 ? 1.0 : 0.45;
+    // Held: bright; within a pinch's reach: a quick pulse, so you know which one you will take.
+    this.material.emissiveIntensity = this.held >= 0 ? 1.1 : this.hover ? 0.8 + 0.25 * Math.sin(time * 12) : 0.45;
+    this.mesh.scale.setScalar(this.hover && this.held < 0 ? 1.08 : 1);
   }
 }
 
@@ -192,6 +206,10 @@ export class ShardSet {
   moves = 0;
   private grabs: Array<{ shard: Shard; offset: Vector3; roll0: number; angle0: number } | null> = [null, null];
   private label = scaleLabel();
+  /** One pinch cursor per hand: a ring at the fingertips that closes as you pinch. */
+  private cursors: Array<{ ring: Mesh; material: MeshBasicMaterial }> = [];
+  private time = 0;
+  private eye = new Vector3();
   private v = new Vector3();
   private a = new Vector3();
   private b = new Vector3();
@@ -208,6 +226,14 @@ export class ShardSet {
       return shard;
     });
     parent.add(this.label.sprite);
+    for (let h = 0; h < 2; h++) {
+      const material = new MeshBasicMaterial({ color: CURSOR_IDLE, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false, side: DoubleSide });
+      const ring = new Mesh(new RingGeometry(0.82, 1, 40), material);
+      ring.renderOrder = 10;
+      ring.visible = false;
+      parent.add(ring);
+      this.cursors.push({ ring, material });
+    }
   }
 
   /** The wrist's roll on the screen's plane: the knuckle line's angle. */
@@ -226,8 +252,10 @@ export class ShardSet {
   }
 
   update(dt: number, hands: readonly HandState[]): void {
+    this.time += dt;
     const paper = stage.paper;
     const [, , lz] = stage.lantern;
+    for (const shard of this.shards) shard.hover = false;
     for (let h = 0; h < hands.length && h < 2; h++) {
       const hand = hands[h];
       const grab = this.grabs[h];
@@ -238,9 +266,33 @@ export class ShardSet {
         playTink(0.04);
         continue;
       }
+      const cursor = this.cursors[h];
+      cursor.ring.visible = false;
       if (!paper || !hand.tracked) continue;
       this.v.copy(hand.pinch);
       paper.worldToLocal(this.v);
+      // The shard this hand would take, if it pinched now.
+      let reach: Shard | null = null;
+      if (!grab) {
+        let nearest = GRAB_REACH;
+        for (const shard of this.shards) {
+          if (shard.held >= 0) continue;
+          const d = shard.position.distanceTo(this.v);
+          if (d < nearest) {
+            nearest = d;
+            reach = shard;
+          }
+        }
+        if (reach) reach.hover = true;
+      }
+      // The cursor: a ring between thumb and index, shrinking as they close.
+      const closed = Math.min(1, Math.max(0, 1 - hand.pinchGap / CURSOR_OPEN_GAP));
+      cursor.ring.visible = true;
+      cursor.ring.position.copy(this.v);
+      cursor.ring.scale.setScalar(CURSOR_RADIUS * (1.15 - 0.6 * closed));
+      cursor.ring.lookAt(this.parent.localToWorld(this.eye.copy(VIEWER)));
+      cursor.material.color.setHex(grab ? CURSOR_HELD : reach ? CURSOR_REACH : CURSOR_IDLE);
+      cursor.material.opacity = grab ? 0.95 : reach ? 0.9 : 0.35 + 0.4 * closed;
       if (!grab && hand.pinchStarted) {
         let best: Shard | null = null;
         let bestDistance = GRAB_REACH;
@@ -273,7 +325,7 @@ export class ShardSet {
     let shown: Shard | null = null;
     for (const shard of this.shards) {
       shard.project(dt);
-      shard.place();
+      shard.place(this.time);
       this.shadows.push(shard.shadow);
       if (shard.held >= 0) shown = shard;
     }
@@ -283,6 +335,5 @@ export class ShardSet {
       this.label.set(`×${shown.scale.toFixed(1)}`);
       this.label.sprite.position.set(shown.position.x, shown.position.y + 0.05, shown.position.z);
     }
-    void this.parent;
   }
 }

@@ -76,7 +76,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { DUEL, DUEL_INDEX, friendName, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
@@ -182,6 +182,8 @@ export class ShadowGameSystem extends createSystem({
   private phase: Phase = 'story';
   private phaseTime = 0;
   private puzzleIndex = 0;
+  /** The story's place, kept while a side game (the duel, the Daily Light) is on. */
+  private storyIndex = 0;
   private puzzle: Puzzle | null = null;
   /** Shapes the player may make right now. */
   private candidates: Level[] = [];
@@ -498,6 +500,7 @@ export class ShadowGameSystem extends createSystem({
           title: p.title,
           kind: p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend',
         })),
+        { index: DAILY_INDEX, id: 'daily', chapter: 'Side games', title: 'Daily Light', kind: 'hands' },
         { index: DUEL_INDEX, id: DUEL.id, chapter: 'Side games', title: DUEL.title, kind: 'hands' },
       ],
       current: () => this.puzzle?.id ?? '',
@@ -607,7 +610,7 @@ export class ShadowGameSystem extends createSystem({
     this.skipClick = false;
     if (skipped) {
       playClick();
-      if (this.puzzle?.id === 'duel') this.showTitle();
+      if (isSideGame(this.puzzleIndex)) this.showTitle();
       else this.skip();
     }
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
@@ -631,7 +634,14 @@ export class ShadowGameSystem extends createSystem({
         this.updateTable(dt, pressed);
         break;
       case 'growing':
-        if (this.phaseTime >= GROW_TIME) this.showTitle();
+        // A first-time player goes straight into the prologue, then level one: no menu to find first.
+        if (this.phaseTime >= GROW_TIME) {
+          if (resumeIndex() === 0 && totalStars() === 0) {
+            this.showTitle();
+            this.menu.close();
+            this.startIntro();
+          } else this.showTitle();
+        }
         break;
       case 'title': {
         const action = this.menu.update(dt, this.liveTips, this.menuClick, this.enterPressed);
@@ -672,7 +682,7 @@ export class ShadowGameSystem extends createSystem({
         break;
       case 'cleared':
         if (this.phaseTime >= CLEAR_TIME) {
-          if (this.puzzle?.id === 'duel') this.showTitle();
+          if (isSideGame(this.puzzleIndex)) this.showTitle();
           else this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
         }
         break;
@@ -745,10 +755,22 @@ export class ShadowGameSystem extends createSystem({
     }
   }
 
+  /** The very first time: the shadow-puppet prologue (skippable), then level one. */
+  private startIntro(): void {
+    this.bannerShown = false;
+    this.playButton.setText('Skip');
+    this.playButton.show(true);
+    this.intro.start();
+    this.setPhase('intro');
+  }
+
   /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
     this.leaveArena();
+    // Back from a side game: the story's place, not the side game's.
+    if (isSideGame(play.puzzleIndex)) play.puzzleIndex = this.storyIndex;
     const resume = resumeIndex();
+    this.storyIndex = play.puzzleIndex;
     this.puzzleIndex = resume;
     this.puzzle = null;
     this.candidates = [];
@@ -787,18 +809,16 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'chapter') {
       playAwaken();
       this.startPuzzle(action.index);
+    } else if (action.do === 'daily') {
+      playAwaken();
+      this.startPuzzle(DAILY_INDEX);
     } else if (action.do === 'duel') {
       playAwaken();
       this.startPuzzle(DUEL_INDEX);
     } else if (action.do === 'arena') {
       this.enterArena();
     } else if (this.fresh) {
-      // The very first time: the shadow-puppet prologue, then level one.
-      this.bannerShown = false;
-      this.playButton.setText('Skip');
-      this.playButton.show(true);
-      this.intro.start();
-      this.setPhase('intro');
+      this.startIntro();
     } else {
       playAwaken();
       this.startPuzzle(this.puzzleIndex < PUZZLES.length ? this.puzzleIndex : 0);
@@ -875,10 +895,10 @@ export class ShadowGameSystem extends createSystem({
     this.menu.close();
     this.puzzleIndex = index;
     this.puzzle = puzzleAt(index);
-    const duel = index === DUEL_INDEX;
-    // The duel is a side game: it never moves the story's saved place.
-    if (!duel) {
+    // Side games (the duel, the Daily Light) never move the story's saved place.
+    if (!isSideGame(index)) {
       play.puzzleIndex = this.puzzle ? index : -1;
+      this.storyIndex = play.puzzleIndex;
       saveProgress();
     }
     play.puzzleIndex = this.puzzle ? index : -1;
@@ -919,8 +939,13 @@ export class ShadowGameSystem extends createSystem({
 
     if (puzzle) {
       const firstOfWorld = PUZZLES.findIndex((p) => p.world === puzzle.world) === index;
-      const kicker = puzzle.id === 'duel' ? 'Side game · vs Morwen the Ink Witch' : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
-      this.drawBanner(firstOfWorld || puzzle.id === 'duel' ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
+      const side = isSideGame(this.puzzleIndex);
+      const kicker = puzzle.id === 'duel'
+        ? 'Side game · vs Morwen the Ink Witch'
+        : puzzle.id === 'daily'
+          ? 'Side game · a new course every day'
+          : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
+      this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
       this.setCaption(puzzle.ask);
     } else {
       this.drawBanner(
@@ -1231,8 +1256,10 @@ export class ShadowGameSystem extends createSystem({
       if (!play.feats.includes(feat)) play.feats.push(feat);
     }
     const trophies = trophyLine(awardTrophies());
-    // Resume from the next level if the player leaves now.
-    play.puzzleIndex = this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
+    // Resume from the next level if the player leaves now (a side game keeps the story's place).
+    play.puzzleIndex = isSideGame(this.puzzleIndex)
+      ? this.storyIndex
+      : this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
     saveProgress();
     play.puzzleIndex = this.puzzleIndex;
 
