@@ -238,39 +238,27 @@ export class ShadowStageSystem extends createSystem({}) {
       canvas.width / 2, canvas.height * 0.45, 20,
       canvas.width / 2, canvas.height / 2, canvas.width * 0.62,
     );
-    glow.addColorStop(0, '#fff3d6');
-    glow.addColorStop(0.6, '#f1d9a8');
-    glow.addColorStop(1, '#c99a5b');
+    // A lightbox panel: bright white in the middle, a cool soft falloff to the edges.
+    glow.addColorStop(0, '#ffffff');
+    glow.addColorStop(0.65, '#f4f7fb');
+    glow.addColorStop(1, '#dfe6ef');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // Paper fibres: a deterministic sprinkle of faint strokes.
-    let seed = 7;
-    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    ctx.strokeStyle = 'rgba(120, 80, 30, 0.07)';
-    for (let i = 0; i < 260; i++) {
-      const x = rand() * canvas.width;
-      const y = rand() * canvas.height;
-      const len = 4 + rand() * 14;
-      const angle = rand() * Math.PI;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
-      ctx.stroke();
-    }
     const texture = new CanvasTexture(canvas);
     texture.colorSpace = SRGBColorSpace;
 
     const paperMesh = new Mesh(
       new PlaneGeometry(PAPER_WIDTH, PAPER_HEIGHT),
-      new MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.94 }),
+      new MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.97 }),
     );
     paperMesh.name = 'PaperSurface';
     this.paper.add(paperMesh);
 
 
+    // Crisp, deep navy shadows on the white screen.
     const shadowMaterial = new ShadowMaterial({
-      color: 0x140b05,
-      opacity: 0.88,
+      color: 0x0b1430,
+      opacity: 0.9,
       depthWrite: false,
     });
     const shadowCatcher = new Mesh(

@@ -6,11 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
-    <meta name="theme-color" content="#1c120b" />
+    <meta name="theme-color" content="#2f7dff" />
     <link rel="icon" href="data:," />
     <title>Shadowplay</title>
     <style>
+      /* Bright and clean, like a well-made toy: sky, bold type, chunky colourful buttons. */
       #sp-splash {
+        --navy: #14213d;
+        --ink: #22304f;
+        --yellow: #ffc928;
+        --green: #1fb35a;
+        --red: #ff4d42;
+        --blue: #2f7dff;
+        --white: #ffffff;
         position: fixed;
         inset: 0;
         z-index: 10;
@@ -18,239 +26,134 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 16px;
-        padding: 24px;
+        gap: 14px;
+        padding: 24px max(16px, env(safe-area-inset-left)) 24px max(16px, env(safe-area-inset-right));
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: auto;
         text-align: center;
-        color: #ffe9c4;
-        font-family: Georgia, 'Times New Roman', serif;
-        /* Twilight: deep blue overhead, plum, and amber light low on the horizon. */
+        color: var(--navy);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         background:
-          radial-gradient(ellipse 55% 42% at 50% 36%, rgba(255, 196, 110, 0.32), transparent 70%),
-          linear-gradient(180deg, #0d1230 0%, #2a1840 38%, #5a2a3a 66%, #c0652e 92%, #e89a3c 100%);
+          radial-gradient(ellipse 60% 45% at 50% 30%, rgba(255, 255, 255, 0.85), transparent 70%),
+          linear-gradient(180deg, #5aa9ff 0%, #9fd0ff 45%, #ffe7b8 100%);
         transition: opacity 0.6s ease;
       }
       #sp-splash[data-hidden] {
         opacity: 0;
         pointer-events: none;
       }
-      /* Stars twinkling over the scene. */
-      #sp-splash .stars,
-      #sp-splash .stars::after {
-        position: absolute;
-        inset: 0 0 35% 0;
-        background-image:
-          radial-gradient(1.6px 1.6px at 12% 18%, #fff, transparent),
-          radial-gradient(1.2px 1.2px at 27% 8%, #fff8e0, transparent),
-          radial-gradient(1.8px 1.8px at 41% 22%, #fff, transparent),
-          radial-gradient(1.1px 1.1px at 58% 11%, #ffe9c4, transparent),
-          radial-gradient(1.6px 1.6px at 73% 25%, #fff, transparent),
-          radial-gradient(1.2px 1.2px at 86% 9%, #fff8e0, transparent),
-          radial-gradient(1.4px 1.4px at 93% 30%, #fff, transparent),
-          radial-gradient(1px 1px at 6% 40%, #fff, transparent),
-          radial-gradient(1.3px 1.3px at 33% 44%, #ffe9c4, transparent),
-          radial-gradient(1px 1px at 66% 47%, #fff, transparent);
-        pointer-events: none;
-        animation: twinkle 5s ease-in-out infinite;
-      }
-      #sp-splash .stars::after {
-        content: '';
-        inset: 0;
-        transform: translate(3.5%, 6%);
-        animation-delay: -2.5s;
-      }
-      /* A silhouette horizon: jungle canopy on the left, the dragon's mountain on the right. */
-      #sp-splash .horizon {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        height: 26vh;
-        pointer-events: none;
-      }
-      #sp-splash > :not(.stars):not(.horizon) {
+      #sp-splash > * {
         position: relative;
       }
-      #sp-splash .lantern {
-        width: 104px;
-        height: 104px;
-        border-radius: 50%;
-        background: radial-gradient(circle, #fff6d6 0%, #ffc463 42%, rgba(255, 150, 40, 0) 72%);
-        animation: flicker 3s ease-in-out infinite;
+      /* The demo: a lightbox, a hand's shadow as a bridge, and a spark rolling across it. */
+      #sp-splash .demo {
+        width: min(420px, 86vw);
+        aspect-ratio: 10 / 4;
+        border-radius: 22px;
+        background: linear-gradient(180deg, #ffffff, #edf2f8);
+        border: 6px solid var(--white);
+        box-shadow: 0 14px 40px rgba(20, 33, 61, 0.25), inset 0 0 0 2px #dfe6ef;
+        overflow: hidden;
       }
-      #sp-splash .lantern::before {
-        content: '';
-        position: absolute;
-        inset: -70px;
-        border-radius: 50%;
-        background: repeating-conic-gradient(from 0deg, rgba(255, 214, 140, 0.16) 0deg 5deg, transparent 5deg 20deg);
-        -webkit-mask: radial-gradient(circle, #000 25%, transparent 70%);
-        mask: radial-gradient(circle, #000 25%, transparent 70%);
-        animation: rays 40s linear infinite;
-      }
-      #sp-splash .shadow {
+      #sp-splash .demo svg {
+        width: 100%;
+        height: 100%;
         display: block;
-        margin: -10px auto 0;
-        filter: drop-shadow(0 0 6px rgba(255, 150, 60, 0.35));
-        animation: glide 4.2s ease-in-out infinite;
       }
-      @keyframes glide {
-        0%, 100% { transform: translate(-6px, 0) rotate(-2deg); }
-        50% { transform: translate(6px, -7px) rotate(2deg); }
+      #sp-splash .spark {
+        animation: roll 3.6s cubic-bezier(0.45, 0, 0.4, 1) infinite;
+      }
+      @keyframes roll {
+        0% { transform: translate(0, 0); opacity: 0; }
+        8% { opacity: 1; }
+        30% { transform: translate(78px, 34px); }
+        70% { transform: translate(250px, 46px); }
+        92% { transform: translate(330px, 46px); opacity: 1; }
+        100% { transform: translate(338px, 46px); opacity: 0; }
       }
       #sp-splash .kicker {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin: 0;
-        font-size: 15px;
-        letter-spacing: 0.32em;
+        margin: 6px 0 0;
+        padding: 6px 16px;
+        border-radius: 999px;
+        background: var(--navy);
+        color: var(--white);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: #f3c98a;
-      }
-      #sp-splash .kicker::before,
-      #sp-splash .kicker::after {
-        content: '';
-        width: 46px;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, #f3c98a, transparent);
       }
       #sp-splash h1 {
-        margin: -4px 0 0;
-        font-size: clamp(48px, 10vw, 96px);
-        letter-spacing: 0.03em;
-        background: linear-gradient(180deg, #fff7e2 10%, #ffd27a 55%, #e8963a 95%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        filter: drop-shadow(0 4px 22px rgba(255, 170, 60, 0.45));
+        margin: 0;
+        font-size: clamp(52px, 11vw, 104px);
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        color: var(--navy);
+        text-shadow: 0 5px 0 var(--yellow), 0 12px 30px rgba(20, 33, 61, 0.25);
+        text-wrap: balance;
       }
       #sp-splash .tagline {
-        margin: 0;
-        max-width: 30em;
+        margin: 2px 0 0;
+        max-width: 32em;
         font-size: 19px;
-        line-height: 1.45;
-        color: #f7e3c2;
-        text-shadow: 0 1px 8px rgba(20, 8, 30, 0.6);
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--ink);
+        text-wrap: balance;
       }
       #sp-splash .chapters {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
         gap: 8px;
-        margin: 2px 0 0;
+        margin: 4px 0 0;
         padding: 0;
         list-style: none;
       }
       #sp-splash .chapters li {
-        padding: 6px 14px;
+        padding: 6px 12px;
         border-radius: 999px;
+        background: rgba(255, 255, 255, 0.75);
+        color: var(--ink);
         font-size: 14px;
-        color: #ffe9c4;
-        background: rgba(30, 14, 40, 0.45);
-        border: 1px solid rgba(255, 210, 140, 0.35);
-        backdrop-filter: blur(4px);
+        font-weight: 700;
       }
       #sp-splash .chapters li span {
-        color: #f3c98a;
         margin-right: 6px;
-        font-size: 12px;
-        letter-spacing: 0.1em;
+        color: var(--blue);
+        font-weight: 900;
       }
       #sp-splash button {
-        margin-top: 8px;
-        min-width: 260px;
-        padding: 17px 40px;
+        font: inherit;
+        cursor: pointer;
+      }
+      #sp-play {
+        min-width: 240px;
+        margin-top: 6px;
+        padding: 16px 40px;
         border: 0;
         border-radius: 999px;
-        font: 700 22px Georgia, 'Times New Roman', serif;
-        letter-spacing: 0.02em;
-        color: #2b1709;
-        background:
-          linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%) -200% 0 / 200% 100% no-repeat,
-          linear-gradient(#ffe08f, #f3a23a);
-        box-shadow: 0 6px 0 #9a5a1c, 0 12px 36px rgba(255, 160, 50, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-        cursor: pointer;
-        transition: transform 0.08s ease, box-shadow 0.08s ease;
-        animation: shimmer 3.2s ease-in-out infinite;
+        background: var(--green);
+        color: var(--white);
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        box-shadow: 0 6px 0 #138040, 0 12px 26px rgba(20, 33, 61, 0.25);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
       }
-      #sp-splash button:hover {
-        transform: translateY(-1px);
+      #sp-play:hover:not(:disabled) {
+        transform: translateY(-2px);
       }
-      #sp-splash button:active {
-        transform: translateY(5px);
-        box-shadow: 0 1px 0 #9a5a1c, 0 4px 14px rgba(255, 160, 50, 0.3);
+      #sp-play:active:not(:disabled) {
+        transform: translateY(4px);
+        box-shadow: 0 2px 0 #138040, 0 6px 14px rgba(20, 33, 61, 0.25);
       }
-      #sp-splash button:disabled {
-        cursor: default;
-        animation: none;
-        filter: grayscale(0.5) brightness(0.85);
+      #sp-play:disabled {
+        background: #9aa6b8;
+        box-shadow: 0 6px 0 #77839a;
+        cursor: progress;
       }
-      #sp-splash .bar {
-        width: 260px;
-        height: 5px;
-        border-radius: 3px;
-        background: rgba(255, 233, 196, 0.15);
-        overflow: hidden;
-      }
-      #sp-splash .bar span {
-        display: block;
-        height: 100%;
-        width: 30%;
-        border-radius: 3px;
-        background: linear-gradient(90deg, #ffd27a, #ff9a3a);
-        animation: load 1.2s ease-in-out infinite;
-      }
-      #sp-splash .hints {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 8px 10px;
-        margin: 4px 0 0;
-        padding: 0;
-        list-style: none;
-        font-size: 14px;
-        color: #f0d7b0;
-      }
-      #sp-splash .hints li {
-        padding: 5px 12px;
-        border-radius: 999px;
-        background: rgba(20, 8, 30, 0.35);
-        border: 1px solid rgba(255, 210, 140, 0.22);
-      }
-      #sp-splash .note {
-        font-size: 13px;
-        color: #f0d7b0;
-        opacity: 0.8;
-        margin: 0;
-      }
-      @keyframes flicker {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        45% { transform: scale(1.06); opacity: 0.92; }
-        60% { transform: scale(0.98); opacity: 1; }
-      }
-      @keyframes rays {
-        to { transform: rotate(360deg); }
-      }
-      @keyframes twinkle {
-        0%, 100% { opacity: 0.9; }
-        50% { opacity: 0.35; }
-      }
-      @keyframes shimmer {
-        0%, 55% { background-position: -200% 0, 0 0; }
-        100% { background-position: 200% 0, 0 0; }
-      }
-      @keyframes load {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(340%); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        #sp-splash *, #sp-splash *::before, #sp-splash *::after { animation: none !important; }
-      }
-
-      /* A level picker (any level, straight in) and the Arsenal's boss fights. */
       #sp-splash .row-buttons {
         display: flex;
         flex-wrap: wrap;
@@ -258,27 +161,32 @@
         gap: 10px;
       }
       #sp-splash button.secondary {
-        min-width: 0;
-        margin-top: 0;
-        padding: 10px 22px;
+        padding: 11px 22px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--red);
+        color: var(--white);
         font-size: 16px;
-        color: #ffe9c4;
-        background: rgba(30, 14, 40, 0.55);
-        border: 1px solid rgba(255, 210, 140, 0.4);
-        box-shadow: none;
-        animation: none;
+        font-weight: 800;
+        box-shadow: 0 4px 0 #c9332b, 0 8px 18px rgba(20, 33, 61, 0.2);
+      }
+      #sp-splash button.secondary:disabled {
+        background: #b9c2d0;
+        box-shadow: 0 4px 0 #98a3b5;
       }
       #sp-splash .levels {
         max-width: min(680px, 92vw);
-        color: #ffe9c4;
         font-size: 15px;
       }
       #sp-splash .levels summary {
         cursor: pointer;
-        padding: 6px 16px;
+        display: inline-block;
+        padding: 8px 18px;
         border-radius: 999px;
-        background: rgba(30, 14, 40, 0.45);
-        border: 1px solid rgba(255, 210, 140, 0.35);
+        background: var(--white);
+        color: var(--blue);
+        font-weight: 800;
+        box-shadow: 0 3px 0 #c9d6ea;
       }
       #sp-splash .level-list {
         display: flex;
@@ -286,18 +194,19 @@
         gap: 6px;
         max-height: 34vh;
         overflow-y: auto;
-        margin-top: 8px;
-        padding: 8px 10px;
-        border-radius: 14px;
-        background: rgba(20, 8, 30, 0.6);
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.9);
         text-align: left;
       }
       #sp-splash .level-list h3 {
         margin: 6px 0 0;
         font-size: 12px;
+        font-weight: 900;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #f3c98a;
+        color: var(--blue);
       }
       #sp-splash .level-list .row {
         display: flex;
@@ -305,65 +214,107 @@
         gap: 6px;
       }
       #sp-splash .level-list button {
-        min-width: 0;
         margin: 0;
         padding: 6px 12px;
+        border: 2px solid #dbe4f2;
+        border-radius: 12px;
+        background: var(--white);
+        color: var(--navy);
         font-size: 14px;
-        font-weight: 400;
-        color: #ffe9c4;
-        background: rgba(255, 210, 140, 0.12);
-        border: 1px solid rgba(255, 210, 140, 0.3);
-        box-shadow: none;
-        animation: none;
+        font-weight: 700;
       }
       #sp-splash .level-list button:hover {
-        background: rgba(255, 210, 140, 0.28);
+        border-color: var(--blue);
+      }
+      #sp-splash .bar {
+        width: 220px;
+        height: 6px;
+        border-radius: 3px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.6);
+      }
+      #sp-splash .bar span {
+        display: block;
+        width: 30%;
+        height: 100%;
+        border-radius: 3px;
+        background: var(--blue);
+        animation: load 1.2s ease-in-out infinite;
+      }
+      @keyframes load {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(340%); }
+      }
+      #sp-splash .hints {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin: 6px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      #sp-splash .hints li {
+        padding: 7px 13px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.8);
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      #sp-splash .note {
+        margin: 2px 0 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #4a5878;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #sp-splash *, #sp-splash *::before, #sp-splash *::after { animation: none !important; }
       }
     </style>
   </head>
-  <body style="margin: 0; overflow: hidden; background: #120b06">
+  <body style="margin: 0; overflow: hidden; background: #9fd0ff">
     <div id="sp-splash">
-      <div class="stars" aria-hidden="true"></div>
-      <svg class="horizon" aria-hidden="true" viewBox="0 0 1200 260" preserveAspectRatio="none">
-        <!-- Far hills, then jungle canopy (left), the mountain (right), all in silhouette. -->
-        <path d="M0 170 C150 120 260 150 380 130 C520 105 600 150 760 120 C900 95 1040 140 1200 110 L1200 260 L0 260 Z" fill="#3a1830" opacity="0.65" />
-        <path d="M0 200 C40 160 70 190 100 165 C130 140 160 185 195 160 C230 135 255 180 290 158 C320 140 350 182 385 168 C420 150 450 190 480 185 L520 260 L0 260 Z" fill="#1a0c18" />
-        <path d="M640 260 L840 70 L880 108 L905 84 L1100 260 Z" fill="#1a0c18" />
-        <path d="M835 76 L846 90 L860 80 L872 96 L880 108 L840 70 Z" fill="#ff9a3a" opacity="0.35" />
-        <path d="M0 230 C200 215 400 238 600 225 C800 212 1000 236 1200 222 L1200 260 L0 260 Z" fill="#0d0610" />
-      </svg>
-      <div class="lantern" aria-hidden="true"></div>
-      <svg class="shadow" aria-hidden="true" viewBox="0 0 120 56" width="132" height="62">
-        <!-- The Shadow Dragon in flight, cut like a shadow puppet. -->
-        <g fill="#0b0806">
-          <path d="M40 34 C50 26 75 25 88 31 C80 38 55 40 40 34 Z" />
-          <path d="M42 32 C34 27 28 23 20 23 L9 25.5 L18 27.5 L11 30.5 L22 30.5 C28 31 34 34 42 37 Z" />
-          <path d="M23 23.5 L33 15 L28 24.5 Z M20 23.5 L26 17 L23.5 24.5 Z" />
-          <path d="M49 30 C51 18 55 9 60 3 C63 10 69 12 77 6 C79 13 85 15 94 12 C88 20 81 26 73 30 Z" opacity="0.92" />
-          <path d="M86 30.5 C98 29 104 38 112 36 L118 31 L115 40 L110 38.5 C102 42 94 38 86 34 Z" />
-          <path d="M58 37 L55.5 46 L59.5 46 L62 37 Z M72 36.5 L74.5 45 L78.5 45 L76.5 36 Z" />
-        </g>
-        <path d="M53 33 C55 31 58 31 60 33" stroke="#ff9a3a" stroke-width="1.6" fill="none" opacity="0.85" />
-      </svg>
+      <div class="demo" aria-hidden="true">
+        <svg viewBox="0 0 400 160">
+          <!-- The course: two cut-paper cliffs, a gate on the right. -->
+          <path d="M0 95 L92 112 L92 160 L0 160 Z" fill="#232a63" />
+          <path d="M92 112 L92 116" stroke="#ffc85a" stroke-width="3" />
+          <path d="M0 95 L92 112" stroke="#ffc85a" stroke-width="3" fill="none" />
+          <path d="M270 120 L400 120 L400 160 L270 160 Z" fill="#232a63" />
+          <path d="M270 120 L400 120" stroke="#ffc85a" stroke-width="3" />
+          <!-- The hand's shadow: a flat hand bridging the gap. -->
+          <g fill="#0b1430" opacity="0.88">
+            <path d="M86 113 C120 108 170 110 210 112 C236 113 262 114 290 118 L292 128 C262 126 234 127 206 126 C168 125 128 126 90 126 Z" />
+            <path d="M200 112 C214 102 232 98 252 100 L254 106 C238 106 222 110 210 116 Z" />
+          </g>
+          <circle cx="362" cy="104" r="15" fill="none" stroke="#ffc928" stroke-width="5" />
+          <!-- The spark. -->
+          <g class="spark">
+            <circle cx="24" cy="64" r="11" fill="#ffffff" />
+            <circle cx="24" cy="64" r="20" fill="#9fd8ff" opacity="0.35" />
+          </g>
+        </svg>
+      </div>
       <p class="kicker">Escape the Lantern</p>
       <h1>Shadowplay</h1>
       <p class="tagline">Your shadow is solid. Bend the light, build with shadow, end the dragon.</p>
       <ul class="chapters" aria-label="Chapters">
-        <li><span>I</span>Light &amp; Shadow</li>
-        <li><span>II</span>Structures</li>
-        <li><span>III</span>Fire &amp; Iron</li>
-        <li><span>IV</span>Hot Air</li>
-        <li><span>V</span>The Dragon</li>
+        <li><span>1</span>Light &amp; Shadow</li>
+        <li><span>2</span>Structures</li>
+        <li><span>3</span>Fire &amp; Iron</li>
+        <li><span>4</span>Hot Air</li>
+        <li><span>5</span>The Dragon</li>
       </ul>
-      <details class="levels" id="sp-levels">
-        <summary>Choose a level</summary>
-        <div class="level-list" id="sp-level-list"></div>
-      </details>
       <div class="bar" id="sp-bar"><span></span></div>
       <button id="sp-play" disabled>Loading…</button>
       <div class="row-buttons">
         <button id="sp-arena" class="secondary" disabled>⚔️ The Arsenal: boss fights</button>
       </div>
+      <details class="levels" id="sp-levels">
+        <summary>Choose a level</summary>
+        <div class="level-list" id="sp-level-list"></div>
+      </details>
       <ul class="hints">
         <li>✋ Hands only: your shadow is the controller</li>
         <li>🪑 Seated, on your own table</li>

@@ -1,3 +1,4 @@
+import { fitFont, font, roundRect as themeRoundRect, UI } from './ui-theme.js';
 import {
   CanvasTexture,
   Color,
@@ -1518,78 +1519,55 @@ export class ShadowGameSystem extends createSystem({
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    // An illuminated parchment card: warm paper, a soft shadow, a gilded double border.
+    // A clean white card: soft shadow, a thick yellow border, a navy kicker pill, bold sans type.
     ctx.save();
-    ctx.shadowColor = 'rgba(40, 20, 5, 0.45)';
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 6;
-    const paper = ctx.createLinearGradient(0, 0, 0, h);
-    paper.addColorStop(0, '#fffaf0');
-    paper.addColorStop(0.55, '#fbefd6');
-    paper.addColorStop(1, '#f1dfba');
-    ctx.fillStyle = paper;
-    roundRect(ctx, 14, 12, w - 28, h - 30, 38);
+    ctx.shadowColor = 'rgba(10, 20, 45, 0.35)';
+    ctx.shadowBlur = 22;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = UI.white;
+    themeRoundRect(ctx, 16, 12, w - 32, h - 34, 44);
     ctx.fill();
     ctx.restore();
-    // A warm glow from the middle, like lamplight on paper.
-    const glow = ctx.createRadialGradient(w / 2, h * 0.42, 20, w / 2, h * 0.42, w * 0.55);
-    glow.addColorStop(0, 'rgba(255, 236, 190, 0.55)');
-    glow.addColorStop(1, 'rgba(255, 236, 190, 0)');
-    ctx.fillStyle = glow;
-    roundRect(ctx, 14, 12, w - 28, h - 30, 38);
-    ctx.fill();
-    const gold = ctx.createLinearGradient(0, 0, w, h);
-    gold.addColorStop(0, '#b8862e');
-    gold.addColorStop(0.5, '#f0cf7a');
-    gold.addColorStop(1, '#a8741f');
-    ctx.strokeStyle = gold;
-    ctx.lineWidth = 7;
-    roundRect(ctx, 14, 12, w - 28, h - 30, 38);
+    ctx.strokeStyle = UI.yellow;
+    ctx.lineWidth = 10;
+    themeRoundRect(ctx, 21, 17, w - 42, h - 44, 40);
     ctx.stroke();
-    ctx.lineWidth = 2.5;
-    roundRect(ctx, 30, 28, w - 60, h - 62, 28);
-    ctx.stroke();
-    // Corner flourishes.
-    ctx.fillStyle = '#c99a3c';
-    for (const [cx, cy] of [[52, 50], [w - 52, 50], [52, h - 66], [w - 52, h - 66]]) {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 9);
-      ctx.lineTo(cx + 9, cy);
-      ctx.lineTo(cx, cy + 9);
-      ctx.lineTo(cx - 9, cy);
-      ctx.closePath();
-      ctx.fill();
-    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Kicker between two fine rules.
-    ctx.fillStyle = '#9a6a2a';
-    ctx.font = 'italic 600 34px Georgia, "Times New Roman", serif';
-    ctx.fillText(kicker, w / 2, 76, w - 220);
-    const kw = Math.min(w - 220, ctx.measureText(kicker).width);
-    ctx.strokeStyle = 'rgba(176, 132, 60, 0.7)';
-    ctx.lineWidth = 2;
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(w / 2 + side * (kw / 2 + 18), 77);
-      ctx.lineTo(w / 2 + side * (kw / 2 + 90), 77);
-      ctx.stroke();
-    }
+    // The kicker in a navy pill.
+    const kickerPx = fitFont(ctx, kicker.toUpperCase(), 800, 28, w - 260);
+    const kw = ctx.measureText(kicker.toUpperCase()).width + 56;
+    ctx.fillStyle = UI.navy;
+    themeRoundRect(ctx, w / 2 - kw / 2, 52, kw, kickerPx + 24, (kickerPx + 24) / 2);
+    ctx.fill();
+    ctx.fillStyle = UI.white;
+    ctx.fillText(kicker.toUpperCase(), w / 2, 52 + (kickerPx + 24) / 2 + 1);
     const stars = /^[★☆]+$/.test(title);
-    ctx.save();
-    ctx.shadowColor = stars ? 'rgba(255, 190, 40, 0.8)' : 'rgba(200, 140, 40, 0.35)';
-    ctx.shadowBlur = stars ? 24 : 10;
-    ctx.fillStyle = stars ? '#f0a820' : '#3a2210';
-    ctx.font = stars ? '700 110px Georgia, serif' : '700 74px Georgia, "Times New Roman", serif';
-    ctx.fillText(title, w / 2, 160, w - 100);
-    ctx.restore();
-    ctx.fillStyle = '#4a3020';
-    ctx.font = '500 36px Georgia, "Times New Roman", serif';
-    wrapText(ctx, body, w / 2, 262, w - 200, 48);
+    if (stars) {
+      // Big gold stars with a navy outline; empty ones pale.
+      ctx.font = font(900, 112);
+      ctx.lineJoin = 'round';
+      const gap = 120;
+      [...title].forEach((ch, i) => {
+        const x = w / 2 + (i - (title.length - 1) / 2) * gap;
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = UI.navy;
+        ctx.strokeText('★', x, 168);
+        ctx.fillStyle = ch === '★' ? UI.yellow : '#e3e8f0';
+        ctx.fillText('★', x, 168);
+      });
+    } else {
+      ctx.fillStyle = UI.navy;
+      fitFont(ctx, title, 800, 76, w - 120);
+      ctx.fillText(title, w / 2, 168);
+    }
+    ctx.fillStyle = UI.ink;
+    ctx.font = font(500, 34);
+    wrapText(ctx, body, w / 2, 262, w - 200, 46);
     if (footer) {
-      ctx.fillStyle = '#9a6a2a';
-      ctx.font = 'italic 600 30px Georgia, serif';
-      ctx.fillText(footer, w / 2, h - 66, w - 120);
+      ctx.fillStyle = UI.green;
+      fitFont(ctx, footer, 700, 28, w - 140);
+      ctx.fillText(footer, w / 2, h - 70);
     }
     this.bannerTexture.needsUpdate = true;
   }
@@ -1625,26 +1603,25 @@ export class ShadowGameSystem extends createSystem({
     const canvas = this.captionCanvas;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Dark lacquered wood with a fine gold edge and a soft inner light.
-    const wood = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    wood.addColorStop(0, 'rgba(62, 36, 18, 0.92)');
-    wood.addColorStop(1, 'rgba(30, 16, 8, 0.92)');
-    ctx.fillStyle = wood;
-    roundRect(ctx, 6, 6, canvas.width - 12, canvas.height - 12, 44);
+    // A navy pill with a bright yellow underline and bold white type.
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.save();
+    ctx.shadowColor = 'rgba(8, 14, 32, 0.35)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = 'rgba(20, 33, 61, 0.94)';
+    themeRoundRect(ctx, 8, 6, w - 16, h - 16, (h - 16) / 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(230, 186, 100, 0.85)';
-    ctx.lineWidth = 3;
-    roundRect(ctx, 10, 10, canvas.width - 20, canvas.height - 20, 40);
-    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = UI.yellow;
+    themeRoundRect(ctx, w * 0.3, h - 13, w * 0.4, 6, 3);
+    ctx.fill();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.save();
-    ctx.shadowColor = 'rgba(255, 200, 110, 0.55)';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = '#ffe9c0';
-    ctx.font = '600 46px Georgia, "Times New Roman", serif';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2, canvas.width - 80);
-    ctx.restore();
+    ctx.fillStyle = UI.white;
+    fitFont(ctx, text, 700, 46, w - 90);
+    ctx.fillText(text, w / 2, h / 2 - 1);
     this.captionTexture.needsUpdate = true;
   }
 }

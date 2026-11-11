@@ -1,10 +1,11 @@
+import { FONT, shade } from '../ui-theme.js';
 import {
   AdditiveBlending,
   CanvasTexture,
+  CircleGeometry,
   CylinderGeometry,
-  DodecahedronGeometry,
+  DoubleSide,
   Group,
-  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -49,58 +50,51 @@ interface Node {
   label: Sprite | null;
 }
 
+/** Each resource's icon on its token. */
+const ICONS: Record<Resource, string> = { wood: '🪵', stone: '🪨', iron: '⛓️', herb: '🌿', crystal: '💎', ember: '🔥' };
+
+/**
+ * A collectible token: a glossy disc in the resource's colour with a white rim
+ * and its icon, standing upright and turning slowly, with a soft ring of
+ * light beneath. Clean and readable at a glance, like a game's coin.
+ */
 function model(resource: Resource): Group {
   const g = new Group();
   const color = RESOURCES[resource].color;
-  switch (resource) {
-    case 'wood': {
-      // A short split log, end grain showing.
-      const log = new Mesh(new CylinderGeometry(0.011, 0.012, 0.04, 9), new MeshStandardMaterial({ color: 0x7a4e2c, roughness: 0.9 }));
-      log.rotation.z = Math.PI / 2;
-      log.position.y = 0.012;
-      g.add(log);
-      break;
-    }
-    case 'stone': {
-      const s = new Mesh(new DodecahedronGeometry(0.014, 0), new MeshStandardMaterial({ color: 0xa8a29a, roughness: 0.85, flatShading: true }));
-      s.scale.set(1.2, 0.8, 1);
-      s.position.y = 0.011;
-      g.add(s);
-      break;
-    }
-    case 'iron': {
-      const s = new Mesh(new DodecahedronGeometry(0.012, 0), new MeshStandardMaterial({ color: 0x6d7480, metalness: 0.8, roughness: 0.35, flatShading: true }));
-      s.position.y = 0.01;
-      g.add(s);
-      const fleck = new Mesh(new DodecahedronGeometry(0.006, 0), new MeshStandardMaterial({ color: 0xb87333, metalness: 0.7, roughness: 0.4, flatShading: true }));
-      fleck.position.set(0.008, 0.016, 0.004);
-      g.add(fleck);
-      break;
-    }
-    case 'herb': {
-      const leaf = new MeshStandardMaterial({ color: 0x5f9e34, roughness: 0.7 });
-      for (let i = 0; i < 5; i++) {
-        const l = new Mesh(new IcosahedronGeometry(0.008, 0), leaf);
-        const a = (i / 5) * Math.PI * 2;
-        l.scale.set(0.45, 1.4, 0.2);
-        l.position.set(Math.cos(a) * 0.006, 0.013, Math.sin(a) * 0.006);
-        l.rotation.set(Math.sin(a) * 0.5, a, Math.cos(a) * 0.5);
-        g.add(l);
-      }
-      break;
-    }
-    case 'crystal':
-      g.add(crystals(0.022, 4, 41, color));
-      break;
-    case 'ember': {
-      const e = new Mesh(new IcosahedronGeometry(0.01, 1), new MeshStandardMaterial({ color: 0x3a1a0a, emissive: 0xff7a20, emissiveIntensity: 2.2, roughness: 0.8 }));
-      e.position.y = 0.011;
-      g.add(e);
-      break;
-    }
-  }
-  // A soft ring of light on the ground marks it as something to pick up.
-  const ring = new Mesh(new RingGeometry(0.016, 0.024, 24), new MeshBasicMaterial({ color, transparent: true, opacity: 0.5, blending: AdditiveBlending, depthWrite: false }));
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const fill = ctx.createLinearGradient(0, 0, 0, 128);
+  fill.addColorStop(0, shade(color, 0.3));
+  fill.addColorStop(1, shade(color, -0.15));
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(64, 64, 62, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc(64, 64, 52, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = `64px "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ICONS[resource], 64, 70);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  const face = new MeshBasicMaterial({ map: texture, transparent: true, side: DoubleSide });
+  const coin = new Mesh(new CircleGeometry(0.017, 40), face);
+  coin.position.y = 0.024;
+  g.add(coin);
+  // The coin's edge: a thin glossy band, so it reads as a solid token from the side.
+  const edge = new Mesh(
+    new CylinderGeometry(0.0172, 0.0172, 0.004, 40, 1, true),
+    new MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.3, emissive: color, emissiveIntensity: 0.25, side: DoubleSide }),
+  );
+  edge.rotation.x = Math.PI / 2;
+  edge.position.y = 0.024;
+  g.add(edge);
+  // A soft ring of light on the mat marks it as something to pick up.
+  const ring = new Mesh(new RingGeometry(0.014, 0.022, 32), new MeshBasicMaterial({ color, transparent: true, opacity: 0.55, blending: AdditiveBlending, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.002;
   ring.name = 'PickupRing';
@@ -116,15 +110,15 @@ function labelSprite(text: string, color: number): Sprite {
   canvas.width = 256;
   canvas.height = 96;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = 'rgba(40, 22, 10, 0.85)';
+  ctx.fillStyle = 'rgba(20, 33, 61, 0.92)';
   ctx.beginPath();
   ctx.roundRect(8, 16, 240, 64, 32);
   ctx.fill();
   ctx.strokeStyle = `#${color.toString(16).padStart(6, '0')}`;
   ctx.lineWidth = 5;
   ctx.stroke();
-  ctx.fillStyle = '#ffe2a8';
-  ctx.font = '700 36px Georgia, serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 34px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 128, 49);

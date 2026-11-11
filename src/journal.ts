@@ -91,13 +91,6 @@ export const JOURNAL: JournalPage[] = [
     diagram: 'projectile',
   },
   {
-    id: 'old-well',
-    topic: 'The Horse Whim',
-    formula: '36 cogs ÷ 9 staves = 4 : 1',
-    body: 'A horse walking round turns the great crown wheel. Its 36 cogs drive a 9-stave lantern pinion four times as fast, winding the rope onto the drum. A ratchet and pawl clicks into each tooth, so the bucket can never run back down.',
-    diagram: 'gears',
-  },
-  {
     id: 'broken-bridge',
     topic: 'Why Bridges Are Triangles',
     formula: 'three sides fix one shape',
