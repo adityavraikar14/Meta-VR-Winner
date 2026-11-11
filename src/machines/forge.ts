@@ -338,7 +338,7 @@ export class Forge {
     let text = '';
     switch (this.step) {
       case 'light':
-        text = 'The forge is cold. Pinch the Lantern Stone and drop it into the hearth';
+        text = 'The forge is cold. Pinch the lantern shard and drop it into the hearth';
         if (this.lit) this.setStep('bellows');
         break;
       case 'bellows':

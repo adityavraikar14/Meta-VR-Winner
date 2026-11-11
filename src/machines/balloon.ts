@@ -259,7 +259,7 @@ export class SkyLantern {
 
   private prompt(): string {
     const lift = Math.round(this.liftRatio() * 100);
-    if (this.delivered) return 'The Lantern Stone reached the ledge! The mountain path is open.';
+    if (this.delivered) return 'The lantern shards reached the ledge. The mountain path is open.';
     if (!this.lit) return 'Pinch the little burner under the paper lantern to light it';
     if (this.liftRatio() < 1) return `Hot air is lighter: cup your palm under the flame to shelter it · lift ${lift}% of its weight`;
     return `Rising! Lift ${lift}% of its weight · keep it warm, but not too hot`;

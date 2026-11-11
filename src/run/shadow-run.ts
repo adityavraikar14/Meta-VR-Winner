@@ -21,6 +21,7 @@ import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim } from './run-sim.js';
 import { ShardSet } from './shards.js';
+import { DEMO, resetWorkshop, saveWorkshop } from './workshop.js';
 import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
 
 /**
@@ -54,6 +55,12 @@ const Z_SPARK = 0.0045;
 const VIEWER = new Vector3(0, 0.12, 1.0);
 /** The Drop button (build levels), right of the paper, within reach. */
 const DROP_AT = new Vector3(0.42, -0.02, 0.6);
+const RESET_AT = new Vector3(0.42, -0.15, 0.6);
+
+/** A marker's shadow counts only where it is on the visible part of the screen. */
+function onScreen([x, y]: [number, number]): boolean {
+  return Math.abs(x) < 0.47 && y > -0.12 && y < 0.33;
+}
 
 interface Burst {
   sprite: Sprite;
@@ -164,6 +171,11 @@ export class ShadowRun {
   private waitTime = 0;
   private lostTime = 0;
   private wonTime = 0;
+  /** Workshop: whether the star's and ring's shadows are on the screen, the reset button, the last time. */
+  private startOk = true;
+  private gateOk = true;
+  private reset: PushButton | null = null;
+  private lastTime = 0;
   private time = 0;
   private bestScale = 0;
   /** Dev: a still test shadow bridging the level ("]" toggles it). */
@@ -245,10 +257,17 @@ export class ShadowRun {
       this.drop.size = 0.75;
       this.drop.root.position.copy(DROP_AT);
     }
+    if (level.workshop) {
+      this.reset = new PushButton(this.paper, 'Reset');
+      this.reset.size = 0.6;
+      this.reset.root.position.copy(RESET_AT);
+    }
 
     devInfo.run = () => `${level.id} ${this.sim.state} t=${this.sim.time.toFixed(1)} spark=(${this.sim.spark.x.toFixed(2)},${this.sim.spark.y.toFixed(2)}) motes=${this.sim.motesTaken} retries=${this.sim.retries} hands=${this.shadows.capsules.length} scale=${this.shadows.stats.scale.map((s) => s.toFixed(2)).join('/')}`;
     devActions[']'] = () => {
-      this.devShadow = !this.devShadow;
+      // The Workshop: build the demonstration course; elsewhere, a test shadow that solves the level.
+      if (this.level.workshop) this.shards?.restore(DEMO);
+      else this.devShadow = !this.devShadow;
     };
     devActions['['] = () => this.release();
     this.place();
@@ -274,14 +293,28 @@ export class ShadowRun {
     this.alignToPaper();
     this.shadows.update(dt);
     this.shards?.update(dt, hands);
+    if (this.level.workshop) this.followMarkers();
+    this.tips.length = 0;
+    for (const hand of hands) if (hand.tracked) this.tips.push(hand.indexTip);
     if (this.drop) {
       this.drop.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
       this.drop.show(this.sim.state === 'ready' && stage.playing);
-      this.tips.length = 0;
-      for (const hand of hands) if (hand.tracked) this.tips.push(hand.indexTip);
       if (this.drop.update(dt, this.tips, false)) {
         playClick();
-        this.release();
+        if (this.level.workshop && (!this.startOk || !this.gateOk)) {
+          playHiss(0.02, 0.2);
+        } else {
+          if (this.level.workshop && this.shards) saveWorkshop(this.shards.layout());
+          this.release();
+        }
+      }
+    }
+    if (this.reset && this.shards) {
+      this.reset.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
+      this.reset.show(this.sim.state === 'ready' && stage.playing);
+      if (this.reset.update(dt, this.tips, false)) {
+        playClick();
+        this.shards.restore(resetWorkshop());
       }
     }
     const scale = Math.max(...this.shadows.stats.scale);
@@ -337,14 +370,48 @@ export class ShadowRun {
     }
     if (sim.state === 'won') {
       this.wonTime += dt;
-      if (this.wonTime > WIN_HOLD) this.done = true;
+      if (this.wonTime > WIN_HOLD) {
+        // The Workshop never ends: a success shows its time, and the spark waits for the next drop.
+        if (this.level.workshop) {
+          this.lastTime = sim.time;
+          sim.reset(false);
+          this.trailAt.length = 0;
+        } else this.done = true;
+      }
     }
     this.place(dt);
     this.updateCaption(scale);
   }
 
+  /** Workshop: the star's shadow is the start, the ring's shadow the gate. */
+  private followMarkers(): void {
+    const shards = this.shards?.shards ?? [];
+    const star = shards.find((s) => s.kind === 'star');
+    const ring = shards.find((s) => s.kind === 'ring');
+    if (!star || !ring) return;
+    const start = star.shadowCentre();
+    const gate = ring.shadowCentre();
+    this.startOk = onScreen(start);
+    this.gateOk = onScreen(gate);
+    if (this.gateOk) this.level.gate = gate;
+    if (this.startOk) {
+      this.level.start = start;
+      if (this.sim.state === 'ready') this.sim.spark.place(start[0], start[1]);
+    }
+  }
+
   private updateCaption(scale: number): void {
     const sim = this.sim;
+    if (this.level.workshop) {
+      if (sim.state === 'won') this.caption = `Through the gate in ${sim.time.toFixed(1)} s!`;
+      else if (sim.state === 'live') this.caption = 'There it goes… catch it with your hands if it strays';
+      else if (!this.startOk) this.caption = 'Hold the gold star in the light: its shadow is where the spark drops';
+      else if (!this.gateOk) this.caption = 'Hold the gold ring in the light: its shadow is the gate';
+      else this.caption = this.lastTime > 0
+        ? `Last run: ${this.lastTime.toFixed(1)} s. Change your course and push Drop again`
+        : this.level.ask;
+      return;
+    }
     if (sim.state === 'won') {
       this.caption = `Through the gate!  ${'★'.repeat(this.stars)}${'☆'.repeat(3 - this.stars)}  ·  ${sim.time.toFixed(1)} s`;
       return;
@@ -365,7 +432,7 @@ export class ShadowRun {
     const visible = sim.state !== 'lost';
     const waiting = sim.state === 'ready';
     const pulse = waiting ? 1 + 0.18 * Math.sin(this.time * 6) : 1;
-    this.spark.visible = this.halo.visible = visible && sim.state !== 'won';
+    this.spark.visible = this.halo.visible = visible && sim.state !== 'won' && this.startOk;
     this.spark.position.set(x, y, Z_SPARK);
     this.halo.position.set(x, y, Z_SPARK - 0.0005);
     this.halo.scale.setScalar(SPARK_RADIUS * 9 * pulse);
@@ -386,6 +453,11 @@ export class ShadowRun {
     // Gate: a slow turn and a breathing glow; it flares when the spark is through.
     const flare = sim.state === 'won' ? Math.max(0, 1 - this.wonTime) : 0;
     this.gateRing.rotation.z = this.time * 0.6;
+    // The gate follows its level (the Workshop's ring moves it).
+    const [gx, gy] = this.level.gate;
+    this.gateRing.position.set(gx, gy, Z_GATE);
+    this.gateGlow.position.set(gx, gy, Z_GATE);
+    this.gateRing.visible = this.gateGlow.visible = this.gateOk;
     this.gateGlow.scale.setScalar(GATE_RADIUS * (3 + 0.25 * Math.sin(this.time * 2.4) + 4 * flare));
     // Motes bob gently.
     this.motes.forEach((m, i) => {

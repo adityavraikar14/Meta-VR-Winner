@@ -32,6 +32,8 @@ jobs:
       # The physics and level checks must pass before anything is published.
       - run: npm run test:spark
       - run: npm run test:levels
+      - run: npm run test:daily
+      - run: npm run test:workshop
       - run: npm run build
         env:
           NODE_ENV: production

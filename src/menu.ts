@@ -17,7 +17,7 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'arena' };
+export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena' };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -265,13 +265,14 @@ export class MainMenu {
     const streak = play.daily.streak > 1 ? `  ·  Day streak: ${play.daily.streak}` : '';
     this.draw(
       'Side games',
-      'Battles & the Daily Light',
-      'Daily Light: a new spark course every day, the same for everyone.  ·  Ink Duel: draw in the air and throw it at Morwen.  ·  Arena: the Arsenal\u2019s seven weapons against a sentinel, the dragon and Morwen.',
+      'Side games',
+      'Daily Light: a new course every day.  ·  Workshop: build your own course from light and glass.  ·  Ink Duel: draw in the air, throw it at Morwen.  ·  Arena: seven weapons against three bosses.',
       `Bring draughts, wards and sun shards from your bag${streak}`,
     );
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Daily', run: () => ({ do: 'daily' }) },
+      { label: 'Workshop', run: () => ({ do: 'workshop' }) },
       { label: 'Duel', run: () => ({ do: 'duel' }) },
       { label: 'Arena', run: () => ({ do: 'arena' }) },
     ];

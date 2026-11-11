@@ -76,7 +76,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, refreshWorkshop, WORKSHOP_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
@@ -501,6 +501,7 @@ export class ShadowGameSystem extends createSystem({
           kind: p.warmup ? 'warmup' : p.walk ? 'walk' : p.handsOn ? 'hands' : 'friend',
         })),
         { index: DAILY_INDEX, id: 'daily', chapter: 'Side games', title: 'Daily Light', kind: 'hands' },
+        { index: WORKSHOP_INDEX, id: 'workshop', chapter: 'Side games', title: 'The Workshop', kind: 'hands' },
         { index: DUEL_INDEX, id: DUEL.id, chapter: 'Side games', title: DUEL.title, kind: 'hands' },
       ],
       current: () => this.puzzle?.id ?? '',
@@ -809,6 +810,9 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'chapter') {
       playAwaken();
       this.startPuzzle(action.index);
+    } else if (action.do === 'workshop') {
+      playAwaken();
+      this.startPuzzle(WORKSHOP_INDEX);
     } else if (action.do === 'daily') {
       playAwaken();
       this.startPuzzle(DAILY_INDEX);
@@ -894,6 +898,7 @@ export class ShadowGameSystem extends createSystem({
     this.table.hide();
     this.menu.close();
     this.puzzleIndex = index;
+    if (index === WORKSHOP_INDEX) refreshWorkshop();
     this.puzzle = puzzleAt(index);
     // Side games (the duel, the Daily Light) never move the story's saved place.
     if (!isSideGame(index)) {
@@ -944,6 +949,8 @@ export class ShadowGameSystem extends createSystem({
         ? 'Side game · vs Morwen the Ink Witch'
         : puzzle.id === 'daily'
           ? 'Side game · a new course every day'
+          : puzzle.id === 'workshop'
+            ? 'Side game · build your own course'
           : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
       this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
       this.setCaption(puzzle.ask);

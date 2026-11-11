@@ -8,7 +8,7 @@
 import { createSystem, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { loadProgress, play, totalStars } from './progress.js';
 import { stage } from './stage-state.js';
-import { DAILY_INDEX, DUEL, DUEL_INDEX, PUZZLES, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, PUZZLES, WORKSHOP_INDEX, WORLDS } from './world/puzzles.js';
 import { TROPHIES, trophiesEarned } from './trophies.js';
 import { sfx } from './yash/sfx.js';
 
@@ -99,6 +99,7 @@ export class PanelSystem extends createSystem({}) {
     });
     group('Side games', [
       { index: DAILY_INDEX, id: 'daily', title: 'Daily Light (today’s course)' },
+      { index: WORKSHOP_INDEX, id: 'workshop', title: 'The Workshop (build your own)' },
       { index: DUEL_INDEX, id: DUEL.id, title: DUEL.title },
     ]);
   }

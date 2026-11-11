@@ -238,7 +238,7 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 ### Day 4 — Sat Nov 14
 - [x] P0 New story order: Light & Shadow (spark), Structures (whim, bridges, build levels), Fire & Iron, Hot Air, The Dragon; creature errands retired · [x] first run: table → world grows → prologue → level 1, no menu
 - [x] P0 New intro, start page, home card and chapter names for ages 15–35 · [ ] remaining machine-level lines
-- [ ] P1 Workshop sandbox with three save slots (5.7)
+- [x] P1 Workshop: build in 3D, play in shadow (the star's shadow is the start, the ring's the gate, glass is the ground); Drop saves the design, Reset restores; the demo course is proven by `npm run test:workshop` · [ ] three save slots
 - [x] P1 Daily Light (5.6): seeded, every course proven by simulation (`npm run test:daily`: 120 days, 0 fallbacks), best time per day, day streak, Regular trophy
 
 ### Day 5 — Sun Nov 15

@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Path,
   RingGeometry,
   Shape,
   Sprite,
@@ -16,8 +17,10 @@ import {
 import { playClick, playTink } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { stage } from '../stage-state.js';
-import type { Pt } from './run-levels.js';
+import { isMarker, OUTLINES, RING_HOLE, type ShardKind, shadowOf, shadowScale, shardShadow, THICKNESS } from './shard-shapes.js';
 import { type Poly, TAG_SHARD } from './spark-physics.js';
+
+export { isMarker, type ShardKind } from './shard-shapes.js';
 
 /**
  * Light shards: cut-glass pieces you hold in the lantern's light. Their
@@ -35,8 +38,6 @@ import { type Poly, TAG_SHARD } from './spark-physics.js';
  * the shadow grows.
  */
 
-export type ShardKind = 'plank' | 'wedge' | 'block';
-
 export interface ShardSpec {
   kind: ShardKind;
   /** Where it waits, in paper space (x, y, z = distance in front of the screen). */
@@ -45,13 +46,6 @@ export interface ShardSpec {
   angle?: number;
 }
 
-const OUTLINES: Record<ShardKind, Pt[]> = {
-  plank: [[-0.06, -0.008], [0.06, -0.008], [0.06, 0.008], [-0.06, 0.008]],
-  // A 22° wedge: steeper ones meet the floor in a corner that eats the spark's speed.
-  wedge: [[-0.05, -0.02], [0.05, -0.02], [0.05, 0.02]],
-  block: [[-0.025, -0.025], [0.025, -0.025], [0.025, 0.025], [-0.025, 0.025]],
-};
-const THICKNESS = 0.012;
 /** A pinch this close to a shard's centre takes it. */
 const GRAB_REACH = 0.07;
 /** Depth limits, as a fraction of the lantern-to-screen distance from the screen. */
@@ -89,11 +83,17 @@ export class Shard {
     const shape = new Shape();
     OUTLINES[kind].forEach(([x, y], i) => (i ? shape.lineTo(x, y) : shape.moveTo(x, y)));
     shape.closePath();
+    if (kind === 'ring') {
+      const hole = new Path();
+      RING_HOLE.forEach(([x, y], i) => (i ? hole.lineTo(x, y) : hole.moveTo(x, y)));
+      hole.closePath();
+      shape.holes.push(hole);
+    }
     const geometry = new ExtrudeGeometry(shape, { depth: THICKNESS, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 1 });
     geometry.translate(0, 0, -THICKNESS / 2);
     this.material = new MeshStandardMaterial({
-      color: 0xd8f3ff,
-      emissive: 0x47b6ff,
+      color: isMarker(kind) ? 0xfff1c4 : 0xd8f3ff,
+      emissive: isMarker(kind) ? 0xffaa2a : 0x47b6ff,
       emissiveIntensity: 0.45,
       roughness: 0.15,
       metalness: 0.05,
@@ -106,27 +106,19 @@ export class Shard {
     parent.add(this.mesh);
   }
 
-  /** Corners in paper space, projected through the lantern; the shadow is their hull. */
+  /** Where its centre's shadow falls on the screen (paper space). */
+  shadowCentre(): [number, number] {
+    return shadowOf(this.position.x, this.position.y, this.position.z, stage.lantern);
+  }
+
+  /** Its shadow on the screen this frame (a collider), its scale, and the shadow's own velocity. */
   project(dt: number): void {
-    const [lx, ly, lz] = stage.lantern;
-    const c = Math.cos(this.angle);
-    const s = Math.sin(this.angle);
-    const pts: Array<[number, number]> = [];
-    for (const [ox, oy] of OUTLINES[this.kind]) {
-      const x = this.position.x + ox * c - oy * s;
-      const y = this.position.y + ox * s + oy * c;
-      for (const dz of [-THICKNESS / 2, THICKNESS / 2]) {
-        const t = lz / (lz - (this.position.z + dz));
-        pts.push([lx + (x - lx) * t, ly + (y - ly) * t]);
-      }
-    }
-    const hull = convexHull(pts);
+    const hull = shardShadow(this.kind, this.position.x, this.position.y, this.position.z, this.angle, stage.lantern);
     this.shadow.xs = hull.map((p) => p[0]);
     this.shadow.ys = hull.map((p) => p[1]);
-    this.scale = lz / (lz - this.position.z);
+    this.scale = shadowScale(this.position.z, stage.lantern);
     // The shadow's own velocity, so a shard swept through the spark bats it.
-    const cx = lx + (this.position.x - lx) * this.scale;
-    const cy = ly + (this.position.y - ly) * this.scale;
+    const [cx, cy] = this.shadowCentre();
     if (this.lastCentre && dt > 0) {
       this.shadow.vx = (cx - this.lastCentre[0]) / dt;
       this.shadow.vy = (cy - this.lastCentre[1]) / dt;
@@ -142,27 +134,6 @@ export class Shard {
     this.material.emissiveIntensity = this.held >= 0 ? 1.1 : this.hover ? 0.8 + 0.25 * Math.sin(time * 12) : 0.45;
     this.mesh.scale.setScalar(this.hover && this.held < 0 ? 1.08 : 1);
   }
-}
-
-/** Andrew's monotone chain: counter-clockwise hull of 2D points. */
-export function convexHull(points: Array<[number, number]>): Array<[number, number]> {
-  const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (p.length < 3) return p;
-  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lower: Array<[number, number]> = [];
-  for (const q of p) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
-    lower.push(q);
-  }
-  const upper: Array<[number, number]> = [];
-  for (let i = p.length - 1; i >= 0; i--) {
-    const q = p[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
-    upper.push(q);
-  }
-  upper.pop();
-  lower.pop();
-  return lower.concat(upper);
 }
 
 function scaleLabel(): { sprite: Sprite; set(text: string): void } {
@@ -234,6 +205,26 @@ export class ShardSet {
       parent.add(ring);
       this.cursors.push({ ring, material });
     }
+  }
+
+  /** Puts every piece back where `specs` say (by index), e.g. the Workshop's default layout. */
+  restore(specs: readonly ShardSpec[]): void {
+    specs.forEach((spec, i) => {
+      const shard = this.shards[i];
+      if (!shard || shard.held >= 0) return;
+      shard.position.set(spec.at[0], spec.at[1], spec.at[2]);
+      shard.angle = ((spec.angle ?? 0) * Math.PI) / 180;
+    });
+  }
+
+  /** Where every piece is, for saving a Workshop design. */
+  layout(): ShardSpec[] {
+    const round = (n: number) => Math.round(n * 1000) / 1000;
+    return this.shards.map((s) => ({
+      kind: s.kind,
+      at: [round(s.position.x), round(s.position.y), round(s.position.z)] as const,
+      angle: Math.round((s.angle * 180) / Math.PI),
+    }));
   }
 
   /** The wrist's roll on the screen's plane: the knuckle line's angle. */
@@ -326,7 +317,7 @@ export class ShardSet {
     for (const shard of this.shards) {
       shard.project(dt);
       shard.place(this.time);
-      this.shadows.push(shard.shadow);
+      if (!isMarker(shard.kind)) this.shadows.push(shard.shadow);
       if (shard.held >= 0) shown = shard;
     }
     // While held: the shard's magnification, read live.

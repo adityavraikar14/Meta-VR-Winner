@@ -9,6 +9,7 @@ import { DragonBattle } from '../fight/battle.js';
 import { PowerChoice } from '../fight/power-choice.js';
 import { dailyLevel, dateKey, noteDaily } from '../run/daily.js';
 import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
+import { workshopLevel } from '../run/workshop.js';
 import { ShadowRun } from '../run/shadow-run.js';
 import { InkDuel } from '../fight/duel.js';
 import { Bridge } from '../machines/bridge.js';
@@ -512,10 +513,10 @@ const oreTrain: Puzzle = {
   id: 'ore-train',
   world: 1,
   title: 'The Ore Train',
-  story: 'Now the cart is full of iron ore, twice as heavy. A bridge that was enough before may not be now.',
+  story: 'Now the cart is loaded with iron ore, twice the weight. A bridge that held before may not hold now.',
   ask: 'Build it stronger: brace the triangles, or add a second truss above the road',
   handsOn: true,
-  solved: 'It carried the ore! Strong, light, and all triangles.',
+  solved: 'It carried the ore. Bracing turned long members that would buckle into short ones that will not.',
   build(root, kit) {
     // Tuned with the truss physics: the first bridge's design buckles under this cart,
     // cross-braces or a second truss above the road carry it.
@@ -541,10 +542,10 @@ const brokenBridge: Puzzle = {
   id: 'broken-bridge',
   world: 1,
   title: 'The Broken Bridge',
-  story: 'The flood took the old bridge. The ore cart must cross the river to reach the mine.',
-  ask: 'Build a bridge of timbers across the river',
+  story: 'The flood took the old bridge, and the cart carrying the next lantern shard has to cross the river.',
+  ask: 'Pinch timbers into place: build a truss across the river',
   handsOn: true,
-  solved: 'Your bridge held! Triangles carry the load.',
+  solved: 'It holds. A triangle cannot change shape unless one of its members changes length.',
   build(root, kit) {
     const bridge = new Bridge(kit.floor, BRIDGE_AT);
     root.add(bridge.group);
@@ -595,10 +596,10 @@ const shadowDragon: Puzzle = {
   id: 'shadow-dragon',
   world: 4,
   title: 'The Shadow Dragon',
-  story: 'At the top of the mountain the Shadow Dragon guards the Great Lantern, the way home.',
+  story: 'At the summit the Shadow Dragon guards the last of the Great Lantern.',
   ask: 'Choose your powers: Light or the Arsenal',
   handsOn: true,
-  solved: 'The shadow breaks into light. The Great Lantern is free, and so are you!',
+  solved: 'The shadow breaks into light. The Great Lantern burns again.',
   build(root, kit) {
     // First the choice of powers: the story's Light, or Yash's Arsenal of seven weapons.
     const choice = new PowerChoice(kit.floor);
@@ -634,7 +635,7 @@ const healingDraught: Puzzle = {
   id: 'healing-draught',
   world: 2,
   title: 'The Healing Draught',
-  story: 'The dragon’s fire burns. An old herbalist’s pot hangs in the mine: brew something to heal you.',
+  story: 'The dragon’s fire will burn. In the mine hangs an old herbalist’s pot: brew something to heal you.',
   ask: 'Drop the three herbs into the pot',
   handsOn: true,
   solved: 'Two healing draughts, steeped just right.',
@@ -692,10 +693,10 @@ const skyLantern: Puzzle = {
   id: 'sky-lantern',
   world: 3,
   title: 'The Sky Lantern',
-  story: 'The mountain path starts on a ledge no one can climb. A paper lantern could carry the Lantern Stone up, if the air inside is hot enough.',
+  story: 'The mountain path starts on a ledge no one can climb. A paper lantern could carry the shards up, if the air inside it is hot enough.',
   ask: 'Light the lantern, then shelter its flame with a cupped hand',
   handsOn: true,
-  solved: 'Hot air is lighter than cold: it rose, and the path is open!',
+  solved: 'Hot air is less dense than cold air: it rose, and the path is open.',
   build(root, kit) {
     const sky = new SkyLantern(kit.floor);
     root.add(sky.group);
@@ -719,10 +720,10 @@ const smithy: Puzzle = {
   id: 'smithy',
   world: 2,
   title: 'The Smithy',
-  story: 'Roots hard as iron bar the mine. An old smithy stands cold: forge an axe to cut through.',
-  ask: 'Light the forge with the Lantern Stone',
+  story: 'Roots as hard as iron seal the mine. The old forge is cold: you need an axe, and an axe needs steel.',
+  ask: 'Light the forge with the lantern shard',
   handsOn: true,
-  solved: 'You forged an axe: hard steel, a keen edge.',
+  solved: 'An axe: quenched hard, with a keen edge.',
   build(root, kit) {
     const forge = new Forge(kit.floor);
     root.add(forge.group);
@@ -749,10 +750,10 @@ export const DUEL: Puzzle = {
   id: 'duel',
   world: 0,
   title: 'Ink Duel',
-  story: 'Morwen, the Ink Witch of the deep woods, steps out of the screen and challenges you. Draw in the air, then throw your drawings at her!',
+  story: 'Morwen, the Ink Witch, steps out of the screen and challenges you. Draw in the air, then throw your drawings at her.',
   ask: 'Pinch and draw a shape in the air',
   handsOn: true,
-  solved: 'What a duel!',
+  solved: 'A duel well fought.',
   build(root, kit) {
     const duel = new InkDuel(root, kit.floor);
     root.add(duel.group);
@@ -785,7 +786,16 @@ export function dailyPuzzle(): Puzzle {
   return daily.puzzle;
 }
 
-/** Side games (the duel, the Daily Light) sit outside the story and never move its saved place. */
+/** The Workshop: build your own course (a fresh level each visit, with your saved design). */
+export const WORKSHOP_INDEX = 1002;
+let workshop: Puzzle | null = null;
+
+/** Rebuilds the Workshop from the saved design; called each time it is entered. */
+export function refreshWorkshop(): void {
+  workshop = runPuzzle(workshopLevel());
+}
+
+/** Side games (the duel, the Daily Light, the Workshop) sit outside the story and never move its saved place. */
 export function isSideGame(index: number): boolean {
   return index >= DUEL_INDEX;
 }
@@ -793,6 +803,10 @@ export function isSideGame(index: number): boolean {
 export function puzzleAt(index: number): Puzzle | null {
   if (index === DUEL_INDEX) return DUEL;
   if (index === DAILY_INDEX) return dailyPuzzle();
+  if (index === WORKSHOP_INDEX) {
+    if (!workshop) refreshWorkshop();
+    return workshop;
+  }
   return PUZZLES[index] ?? null;
 }
 

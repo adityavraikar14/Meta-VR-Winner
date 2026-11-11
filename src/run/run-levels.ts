@@ -49,6 +49,8 @@ export interface RunLevel {
   shards?: ShardSpec[];
   /** Where its best time is kept (default: its id). */
   bestKey?: string;
+  /** The Workshop: the star and ring markers set the start and gate; a success starts the next try. */
+  workshop?: boolean;
 }
 
 /**
