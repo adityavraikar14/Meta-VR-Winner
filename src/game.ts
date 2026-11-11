@@ -119,6 +119,8 @@ const AWAKEN_SHIVER = 0.45;
 const AWAKEN_DURATION = 1.8;
 /** Seconds the story card stays up before play starts. */
 const STORY_TIME = 4.5;
+/** Seconds with no hand seen before the banner says how to bring them back. */
+const HANDS_HINT_AFTER = 2.5;
 /** Seconds the jungle takes to grow before the title appears. */
 const GROW_TIME = 2.6;
 /** Seconds the stars card stays up after a level. */
@@ -251,6 +253,10 @@ export class ShadowGameSystem extends createSystem({
   private menuClick = -1;
   /** Enter / Space pressed this frame with no other button to take it. */
   private enterPressed = false;
+  /** The banner text the game asked for, the hands prompt shown over it, and how long hands have been gone. */
+  private wantedCaption = '';
+  private handsHint: string | null = null;
+  private handsGone = 0;
   private headAt = new Vector3();
   private shadowWorld!: ShadowWorld;
   private introLine: string | null = null;
@@ -597,6 +603,7 @@ export class ShadowGameSystem extends createSystem({
     const menuMusic = this.phase === 'title' || this.phase === 'table' || this.phase === 'growing' || this.phase === 'intro';
     setMusic(!inHeadset || stage.arena ? null : stage.music ?? (menuMusic ? 'menu' : worldMusic));
     tickMusic(dt);
+    this.watchHands(dt, inHeadset);
     switch (this.phase) {
       case 'table':
         this.updateTable(dt, pressed);
@@ -1523,7 +1530,32 @@ export class ShadowGameSystem extends createSystem({
     this.bannerTexture.needsUpdate = true;
   }
 
+  /** What the game wants the banner to say; a hands prompt may stand in for it. */
   private setCaption(text: string): void {
+    this.wantedCaption = text;
+    this.paintCaption(this.handsHint ?? text);
+  }
+
+  /**
+   * No hands seen for a moment in the headset: say how to bring them back
+   * (hand tracking drops in dim light, or with hands out of view), or, with
+   * controllers in hand, that this game is played with bare hands.
+   */
+  private watchHands(dt: number, inHeadset: boolean): void {
+    const anyHand = stage.tracked[0] || stage.tracked[1];
+    this.handsGone = inHeadset && !anyHand && !stage.arena ? this.handsGone + dt : 0;
+    let hint: string | null = null;
+    if (this.handsGone > HANDS_HINT_AFTER) {
+      const sources = this.renderer.xr.getSession()?.inputSources;
+      const controllers = !!sources && Array.from(sources).some((s) => !s.hand && !!s.gamepad);
+      hint = controllers ? '🎮 Put the controllers down: this game is played with your hands' : '✋ Hold your hands up in front of you, in good light';
+    }
+    if (hint === this.handsHint) return;
+    this.handsHint = hint;
+    this.paintCaption(hint ?? this.wantedCaption);
+  }
+
+  private paintCaption(text: string): void {
     if (text === this.caption) return;
     this.caption = text;
     const canvas = this.captionCanvas;
