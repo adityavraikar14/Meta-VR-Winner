@@ -43,3 +43,7 @@ pids/
 .cursor/mcp.json
 .vscode/mcp.json
 .codex/config.toml
+
+# Local previews (not shipped)
+char-preview.html
+public/gltf/cast-preview/

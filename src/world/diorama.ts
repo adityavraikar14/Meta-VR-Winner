@@ -1,3 +1,4 @@
+import { Mentor } from '../creatures/mentor.js';
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
@@ -47,6 +48,8 @@ export class Diorama {
   private attempting = false;
   /** World-space footprints of the current puzzle's props. */
   blockers: Array<{ center: Vector3; radius: number }> = [];
+  /** Ada, the Lantern's engineer, standing on the table. */
+  private mentor!: Mentor;
   private readonly kit: Kit;
 
   constructor(
@@ -57,6 +60,7 @@ export class Diorama {
     this.decor.name = 'WorldScenery';
     this.props.name = 'PuzzleProps';
     this.screen.name = 'ScreenFrame';
+    this.mentor = new Mentor(stageRoot);
     this.room.name = 'RoomJungle';
     stageRoot.add(this.decor, this.props);
     stage.paper!.add(this.screen, this.room);
@@ -149,6 +153,7 @@ export class Diorama {
       playUnfold();
     }
     mergeStatic(this.props);
+    this.placeMentor();
     // Resources to gather, around the edges of the story's levels.
     this.pickups = null;
     if (puzzle && puzzle.id !== 'duel') {
@@ -160,6 +165,18 @@ export class Diorama {
       this.pickups = new Pickups(world, this.floor, blocked);
       this.props.add(this.pickups.group);
     }
+  }
+
+  /** Ada stands beside the screen, in the first spot clear of this level's machines. */
+  private placeMentor(): void {
+    const spots: Array<[number, number]> = [[-0.47, -0.3], [0.47, -0.3], [-0.5, 0.0], [0.5, 0.0], [-0.44, 0.16], [0.44, 0.16]];
+    const at = new Vector3();
+    const free = spots.find(([x, z]) => {
+      this.stageRoot.localToWorld(at.set(x, this.floor, z));
+      return !this.blockers.some((b) => b.center.distanceTo(at) < b.radius + 0.07);
+    });
+    const [x, z] = free ?? spots[0];
+    this.mentor.place(x, this.floor, z);
   }
 
   private decorate(world: number): void {
@@ -210,6 +227,12 @@ export class Diorama {
   }
 
   update(dt: number, hands: readonly HandState[], head: Vector3): void {
+    // Ada, the mentor: on the table with the world, out of the Arena; she answers the game's cues.
+    this.mentor.update(dt, !stage.arena && !stage.sceneryHidden && !this.previewing && this.growTime >= 1.2);
+    if (stage.cue) {
+      this.mentor.cue(stage.cue);
+      stage.cue = null;
+    }
     if (this.growTime < 4) {
       this.growTime += dt;
       this.applyGrowth();

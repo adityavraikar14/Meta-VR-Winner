@@ -364,6 +364,7 @@ export class MainMenu {
 const CREDITS: Array<[string, string]> = [
   ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
+  ['Characters', 'Ada, the Lantern’s engineer: Animated Woman by Quaternius (CC0), via poly.pizza'],
   ['Animal sounds', 'Horse neigh: Hü, Wikimedia Commons (public domain) · Horse whinny: Briefer, Maigrot, Mandel, Freymond, Bachmann & Hillmann 2015, Scientific Reports (CC BY 4.0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
   ['The World', 'Plants, rocks, textures and the daylight sky: Poly Haven (CC0) · Leaves: ambientCG (CC0)'],

@@ -67,6 +67,8 @@ export const stage = {
   startAt: null as number | null,
   /** The start page's Arsenal button: straight into the Arena once the headset view is up. */
   startArena: false,
+  /** A reaction for Ada, the mentor on the table (consumed once): wave, point, oops, cheer. */
+  cue: null as 'wave' | 'point' | 'oops' | 'cheer' | null,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
   grow: null as { from: Vector3 | null } | null,
 };

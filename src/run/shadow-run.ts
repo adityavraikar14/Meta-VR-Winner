@@ -353,6 +353,7 @@ export class ShadowRun {
         this.burst(x, y, 10, 0.5);
       } else if (event.type === 'lost') {
         this.lostTime = 0;
+        stage.cue = 'oops';
         playHiss(0.03, 0.35);
       } else if (event.type === 'won') {
         this.wonTime = 0;

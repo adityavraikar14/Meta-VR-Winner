@@ -789,6 +789,7 @@ export class ShadowGameSystem extends createSystem({
     this.menu.open('home');
     this.setCaption(this.fresh ? 'Welcome! Push Play to begin' : 'Welcome back!');
     this.setPhase('title');
+    stage.cue = 'wave';
   }
 
   /** Yash's Arena takes over: the paper and the stage step aside until the wrist menu's Menu. */
@@ -970,6 +971,7 @@ export class ShadowGameSystem extends createSystem({
     }
     this.bannerShown = true;
     this.setPhase('story');
+    stage.cue = 'wave';
     playPrompt();
   }
 
@@ -1006,6 +1008,7 @@ export class ShadowGameSystem extends createSystem({
   }
 
   private beginMatching(): void {
+    stage.cue = 'point';
     this.bannerShown = false;
     this.holdTime = 0;
     this.struggleTime = 0;
@@ -1281,6 +1284,7 @@ export class ShadowGameSystem extends createSystem({
     this.bannerShown = true;
     this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');
     this.setPhase('cleared');
+    stage.cue = 'cheer';
   }
 
   // --------------------------------------------------------------- Judging
