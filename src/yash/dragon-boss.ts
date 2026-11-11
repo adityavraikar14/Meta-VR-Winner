@@ -186,7 +186,7 @@ export class DragonBoss implements Boss {
     this.model.flinch();
     this.bursts.spawn(at, 0xffffff, 0.3);
     sfx.hit();
-    sfx.dragonGrunt();
+    sfx.dragonHurt();
     if (this.hp === 0) {
       this.mood = 'defeated';
       this.timer = DEFEAT_TIME + VICTORY_TIME;

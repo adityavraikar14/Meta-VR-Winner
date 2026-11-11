@@ -52,7 +52,25 @@ export class PanelSystem extends createSystem({}) {
       sfx.unlock();
       this.world.launchXR();
     };
-    button.addEventListener('click', launch);
+    // The Judge's Demo: a short cut of the story. Opened from the Arsenal's
+    // start page (?demo=1) it is this page's main button.
+    const demoButton = document.getElementById('sp-demo') as HTMLButtonElement | null;
+    const launchDemo = () => {
+      stage.startDemo = true;
+      launch();
+    };
+    if (new URLSearchParams(location.search).get('demo') === '1') {
+      button.textContent = '🏆 Start the Judge’s Demo';
+      button.addEventListener('click', launchDemo);
+      if (demoButton) demoButton.hidden = true;
+      if (note) note.textContent = 'Seven levels, about 8 minutes. Hands only, played seated.';
+    } else {
+      button.addEventListener('click', launch);
+      if (demoButton) {
+        demoButton.disabled = false;
+        demoButton.addEventListener('click', launchDemo);
+      }
+    }
     if (list) {
       this.fillLevels(list, (index) => {
         stage.startAt = index;
@@ -61,6 +79,8 @@ export class PanelSystem extends createSystem({}) {
     }
     this.cleanupFuncs.push(
       () => button.removeEventListener('click', launch),
+      () => button.removeEventListener('click', launchDemo),
+      () => demoButton?.removeEventListener('click', launchDemo),
       this.world.visibilityState.subscribe((state) => {
         if (state === VisibilityState.NonImmersive) splash.removeAttribute('data-hidden');
         else splash.setAttribute('data-hidden', '');

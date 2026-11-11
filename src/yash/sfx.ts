@@ -269,8 +269,8 @@ export const sfx = {
     if (!playClip(clip, { loudness: 0.09, rate: 0.97 + Math.random() * 0.06, delay })) sfx.witchLaugh(0.5);
   },
   /** Morwen right in front of the player: a long, maniacal cackle, deeper and louder. */
-  witchCloseLaugh(): void {
-    if (!playClip('close', { loudness: 0.17, rate: 0.9, maxSeconds: 5 })) sfx.witchLaugh(1);
+  witchCloseLaugh(delay = 0): void {
+    if (!playClip('close', { loudness: 0.17, rate: 0.9, maxSeconds: 5, delay })) sfx.witchLaugh(1);
   },
   /** Morwen rising inside her ward: a ghostly cackle with an echo, deeper and louder. */
   witchWardLaugh(): void {
@@ -374,10 +374,21 @@ export const sfx = {
     voice({ type: 'sawtooth', from: 150, to: 95, seconds: 0.55, gain: 0.16, lowpass: 800, growl: [34, 0.65], attack: 0.04, release: 0.25 });
     noise(0.5, 0.18, 700, 300);
   },
-  /** Struck: a grunt. */
-  dragonGrunt(): void {
-    if (quiet('dragon-grunt', 0.45)) return;
-    voice({ type: 'sawtooth', from: 120, to: 70, seconds: 0.28, gain: 0.15, lowpass: 600, growl: [40, 0.5], attack: 0.02, release: 0.15 });
+  /**
+   * Struck: a pained, snarling yelp. Pitched well above the roars so a
+   * headset's small speakers carry it, with a low growl under it for weight.
+   */
+  dragonHurt(): void {
+    if (quiet('dragon-hurt', 0.35)) return;
+    voice({ type: 'sawtooth', from: 420, to: 190, seconds: 0.42, gain: 0.14, formants: [[700, 4, 1.2], [1300, 6, 0.6]], growl: [38, 0.5], attack: 0.015, release: 0.2 });
+    voice({ type: 'sawtooth', from: 130, to: 80, seconds: 0.35, gain: 0.12, lowpass: 900, growl: [40, 0.5], attack: 0.02, release: 0.15 });
+    noise(0.3, 0.16, 1500, 600);
+  },
+  /** Morwen struck: a sharp, hoarse "ah!" falling away. */
+  witchHurt(): void {
+    if (quiet('witch-hurt', 0.35)) return;
+    voice({ type: 'sawtooth', from: 760, to: 430, seconds: 0.32, gain: 0.12, formants: AH, vibrato: [11, 18], attack: 0.01, release: 0.14 });
+    noise(0.18, 0.09, 2600, 1500);
   },
   /** Beaten: a long, failing roar. */
   dragonDeath(): void {

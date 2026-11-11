@@ -43,6 +43,16 @@ const PLAYER_HEALTH = 5;
  * half that on the body): a fight of a minute or so.
  */
 const DRAGON_HEALTH = 30;
+/** The Judge's Demo's shorter fight. */
+const DEMO_DRAGON_HEALTH = 18;
+/** In the demo you come carrying this many Iron Wards (not from your bag: the demo saves nothing). */
+const DEMO_WARDS = 2;
+/** Breaking the spell: the hint comes back after this long, and the spell gives way by itself after this. */
+const SPELL_HINT = 20;
+const SPELL_GIVES = 45;
+/** Seconds of gold before the freed guardian flies off, and of flight before the level clears. */
+const FREED_GLOW = 2.6;
+const FREED_FLY = 3;
 const FIRE_SPEED = 0.75;
 const HEAD_RADIUS = 0.16;
 const BREATH_TIME = 1.2;
@@ -57,7 +67,8 @@ const SHARD_MIN = 3;
 const FIRE_RADIUS = 0.03;
 const UP_AXIS = new Vector3(0, 1, 0);
 
-type Mode = 'intro' | 'fight' | 'lost' | 'won';
+/** In the Judge's Demo the dragon isn't destroyed: beaten, it is `subdued`, then `freed` from Morwen's spell. */
+type Mode = 'intro' | 'fight' | 'lost' | 'won' | 'subdued' | 'freed';
 
 interface Fireball {
   sprite: Sprite;
@@ -77,9 +88,12 @@ export class DragonBattle {
   private modeTime = 0;
   private time = 0;
   private health = PLAYER_HEALTH;
+  /** The dragon's full strength: shorter in the Judge's Demo. */
+  private readonly maxHealth = stage.demo ? DEMO_DRAGON_HEALTH : DRAGON_HEALTH;
+  private demoWards = stage.demo ? DEMO_WARDS : 0;
   /** How the fight went, for the Inventor's Journal. */
   private readonly tally = { hits: 0, weak: 0, cut: 0, blocked: 0, bites: 0 };
-  private dragonHealth = DRAGON_HEALTH;
+  private dragonHealth = this.maxHealth;
   private readonly paper = new Group();
   private readonly dragon = new ShadowDragon();
   /** The 3D dragon, once its model has loaded; until then the shadow puppet stands in. */
@@ -139,7 +153,8 @@ export class DragonBattle {
       weakPoints: () => this.weakPoints(),
       bodyRadius: () => this.dragon3d?.radius ?? 0.12,
       get fighting() {
-        return battle.mode === 'fight';
+        // Beaten and spellbound, it can still be struck: the blow that breaks the spell.
+        return battle.mode === 'fight' || battle.mode === 'subdued';
       },
       hit: (amount, at, weak) => this.struck(amount, at, weak),
       fire: () => this.fireballs,
@@ -183,8 +198,9 @@ export class DragonBattle {
     this.forward.normalize();
 
     // Behind the menu or the story card the dragon only breathes and waits.
-    this.hud.visible = stage.playing || this.mode === 'won';
-    stage.music = this.mode === 'won' ? 'victory' : stage.playing ? 'battle' : null;
+    const ending = this.mode === 'won' || this.mode === 'freed';
+    this.hud.visible = stage.playing || stage.paused || ending;
+    stage.music = ending ? 'victory' : stage.playing ? 'battle' : null;
     if (!this.dragon3d) {
       this.dragon3d = Dragon3D.create();
       if (this.dragon3d) {
@@ -192,7 +208,8 @@ export class DragonBattle {
         this.group.add(this.dragon3d.root);
       }
     }
-    const shown = stage.playing || this.mode === 'won';
+    // Paused, the fight stays in view, frozen.
+    const shown = stage.playing || stage.paused || ending;
     // The flat puppet only stands in if the 3D dragon never arrives (a very slow connection).
     this.dragon.root.visible = shown && !this.dragon3d && this.time > PUPPET_AFTER;
     this.player.root.visible = shown;
@@ -200,7 +217,7 @@ export class DragonBattle {
       this.dragon3d.root.visible = shown;
       this.dragon3d.update(dt, this.head);
     }
-    if (!stage.playing && this.mode !== 'won') {
+    if (!stage.playing && !ending) {
       // The intro (and its roar) waits for the story card to close.
       if (this.mode === 'intro') this.modeTime = 0;
       this.dragon.update(dt);
@@ -248,6 +265,34 @@ export class DragonBattle {
         if (Math.random() < dt * 30) this.burstOnPaper(this.v.set((Math.random() - 0.5) * 0.7, (Math.random() - 0.4) * 0.5, 0.01), 4, 0xfff2c0);
         if (this.modeTime > 3.4) this.done = true;
         break;
+      case 'subdued':
+        // Beaten, it sinks, tired, still under the spell: a ball of light into its heart breaks it.
+        if (this.dragon3d) this.dragon3d.subdued = Math.min(1, this.modeTime / 1.5);
+        this.caption = this.noteTime > 0
+          ? this.note
+          : this.modeTime < SPELL_HINT
+            ? 'It’s beaten, but Morwen’s spell still holds it. Throw a power ball 🫴 into its glowing heart!'
+            : 'Hold an invisible ball to arm, turn your palm up 🫴, then throw the ball at its heart';
+        if (this.modeTime > SPELL_GIVES) this.breakSpell(this.weakPoints()[1]);
+        break;
+      case 'freed': {
+        const dragon = this.dragon3d;
+        if (dragon) {
+          dragon.freed = Math.min(1, this.modeTime / 1.4);
+          // Free, it rises and flies off to mend the Great Lantern.
+          const fly = Math.max(0, this.modeTime - FREED_GLOW) / FREED_FLY;
+          dragon.root.position.copy(this.dragonHome);
+          dragon.root.position.y += fly * fly * 0.9;
+          dragon.root.position.addScaledVector(this.forward, fly * 0.6);
+          dragon.root.scale.setScalar(Math.max(0.01, 1 - fly * 0.7));
+        }
+        this.caption = this.modeTime < FREED_GLOW
+          ? 'The spell breaks! The guardian remembers who it is.'
+          : 'Free, it flies off to mend the Great Lantern.';
+        if (Math.random() < dt * 20) this.burstAt(this.weakPoints()[1], 3, 0xffd070);
+        if (this.modeTime > FREED_GLOW + FREED_FLY) this.done = true;
+        break;
+      }
     }
     this.player.update(dt, this.time, this.head, this.forward, this.group);
     this.flyFire(dt);
@@ -300,7 +345,7 @@ export class DragonBattle {
 
   private restart(): void {
     this.health = PLAYER_HEALTH;
-    this.dragonHealth = DRAGON_HEALTH;
+    this.dragonHealth = this.maxHealth;
     for (const f of this.fireballs) this.group.remove(f.sprite);
     this.fireballs.length = 0;
     this.player.reset();
@@ -323,6 +368,11 @@ export class DragonBattle {
 
   /** A blow from the Arsenal. */
   private struck(amount: number, at: Vector3, weak: boolean): void {
+    if (this.mode === 'subdued') {
+      // Any blow that reaches it now is the light that breaks the spell (once it has sunk).
+      if (this.modeTime > 1) this.breakSpell(at);
+      return;
+    }
     if (this.mode !== 'fight') return;
     this.tally.hits++;
     if (weak) this.tally.weak++;
@@ -341,7 +391,11 @@ export class DragonBattle {
     this.dragon.flinch();
     this.dragon3d?.flinch();
     playBoom(0.06 + 0.01 * damage);
-    sfx.dragonGrunt();
+    sfx.dragonHurt();
+    if (this.dragonHealth <= 0.01 && stage.demo) {
+      this.subdue();
+      return;
+    }
     if (this.dragonHealth <= 0.01) {
       this.setMode('won');
       sfx.dragonDeath();
@@ -350,7 +404,7 @@ export class DragonBattle {
       this.fireballs.length = 0;
       return;
     }
-    const enraged = this.dragonHealth <= DRAGON_HEALTH / 2 && before > DRAGON_HEALTH / 2;
+    const enraged = this.dragonHealth <= this.maxHealth / 2 && before > this.maxHealth / 2;
     if (enraged) {
       sfx.dragonRoar(1);
       this.flash('The dragon is enraged! Twin fireballs: keep your shield or wall up', 2.4);
@@ -358,6 +412,34 @@ export class DragonBattle {
       this.flash(weak ? 'A direct hit! The dragon reels' : 'It stings! Hit the head or heart for more', 1);
     }
     // No faster breath per blow: the Arsenal lands many small ones. It angers past half instead.
+  }
+
+  /** The Judge's Demo: beaten, not destroyed. Its fire goes out and it waits, spellbound. */
+  private subdue(): void {
+    this.setMode('subdued');
+    this.dragonHealth = 0;
+    sfx.dragonRoar(0.6);
+    this.player.reset();
+    for (const f of this.fireballs) this.group.remove(f.sprite);
+    this.fireballs.length = 0;
+    this.diveTime = 0;
+    this.breathTime = 0;
+    this.dragon.windup = 0;
+    if (this.dragon3d) {
+      this.dragon3d.windup = 0;
+      this.dragon3d.root.position.copy(this.dragonHome);
+    }
+  }
+
+  /** Light reaches its heart: Morwen's spell breaks, and the guardian is itself again. */
+  private breakSpell(at: Vector3): void {
+    if (this.mode !== 'subdued') return;
+    this.setMode('freed');
+    this.player.reset();
+    sfx.success();
+    playCharge();
+    this.burstAt(at, 50, 0xffe090);
+    this.burstAt(this.weakPoints()[1], 40, 0xfff2c0);
   }
 
   // =========================================================== Dragon fire
@@ -388,7 +470,7 @@ export class DragonBattle {
       this.breathTime = 0.001;
       sfx.dragonSnarl();
       // Angrier as it weakens.
-      this.nextBreath = this.dragonHealth > DRAGON_HEALTH / 2 ? 4.2 + Math.random() : 2.8 + Math.random();
+      this.nextBreath = this.dragonHealth > this.maxHealth / 2 ? 4.2 + Math.random() : 2.8 + Math.random();
     }
   }
 
@@ -437,7 +519,7 @@ export class DragonBattle {
     vel.y -= 0.03;
     vel.setLength(FIRE_SPEED);
     // Wounded past half, it breathes twin fireballs, a little apart and faster.
-    if (this.dragonHealth <= DRAGON_HEALTH / 2 && !this.twin) {
+    if (this.dragonHealth <= this.maxHealth / 2 && !this.twin) {
       this.twin = true;
       this.launch(pos.clone(), vel.clone().applyAxisAngle(UP_AXIS, 0.12).multiplyScalar(1.12));
       vel.applyAxisAngle(UP_AXIS, -0.12).multiplyScalar(1.12);
@@ -520,7 +602,8 @@ export class DragonBattle {
   }
 
   private hurtPlayer(at: Vector3): void {
-    if (useItem('ward')) {
+    if (this.demoWards > 0 || useItem('ward')) {
+      this.demoWards = Math.max(0, this.demoWards - 1);
       // The Iron Ward from your bag takes the blow.
       playClang(0.3, 0.06);
       this.burstAt(at, 26, 0xc8d0dc);
@@ -592,7 +675,7 @@ export class DragonBattle {
       (heart.material as MeshBasicMaterial).opacity = alive ? 0.95 : 0.18;
       heart.scale.setScalar(alive ? 1 + 0.08 * Math.sin(this.time * 4 + i) : 0.9);
     });
-    const k = Math.max(0, this.dragonHealth / DRAGON_HEALTH);
+    const k = Math.max(0, this.dragonHealth / this.maxHealth);
     this.bar.scale.x += (Math.max(0.001, k) - this.bar.scale.x) * Math.min(1, dt * 6);
   }
 }

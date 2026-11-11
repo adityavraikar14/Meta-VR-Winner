@@ -14,6 +14,7 @@ import {
   Raycaster,
   Shape,
   ShapeGeometry,
+  SphereGeometry,
   SRGBColorSpace,
   TubeGeometry,
   Vector3,
@@ -24,7 +25,7 @@ import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
 import { stage } from '../stage-state.js';
-import { ribbon, silhouette } from './dragon.js';
+import { ribbon, ShadowDragon, silhouette } from './dragon.js';
 import { NamePlate, preloadWitch, Witch3D, WITCH_HEIGHT, witchLoad } from './witch3d.js';
 
 /**
@@ -60,6 +61,21 @@ const WALK_TIME = 2.6;
 const READY_TIME = WALK_TIME + 1.6;
 /** The flat puppet stands in only if the 3D witch never arrives. */
 const FLAT_AFTER = 20;
+/**
+ * The Judge's Demo: once Morwen is down to this much health, or the fight
+ * has gone on this long, the freed guardian swoops onto the screen and
+ * breathes fire at her every few seconds, each blast doing this much and
+ * breaking her ward.
+ */
+const HELPER_AT = 60;
+const HELPER_AFTER = 15;
+const HELPER_DAMAGE = 22;
+const HELPER_EVERY = 8;
+/** Where the guardian's shadow perches on the screen (paper space), and how big. */
+const HELPER_SPOT = new Vector3(0.3, 0.08, 0.006);
+const HELPER_SCALE = 0.6;
+/** Seconds its fire takes to reach her. */
+const HELPER_FLIGHT = 0.7;
 
 type Mode = 'ready' | 'fight' | 'won' | 'lost';
 type InkState = 'drawing' | 'hanging' | 'held' | 'flying' | 'gone';
@@ -134,6 +150,11 @@ export class InkDuel {
   private readonly witchFrom = new Vector3();
   private readonly witchSpot = new Vector3();
   private emerged = false;
+  /** The Judge's Demo: the freed guardian, come to help, and its fire on the way. */
+  private helper: ShadowDragon | null = null;
+  private helperTime = 0;
+  private helperNext = 0;
+  private helperFire: { mesh: Mesh; from: Vector3; age: number } | null = null;
   /** How the duel went, for the Inventor's Journal. */
   private readonly tally = { hits: 0, heads: 0, blocked: 0, best: { energy: 0, mass: 0, speed: 0 } };
   private readonly head = new Vector3();
@@ -220,11 +241,13 @@ export class InkDuel {
       else if (this.time > FLAT_AFTER) this.flat = true;
     }
     const live = stage.playing || this.mode === 'won' || this.mode === 'lost';
-    this.paper.visible = live;
+    // Paused, the duel stays in view, frozen.
+    const shown = live || stage.paused;
+    this.paper.visible = shown;
     this.rival.root.visible = this.flat;
     this.frame.visible = this.bar.visible = this.flat;
-    if (this.witch) this.witch.root.visible = live && this.witch.melt < 1;
-    this.plate.mesh.visible = live && this.witch !== null && this.mode !== 'won' && this.emerged;
+    if (this.witch) this.witch.root.visible = shown && this.witch.melt < 1;
+    this.plate.mesh.visible = shown && this.witch !== null && this.mode !== 'won' && this.emerged;
     if (!live) {
       // Behind the menu or the story card: the fight starts when play does.
       if (this.mode === 'ready') this.modeTime = 0;
@@ -255,6 +278,8 @@ export class InkDuel {
         this.grab(hands);
         this.rivalTurn(dt);
         this.say();
+        if (stage.demo && !this.helper && (this.rivalHealth <= HELPER_AT || this.modeTime > HELPER_AFTER)) this.summonHelper();
+        this.updateHelper(dt);
         break;
       case 'won':
         this.caption = this.witch ? 'You win the duel! Morwen melts back into ink.' : 'You win the duel! Your ink flew true.';
@@ -272,6 +297,12 @@ export class InkDuel {
         if (this.modeTime > (this.witch ? 4 : 3.5)) this.done = true;
         break;
       case 'lost':
+        if (stage.demo) {
+          // The demo never ends on a loss: straight into another round.
+          this.caption = 'Splat! Morwen wins this round. Again!';
+          if (this.modeTime > 3.5) this.rematch();
+          break;
+        }
         this.caption = this.witch ? 'Splat! Morwen wins this one. Rematch from the menu!' : 'Splat! The Rival wins this one. Rematch from the menu!';
         if (this.modeTime > 3.5) this.done = true;
         break;
@@ -597,10 +628,11 @@ export class InkDuel {
     witch.flinch();
     this.splashAt(ink.pos, 0x4aa8ff);
     playBoom(0.06 + damage * 0.002);
-    // Wounded at last: her long, maniacal cackle, once.
+    if (this.rivalHealth > 0) sfx.witchHurt();
+    // Wounded at last: her long, maniacal cackle, once, after the cry of pain.
     if (!this.laughedHurt && this.rivalHealth > 0 && this.rivalHealth < RIVAL_HEALTH * 0.7) {
       this.laughedHurt = true;
-      sfx.witchCloseLaugh();
+      sfx.witchCloseLaugh(0.4);
     }
     this.showScore(ink.pos, damage, energy, ink.mass, speed, onHead);
     if (this.rivalHealth <= 0) this.end(true);
@@ -662,6 +694,101 @@ export class InkDuel {
       if (won) sfx.witchShriek();
       else sfx.witchCloseLaugh();
     }
+  }
+
+  // ======================================================= The guardian
+
+  /** The Judge's Demo: the freed Shadow Dragon swoops onto the screen to help. */
+  private summonHelper(): void {
+    const helper = new ShadowDragon();
+    helper.root.scale.setScalar(HELPER_SCALE);
+    helper.root.position.copy(HELPER_SPOT).setX(0.85);
+    this.paper.add(helper.root);
+    this.helper = helper;
+    this.helperTime = 0;
+    this.helperNext = 2;
+    sfx.dragonRoar(0.8);
+    this.flash('The guardian has come to help you!', 2.6);
+  }
+
+  /** It flies in, then every few seconds draws breath and blasts Morwen. */
+  private updateHelper(dt: number): void {
+    const helper = this.helper;
+    if (!helper) return;
+    this.helperTime += dt;
+    const k = Math.min(1, this.helperTime / 1.2);
+    helper.root.position.x = 0.85 + (HELPER_SPOT.x - 0.85) * k * (2 - k);
+    helper.root.position.y = HELPER_SPOT.y + Math.sin(this.helperTime * 1.6) * 0.012;
+    this.helperNext -= dt;
+    helper.windup = this.helperFire ? 0 : Math.min(1, Math.max(0, 1 - this.helperNext / 1.1));
+    if (this.helperNext <= 0 && !this.helperFire) {
+      this.helperNext = HELPER_EVERY;
+      const from = this.group.worldToLocal(this.paper.localToWorld(helper.mouthAt(new Vector3())));
+      const mesh = new Mesh(new SphereGeometry(0.02, 12, 8), new MeshBasicMaterial({ color: 0xffb050 }));
+      mesh.position.copy(from);
+      this.group.add(mesh);
+      this.helperFire = { mesh, from, age: 0 };
+      sfx.fireball();
+    }
+    helper.update(dt);
+    const fire = this.helperFire;
+    if (!fire) return;
+    fire.age += dt;
+    const target = this.rivalTarget(this.w);
+    const t = Math.min(1, fire.age / HELPER_FLIGHT);
+    fire.mesh.position.lerpVectors(fire.from, target, t);
+    fire.mesh.position.y += Math.sin(t * Math.PI) * 0.06;
+    fire.mesh.scale.setScalar(1 + 0.25 * Math.sin(fire.age * 30));
+    this.sparks.emit(fire.mesh.position, this.v.set((Math.random() - 0.5) * 0.06, 0.04, (Math.random() - 0.5) * 0.06), { life: 0.35, size: [0.014, 0.002], from: 0xffc060 });
+    if (t < 1) return;
+    this.group.remove(fire.mesh);
+    fire.mesh.geometry.dispose();
+    this.helperFire = null;
+    this.helperBlast(fire.mesh.position);
+  }
+
+  /** The guardian's fire lands: it burns through her ward and hurts her. */
+  private helperBlast(at: Vector3): void {
+    if (this.mode !== 'fight') return;
+    const ward = this.witch?.warded ?? false;
+    // Breaking off her spell drops the ward.
+    if (this.witch && ward) this.witch.play('idle');
+    this.rivalHealth -= HELPER_DAMAGE;
+    if (this.witch) this.witch.flinch();
+    else this.rival.flinch();
+    for (let i = 0; i < 30; i++) {
+      this.v.set(Math.random() - 0.5, Math.random() - 0.2, Math.random() - 0.5).normalize().multiplyScalar(0.2 + Math.random() * 0.4);
+      this.sparks.emit(at, this.v, { life: 0.5, size: [0.016, 0.002], from: 0xffd070 });
+    }
+    playBoom(0.12);
+    if (this.rivalHealth > 0) sfx.witchHurt();
+    this.flash(ward ? 'The guardian’s fire burns through her ward!' : 'The guardian’s fire strikes Morwen!', 1.8);
+    if (this.rivalHealth <= 0) this.end(true);
+  }
+
+  /** Where to aim at Morwen (or the Rival puppet), in this group's space. */
+  private rivalTarget(out: Vector3): Vector3 {
+    if (this.witch) return this.witch.chestAt(out);
+    return this.group.worldToLocal(this.paper.localToWorld(this.rival.bodyAt(out)));
+  }
+
+  /** The Judge's Demo: after a loss, a fresh round (the guardian comes again at the same point). */
+  private rematch(): void {
+    for (const ink of [...this.inks]) this.remove(ink);
+    this.hearts = PLAYER_HEARTS;
+    this.rivalHealth = RIVAL_HEALTH;
+    this.laughedHurt = false;
+    this.nextRival = 3;
+    if (this.helper) {
+      this.paper.remove(this.helper.root);
+      this.helper = null;
+    }
+    if (this.helperFire) {
+      this.group.remove(this.helperFire.mesh);
+      this.helperFire = null;
+    }
+    this.witch?.play('idle');
+    this.setMode('fight');
   }
 
   // ================================================================= Rival

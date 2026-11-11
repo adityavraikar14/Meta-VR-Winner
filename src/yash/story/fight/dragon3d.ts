@@ -35,6 +35,8 @@ const PHOENIX_URL = 'gltf/phoenix.glb';
 /** Overall length of the dragon in the room, metres. */
 const LENGTH = 0.78;
 const PHOENIX_LENGTH = 0.32;
+/** The freed guardian's glow. */
+const GOLD = new Color(0xffc860);
 
 /** Loads the dragon, then the phoenix, one at a time, retrying a slow or failed load. */
 let loading: Promise<void> | null = null;
@@ -185,6 +187,8 @@ export class Dragon3D {
   private readonly mouth: Object3D | null;
   private readonly chest: Object3D | null;
   private readonly heart: Sprite;
+  /** The ember once the spell is broken: warm gold instead of angry red. */
+  private readonly goldHeart: Sprite;
   private readonly breath: Sprite;
   private readonly materials: Array<{ material: MeshStandardMaterial; emissive: Color }> = [];
   private time = 0;
@@ -245,6 +249,11 @@ export class Dragon3D {
     (this.heart.material as SpriteMaterial).depthTest = false;
     this.heart.renderOrder = 9;
     this.root.add(this.heart);
+    this.goldHeart = glowSprite('rgba(255,252,225,1)', 'rgba(255,200,70,0.8)');
+    (this.goldHeart.material as SpriteMaterial).depthTest = false;
+    this.goldHeart.renderOrder = 9;
+    this.goldHeart.visible = false;
+    this.root.add(this.goldHeart);
     this.breath = glowSprite('rgba(255,250,210,1)', 'rgba(255,120,30,0.8)');
     this.root.add(this.breath);
   }
@@ -278,26 +287,37 @@ export class Dragon3D {
     this.hurt = 0.7;
   }
 
+  /** 0 → 1 as it is beaten but not destroyed (the Judge's Demo): it sinks, tired, still spellbound. */
+  subdued = 0;
+  /** 0 → 1 as Morwen's spell breaks: its hide and ember warm to gold. */
+  freed = 0;
+
   /** `face` is where to turn towards (the player's head), in the parent's space. */
   update(dt: number, face: Vector3): void {
     this.time += dt;
     this.hurt = Math.max(0, this.hurt - dt);
     const h = this.hurt / 0.7;
-    this.mixer.update(dt * (1 + this.windup * 0.4));
+    const tired = this.subdued * (1 - this.freed);
+    this.mixer.update(dt * (1 + this.windup * 0.4) * (1 - 0.55 * tired));
 
     // Turn to face you, gently; recoil backwards and up when struck.
     const want = Math.atan2(face.x - this.root.position.x, face.z - this.root.position.z);
     let delta = want - this.root.rotation.y;
     delta = Math.atan2(Math.sin(delta), Math.cos(delta));
     this.root.rotation.y += delta * Math.min(1, dt * 2);
-    this.body.position.set(0, Math.sin(this.time * 1.7) * 0.025 + h * 0.03 + this.defeat * 0.25, -h * 0.06);
-    this.body.rotation.x = -h * 0.25;
+    this.body.position.set(0, Math.sin(this.time * 1.7) * 0.025 + h * 0.03 + this.defeat * 0.25 - tired * 0.07, -h * 0.06);
+    this.body.rotation.x = -h * 0.25 + tired * 0.18;
 
     // Struck: the hide flashes hot. Beaten: it burns away to light.
     const flash = Math.max(h, this.defeat);
     for (const { material, emissive } of this.materials) {
       material.emissive.copy(emissive).lerp(new Color(this.defeat > 0 ? 0xffd38a : 0xff3010), flash);
       material.emissiveIntensity = 1 + flash * 1.5;
+      // Freed from the spell: a warm, golden glow.
+      if (this.freed > 0) {
+        material.emissive.lerp(GOLD, this.freed * 0.6);
+        material.emissiveIntensity += this.freed;
+      }
       if (this.defeat > 0) {
         material.transparent = true;
         material.opacity = 1 - this.defeat;
@@ -308,8 +328,12 @@ export class Dragon3D {
     this.heartAt(this.tmp);
     this.heart.position.copy(this.root.worldToLocal(this.root.parent!.localToWorld(this.tmp)));
     const pulse = 0.75 + 0.25 * Math.sin(this.time * 3.1);
-    (this.heart.material as SpriteMaterial).opacity = (pulse + h) * (1 - this.defeat);
+    (this.heart.material as SpriteMaterial).opacity = (pulse + h) * (1 - this.defeat) * (1 - this.freed);
     this.heart.scale.setScalar(0.1 + 0.06 * h + 0.04 * this.windup);
+    this.goldHeart.position.copy(this.heart.position);
+    this.goldHeart.visible = this.freed > 0;
+    (this.goldHeart.material as SpriteMaterial).opacity = this.freed * pulse;
+    this.goldHeart.scale.setScalar(0.12 + 0.06 * this.freed);
 
     this.mouthAt(this.tmp);
     this.breath.position.copy(this.root.worldToLocal(this.root.parent!.localToWorld(this.tmp)));

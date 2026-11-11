@@ -33,9 +33,7 @@ const MAX_DROP = 4;
 const HOP_UP = 3.4;
 const SUBSTEPS = 3;
 
-/** Pinch hysteresis (thumb-to-index tip distance, metres) and release debounce. */
-const PINCH_START = 0.02;
-const PINCH_END = 0.035;
+/** The pen lifts once it has been up this long (a debounce for flickering tracking). */
 const RELEASE_DELAY = 0.075;
 /** A new point every this many metres of hand travel. */
 const INK_SPACING = 0.006;
@@ -202,22 +200,21 @@ export class ShadowWorld {
   }
 
   /**
-   * Feeds one hand's pinch: `gap` is the thumb-to-index tip distance and
-   * `point` the pinch in paper space. A pinch pulls a thread of shadow ink
-   * through the air; its shadow on the paper is solid ground.
+   * Feeds one hand's pen: `down` while the hand draws, `point` the pen tip in
+   * paper space. The pen pulls a thread of shadow ink through the air; its
+   * shadow on the paper is solid ground.
    */
-  drawInput(hand: number, tracked: boolean, gap: number, point: Vector3, dt: number): void {
+  drawInput(hand: number, down: boolean, point: Vector3, dt: number): void {
     const level = this.level;
     if (!level?.ink) return;
     let stroke = this.drawing[hand];
-    if (!tracked || gap > PINCH_END) {
+    if (!down) {
       this.releaseTime[hand] += dt;
       if (stroke && this.releaseTime[hand] >= RELEASE_DELAY) this.endStroke(hand);
       return;
     }
     this.releaseTime[hand] = 0;
     if (!stroke) {
-      if (gap > PINCH_START) return;
       stroke = { air: [], cells: [] };
       this.drawing[hand] = stroke;
       this.strokes.push(stroke);
@@ -237,6 +234,17 @@ export class ShadowWorld {
     this.stampSegment(n > 1 ? stroke.cells[n - 2] : cell, cell);
     if (n % 4 === 1) playInk();
     this.inkDirty = true;
+  }
+
+  /** Rubs out the newest line (the one being drawn, if any). False if there was none. */
+  eraseLast(): boolean {
+    const stroke = this.strokes.pop();
+    if (!stroke) return false;
+    for (let hand = 0; hand < this.drawing.length; hand++) {
+      if (this.drawing[hand] === stroke) this.drawing[hand] = null;
+    }
+    this.rebuildInk();
+    return true;
   }
 
   private endStroke(hand: number): void {
@@ -479,7 +487,8 @@ export class ShadowWorld {
     if (this.terrain[i]) return true;
     if (this.phasing) return false;
     if (this.drawn[i]) return true;
-    if (stage.handCount === 0) return false;
+    // Where the player draws, only the ink holds the friend up: a hand's shadow can't carry it.
+    if (this.level?.ink || stage.handCount === 0) return false;
     const o = i * 4;
     const m = stage.mask;
     return m[o] > 127 || m[o + 1] > 127 || m[o + 2] > 127;

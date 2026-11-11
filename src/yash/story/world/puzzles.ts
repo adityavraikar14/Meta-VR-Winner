@@ -177,7 +177,7 @@ const highLedge: Puzzle = {
   id: 'high-ledge',
   world: 0,
   title: 'The High Ledge',
-  story: 'Pinch your fingers to draw a thread of shadow ink. Its shadow is solid too.',
+  story: 'Point one finger to draw a thread of shadow ink. Its shadow is solid ground.',
   ask: 'Draw a ramp up to the high ledge',
   solved: 'Up and over! Ink, light and shadow.',
   walk: {
@@ -375,13 +375,16 @@ const lostStar: Puzzle = {
                   star.group.visible = true;
                   star.material.emissiveIntensity = 1.4;
                   kit.chime();
-                  kit.tween(1.5, (k) => {
-                    star.group.position.set(exit.x, f + 0.04 + k * 0.14, exit.z);
-                    star.group.scale.setScalar(1 + k * 0.8);
+                  kit.fx.burst(kit.at(exit.x, f + 0.05, exit.z), 24, 0.3);
+                  // The prize of the level: it rises over the log towards you, growing until it
+                  // reads from your seat (out of the far end it is a speck behind the log).
+                  kit.tween(2, (k) => {
+                    star.group.position.set(exit.x + (cx - exit.x) * k, f + 0.05 + k * 0.2, exit.z + (cz + 0.08 - exit.z) * k);
+                    star.group.scale.setScalar(1 + k * 3.5);
                   });
                 },
               },
-              { do: 'pose', pose: 'cheer', time: 1.8 },
+              { do: 'pose', pose: 'cheer', time: 2.6 },
             ],
           };
         }

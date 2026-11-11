@@ -62,6 +62,11 @@ export class MainMenu {
     }
   }
 
+  /** Every button, shown or not, for giving each a ray target once. */
+  get allRoots(): Object3D[] {
+    return this.buttons.map((b) => b.root);
+  }
+
   /** Visible buttons, for the desktop mouse fallback. */
   get roots(): Object3D[] {
     return this.buttons.filter((b) => b.visible).map((b) => b.root);

@@ -169,6 +169,55 @@ export function deer(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
   ctx.stroke();
 }
 
+/**
+ * Morwen the Ink Witch, facing right: a long coat, a pointed hat, and a wand
+ * arm that lifts as `raise` goes 0 → 1 (its tip then sits at x + 46s, y − 190s).
+ */
+export function witch(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, raise: number): void {
+  ctx.fillStyle = INK;
+  // Coat, flaring to the hem.
+  ctx.beginPath();
+  ctx.moveTo(x - 16 * s, y - 132 * s);
+  ctx.lineTo(x + 16 * s, y - 132 * s);
+  ctx.lineTo(x + 46 * s, y);
+  ctx.lineTo(x - 50 * s, y);
+  ctx.fill();
+  // Head, with a hooked nose.
+  ellipse(ctx, x + 2 * s, y - 148 * s, 15 * s, 17 * s);
+  ctx.beginPath();
+  ctx.moveTo(x + 14 * s, y - 154 * s);
+  ctx.lineTo(x + 30 * s, y - 144 * s);
+  ctx.lineTo(x + 14 * s, y - 142 * s);
+  ctx.fill();
+  // Hat: a wide brim and a crooked cone.
+  ellipse(ctx, x + 2 * s, y - 162 * s, 36 * s, 6 * s);
+  ctx.beginPath();
+  ctx.moveTo(x - 17 * s, y - 163 * s);
+  ctx.quadraticCurveTo(x - 6 * s, y - 214 * s, x - 26 * s, y - 236 * s);
+  ctx.quadraticCurveTo(x + 10 * s, y - 214 * s, x + 20 * s, y - 163 * s);
+  ctx.fill();
+  // Arm and wand: hanging down, lifting to point the spell.
+  const sx = x + 10 * s;
+  const sy = y - 124 * s;
+  const len = Math.hypot(36, 66);
+  const ax = 0.35 + (36 / len - 0.35) * raise;
+  const ay = 1 + (-66 / len - 1) * raise;
+  const dx = ax * 40 * s;
+  const dy = ay * 40 * s;
+  ctx.strokeStyle = INK;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 11 * s;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx + dx, sy + dy);
+  ctx.stroke();
+  ctx.lineWidth = 4 * s;
+  ctx.beginPath();
+  ctx.moveTo(sx + dx, sy + dy);
+  ctx.lineTo(sx + dx * 1.9, sy + dy * 1.9);
+  ctx.stroke();
+}
+
 export function dragon(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, sneeze: number): void {
   ctx.fillStyle = INK;
   ellipse(ctx, x, y - 70 * s, 80 * s, 46 * s);

@@ -195,8 +195,10 @@ export class WitchBoss implements Boss {
       this.model.setWalkDirection(true);
       this.model.play('death');
       sfx.witchShriek();
-    } else if (this.enraged && !wasEnraged) {
-      sfx.witchCloseLaugh();
+    } else {
+      sfx.witchHurt();
+      // Enraged: her cackle, once the cry of pain is out.
+      if (this.enraged && !wasEnraged) sfx.witchCloseLaugh(0.4);
     }
   }
 

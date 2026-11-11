@@ -22,6 +22,9 @@ if (STORY) {
   document.getElementById('splash-story')?.addEventListener('click', () => {
     location.search = '?mode=story';
   });
+  document.getElementById('splash-demo')?.addEventListener('click', () => {
+    location.search = '?mode=story&demo=1';
+  });
   World.create(
     document.getElementById('scene-container') as HTMLDivElement,
     projectOptions,

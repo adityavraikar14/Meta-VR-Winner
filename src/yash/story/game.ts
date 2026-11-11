@@ -59,7 +59,8 @@ import {
   MaskChannel,
   normalizeMask,
 } from './matcher.js';
-import { IntroShow } from './intro.js';
+import { DEMO_LEVELS, demoKicker, demoNext, demoStart, demoStop, demoTaught, solvedOf, storyOf } from './demo.js';
+import { DEMO_SCENES, IntroShow } from './intro.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
@@ -119,8 +120,12 @@ const AWAKEN_DURATION = 1.8;
 const STORY_TIME = 4.5;
 /** Seconds the jungle takes to grow before the title appears. */
 const GROW_TIME = 2.6;
+/** While the world waits behind the table step, its shaders are readied this often (seconds). */
+const WARM_EVERY = 1.5;
 /** Seconds the stars card stays up after a level. */
 const CLEAR_TIME = 5;
+/** Seconds the Judge's Demo's closing card stays up before the title. */
+const DEMO_END_TIME = 14;
 /** Seconds to read why the wrong friend could not help. */
 const OOPS_TIME = 3.2;
 /** Seconds the first shadow must stay on the paper in the warm-up. */
@@ -139,11 +144,23 @@ const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
 /** The Skip button, off to the right of the paper and clear of the hands-on machines. */
 const SKIP_BUTTON = new Vector3(0.42, 0.02, 0.6);
 const SKIP_SIZE = 0.75;
+/** Pause above Skip, Exit below it, the same size. */
+const PAUSE_BUTTON = new Vector3(0.42, 0.13, 0.6);
+const EXIT_BUTTON = new Vector3(0.42, -0.09, 0.6);
+/** Erase, on the left where nothing else is, in the levels you draw in. */
+const ERASE_BUTTON = new Vector3(-0.42, 0.02, 0.6);
+/** A fingertip this close to a side button is pressing it, not drawing (metres, paper space). */
+const BUTTON_CLEAR = 0.1;
+/**
+ * The pen: index finger straight, middle, ring and little finger curled.
+ * It goes down on the stricter values and lifts on the looser ones.
+ */
+const PEN_INDEX = [0.75, 0.6];
+const PEN_OTHERS = [0.35, 0.5];
 /** Phases in which a level is under way and can be skipped. */
 const SKIPPABLE: ReadonlySet<Phase> = new Set(['story', 'matching', 'awakening', 'solving', 'oops']);
 const VIEWER = new Vector3(0, 0.12, 1.0);
 const INDEX_TIP = 9;
-const THUMB_TIP = 4;
 
 const DIM_OUTLINE = new Color(0x9a7442);
 const HOT_OUTLINE = new Color(0xffc34d);
@@ -238,15 +255,39 @@ export class ShadowGameSystem extends createSystem({
   private leftHanded = false;
   private playButton!: PushButton;
   /** Always-there Skip while a level is on, so any level can be passed over. */
+  /** The Judge's Demo's closing card is up. */
+  private demoEnding = false;
+  /** The story's saved place while the demo borrows play.puzzleIndex. */
+  private demoResume = 0;
   private skipButton!: PushButton;
   private skipEntity!: Entity;
   private skipClick = false;
+  /** Pause while a level is played; Exit leaves the headset view, back to the start page. */
+  private pauseButton!: PushButton;
+  private pauseEntity!: Entity;
+  private pauseClick = false;
+  private paused = false;
+  private exitButton!: PushButton;
+  private exitEntity!: Entity;
+  private exitClick = false;
+  /** Rubs out the newest ink line. */
+  private eraseButton!: PushButton;
+  private eraseEntity!: Entity;
+  private eraseClick = false;
+  /** Each hand's pen is down: pointing with just the index finger. */
+  private penDown = [false, false];
+  private penExtension = createExtension();
+  /** Seconds until the hidden world's shaders are readied again, and whether a pass is running. */
+  private warmIn = 0;
+  private warming = false;
   private buttonEntity!: Entity;
   private intro!: IntroShow;
   private table!: TableFinder;
   private menu!: MainMenu;
   /** Index of the menu button the mouse clicked this frame, or -1. */
   private menuClick = -1;
+  /** Ray targets for the menu's buttons, so a pinch on the Quest presses them too. */
+  private menuEntities: Entity[] = [];
   /** Enter / Space pressed this frame with no other button to take it. */
   private enterPressed = false;
   private headAt = new Vector3();
@@ -259,7 +300,6 @@ export class ShadowGameSystem extends createSystem({
   /** A ray press landed on the button since the last frame (presses can be shorter than a frame). */
   private rayClick = false;
   private tips = [new Vector3(), new Vector3()];
-  private thumb = new Vector3();
   private pinch = new Vector3();
   private liveTips: Vector3[] = [];
 
@@ -365,15 +405,27 @@ export class ShadowGameSystem extends createSystem({
     // Mouse, controller and pinch rays can press it too, not only a fingertip.
     this.buttonEntity = this.world.createTransformEntity(this.playButton.root, { parent: stage.paperEntity! });
     this.buttonEntity.addComponent(RayInteractable);
-    this.skipButton = new PushButton(paper, 'Skip');
-    this.skipButton.size = SKIP_SIZE;
-    this.skipButton.root.position.copy(SKIP_BUTTON);
-    this.skipButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
-    this.skipEntity = this.world.createTransformEntity(this.skipButton.root, { parent: stage.paperEntity! });
-    this.skipEntity.addComponent(RayInteractable);
+    const sideButton = (text: string, at: Vector3): [PushButton, Entity] => {
+      const button = new PushButton(paper, text);
+      button.size = SKIP_SIZE;
+      button.root.position.copy(at);
+      button.root.lookAt(paper.localToWorld(VIEWER.clone()));
+      const entity = this.world.createTransformEntity(button.root, { parent: stage.paperEntity! });
+      entity.addComponent(RayInteractable);
+      return [button, entity];
+    };
+    [this.skipButton, this.skipEntity] = sideButton('Skip', SKIP_BUTTON);
+    [this.pauseButton, this.pauseEntity] = sideButton('Pause', PAUSE_BUTTON);
+    [this.exitButton, this.exitEntity] = sideButton('Exit', EXIT_BUTTON);
+    [this.eraseButton, this.eraseEntity] = sideButton('Erase', ERASE_BUTTON);
     this.queries.rayPressed.subscribe('qualify', (entity) => {
       if (entity === this.buttonEntity) this.rayClick = true;
       if (entity === this.skipEntity) this.skipClick = true;
+      if (entity === this.pauseEntity) this.pauseClick = true;
+      if (entity === this.exitEntity) this.exitClick = true;
+      if (entity === this.eraseEntity) this.eraseClick = true;
+      const k = this.menuEntities.indexOf(entity);
+      if (k >= 0) this.menuClick = this.menu.roots.indexOf(this.menu.allRoots[k]);
     });
     this.addDesktopPress();
     this.intro = new IntroShow(paper);
@@ -425,6 +477,11 @@ export class ShadowGameSystem extends createSystem({
         this.drawBanner(kicker, title, body, footer);
       }
       this.bannerShown = true;
+    });
+    this.menuEntities = this.menu.allRoots.map((root) => {
+      const entity = this.world.createTransformEntity(root, { parent: stage.paperEntity! });
+      entity.addComponent(RayInteractable);
+      return entity;
     });
     this.table = new TableFinder(paper);
     // Dev: Y opens the Arena from the menu, as its button does; D starts the Ink Duel.
@@ -554,6 +611,11 @@ export class ShadowGameSystem extends createSystem({
       playAwaken();
       this.startPuzzle(index);
     }
+    // The Judge's Demo, picked on the start page: no table, no menu, straight into its tale.
+    if (stage.startDemo && this.visibilityState.peek() === VisibilityState.Visible) {
+      stage.startDemo = false;
+      this.beginDemo();
+    }
 
     this.readTips();
     const pressed = this.playButton.update(dt, this.liveTips, this.rayClick);
@@ -564,15 +626,17 @@ export class ShadowGameSystem extends createSystem({
     this.skipClick = false;
     if (skipped) {
       playClick();
-      if (this.puzzle?.id === 'duel') this.showTitle();
+      if (this.puzzle?.id === 'duel' && !stage.demo) this.showTitle();
       else this.skip();
     }
-    if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
+    this.updatePauseExit(dt);
+    if (this.phase !== 'title') this.menu.update(dt, this.liveTips, this.menuClick, false);
     this.introLine = this.intro.update(dt);
-    if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
+    if (this.phase === 'matching' && !stage.menuOpen && !this.paused && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
 
-    stage.playing = this.phase === 'matching' && !stage.menuOpen;
+    stage.playing = this.phase === 'matching' && !stage.menuOpen && !this.paused;
+    stage.paused = this.paused;
     stage.fight = this.puzzle?.id === 'shadow-dragon' || this.puzzle?.id === 'duel';
     stage.titleMenu = this.phase === 'title';
     // Music only in the headset; the Arena keeps Yash's own soundscape.
@@ -605,11 +669,19 @@ export class ShadowGameSystem extends createSystem({
         }
         break;
       case 'story':
+        // The demo's last card: read it, then home.
+        if (this.demoEnding) {
+          if (this.phaseTime >= DEMO_END_TIME) this.showTitle();
+          break;
+        }
         if (!this.welcomed) this.welcomeBack();
         if (this.phaseTime >= STORY_TIME) this.beginMatching();
         break;
       case 'matching':
-        if (stage.menuOpen) {
+        if (this.paused) {
+          this.holdTime = 0;
+          this.setCaption('Paused · push Resume to carry on');
+        } else if (stage.menuOpen) {
           this.holdTime = 0;
           this.setCaption('Paused · poke a button, or lower your hand');
         } else if (this.puzzle?.warmup) this.updateWarmup(dt);
@@ -628,7 +700,8 @@ export class ShadowGameSystem extends createSystem({
         break;
       case 'cleared':
         if (this.phaseTime >= CLEAR_TIME) {
-          if (this.puzzle?.id === 'duel') this.showTitle();
+          if (stage.demo) this.nextDemoLevel();
+          else if (this.puzzle?.id === 'duel') this.showTitle();
           else this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
         }
         break;
@@ -667,7 +740,28 @@ export class ShadowGameSystem extends createSystem({
     this.setPhase('table');
   }
 
+  /**
+   * The world is hidden until the table step ends, so its first frame would
+   * compile every shader at once: seconds frozen in the headset. Compile them
+   * now instead, in the background, from inside the headset view (the XR
+   * target decides each shader's variant). Repeats while models finish loading;
+   * already-ready shaders cost almost nothing.
+   */
+  private warmShaders(dt: number): void {
+    this.warmIn -= dt;
+    if (this.warming || this.warmIn > 0 || !this.renderer.xr.isPresenting) return;
+    this.warmIn = WARM_EVERY;
+    this.warming = true;
+    void this.renderer
+      .compileAsync(this.scene, this.camera)
+      .catch(() => undefined)
+      .finally(() => {
+        this.warming = false;
+      });
+  }
+
   private updateTable(dt: number, skip: boolean): void {
+    this.warmShaders(dt);
     this.player.head.getWorldPosition(this.headAt);
     const reading = this.table.update(dt, stage.joints, stage.tracked, (v) => this.player.localToWorld(v), this.headAt.y);
     if (reading.height !== null || skip) {
@@ -677,6 +771,11 @@ export class ShadowGameSystem extends createSystem({
       this.table.hide();
       this.playButton.show(false);
       playGrow();
+      // Skipped: straight to the menu while the world grows in around it.
+      if (reading.height === null) {
+        this.showTitle();
+        return;
+      }
       const world = WORLDS[PUZZLES[resumeIndex()]?.world ?? WORLDS.length - 1];
       this.setCaption(world.grows);
       this.setPhase('growing');
@@ -684,15 +783,17 @@ export class ShadowGameSystem extends createSystem({
     }
     if (reading.close) {
       this.setCaption(`Hold still…  ${Math.round(reading.progress * 100)}%`);
-    } else if (this.phaseTime > 9) {
-      this.setCaption('No table nearby? Push Skip');
     } else {
-      this.setCaption('Lay one hand flat on your table');
+      this.setCaption('Lay one hand flat on your table, or push Skip');
     }
   }
 
   /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
+    // Home ends the Judge's Demo, wherever it was, and the story is back where it was left.
+    if (stage.demo) play.puzzleIndex = this.demoResume;
+    demoStop();
+    this.demoEnding = false;
     this.leaveArena();
     const resume = resumeIndex();
     this.puzzleIndex = resume;
@@ -707,6 +808,36 @@ export class ShadowGameSystem extends createSystem({
     this.menu.open('home');
     this.setCaption(this.fresh ? 'Welcome! Push Play to begin' : 'Welcome back!');
     this.setPhase('title');
+  }
+
+  /**
+   * The Judge's Demo begins: the world grows in where it floats (no table
+   * step), its own prologue plays, then its first level.
+   */
+  private beginDemo(): void {
+    if (!stage.demo) this.demoResume = play.puzzleIndex;
+    demoStart();
+    this.demoEnding = false;
+    this.menu.close();
+    this.table.hide();
+    if (stage.sceneryHidden) {
+      stage.sceneryHidden = false;
+      stage.grow = { from: null };
+      playGrow();
+    }
+    this.puzzle = null;
+    this.puzzleIndex = DEMO_LEVELS[0];
+    this.bannerShown = false;
+    this.playButton.setText('Skip');
+    this.playButton.show(true);
+    this.intro.start(DEMO_SCENES);
+    this.setPhase('intro');
+  }
+
+  /** On to the demo's next level, or its closing card after the last. */
+  private nextDemoLevel(): void {
+    const next = demoNext(this.puzzleIndex);
+    this.startPuzzle(next ?? PUZZLES.length);
   }
 
   /** Yash's Arena takes over: the paper and the stage step aside until the wrist menu's Menu. */
@@ -762,7 +893,7 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
-      if (!this.playButton.visible && !this.skipButton.visible && this.menu.roots.length === 0) return;
+      if (!this.playButton.visible && !this.skipButton.visible && !this.exitButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
@@ -770,6 +901,9 @@ export class ShadowGameSystem extends createSystem({
       raycaster.setFromCamera(ndc, camera);
       if (this.playButton.visible && raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
       if (this.skipButton.visible && raycaster.intersectObject(this.skipButton.root, true).length > 0) this.skipClick = true;
+      if (this.pauseButton.visible && raycaster.intersectObject(this.pauseButton.root, true).length > 0) this.pauseClick = true;
+      if (this.exitButton.visible && raycaster.intersectObject(this.exitButton.root, true).length > 0) this.exitClick = true;
+      if (this.eraseButton.visible && raycaster.intersectObject(this.eraseButton.root, true).length > 0) this.eraseClick = true;
       this.menu.roots.forEach((root, i) => {
         if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
       });
@@ -788,18 +922,25 @@ export class ShadowGameSystem extends createSystem({
     );
   }
 
-  /** Each hand's pinch, in paper space, for drawing shadow ink. */
+  /** Each hand's pen (its index fingertip, in paper space) for drawing shadow ink. */
   private feedInk(dt: number): void {
     const paper = stage.paper!;
     for (const hand of HAND_CHANNELS) {
       const j = stage.joints[hand];
       const tracked = stage.tracked[hand];
-      this.thumb.set(j[THUMB_TIP * 3], j[THUMB_TIP * 3 + 1], j[THUMB_TIP * 3 + 2]);
       this.pinch.set(j[INDEX_TIP * 3], j[INDEX_TIP * 3 + 1], j[INDEX_TIP * 3 + 2]);
-      const gap = this.thumb.distanceTo(this.pinch);
-      this.pinch.add(this.thumb).multiplyScalar(0.5);
       paper.worldToLocal(this.player.localToWorld(this.pinch));
-      this.shadowWorld.drawInput(hand, tracked, gap, this.pinch, dt);
+      // Only the index finger up draws; curl it (or open the hand) to lift the pen.
+      const ext = readExtension(j, this.penExtension);
+      const down = this.penDown[hand] ? 1 : 0;
+      const others = Math.max(ext.middle, ext.ring, ext.pinky);
+      let pen = tracked && ext.index >= PEN_INDEX[down] && others <= PEN_OTHERS[down];
+      // A fingertip at a side button is pressing it, not drawing.
+      for (const at of [SKIP_BUTTON, PAUSE_BUTTON, EXIT_BUTTON, ERASE_BUTTON]) {
+        if (this.pinch.distanceTo(at) < BUTTON_CLEAR) pen = false;
+      }
+      this.penDown[hand] = pen;
+      this.shadowWorld.drawInput(hand, pen, this.pinch, dt);
     }
   }
 
@@ -823,8 +964,8 @@ export class ShadowGameSystem extends createSystem({
     this.puzzleIndex = index;
     this.puzzle = puzzleAt(index);
     const duel = index === DUEL_INDEX;
-    // The duel is a side game: it never moves the story's saved place.
-    if (!duel) {
+    // The duel is a side game, and the demo saves nothing: neither moves the story's saved place.
+    if (!duel && !stage.demo) {
       play.puzzleIndex = this.puzzle ? index : -1;
       saveProgress();
     }
@@ -839,6 +980,9 @@ export class ShadowGameSystem extends createSystem({
       this.candidates = [];
     } else if (puzzle.teach) {
       this.candidates = [levelFor(puzzle.teach)];
+    } else if (stage.demo) {
+      // Every friend the demo has taught so far.
+      this.candidates = demoTaught(index).map((kind) => levelFor(kind));
     } else {
       // Every friend taught so far in the story.
       this.candidates = PUZZLES.slice(0, index).flatMap((p) => (p.teach ? [levelFor(p.teach)] : []));
@@ -866,9 +1010,20 @@ export class ShadowGameSystem extends createSystem({
 
     if (puzzle) {
       const firstOfWorld = PUZZLES.findIndex((p) => p.world === puzzle.world) === index;
-      const kicker = puzzle.id === 'duel' ? 'Side game · vs Morwen the Ink Witch' : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
-      this.drawBanner(firstOfWorld || puzzle.id === 'duel' ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
+      const kicker = stage.demo
+        ? demoKicker(index)
+        : puzzle.id === 'duel' ? 'Side game · vs Morwen the Ink Witch' : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
+      this.drawBanner(stage.demo || firstOfWorld || puzzle.id === 'duel' ? kicker : WORLDS[puzzle.world].name, puzzle.title, storyOf(puzzle));
       this.setCaption(puzzle.ask);
+    } else if (stage.demo) {
+      this.demoEnding = true;
+      this.drawBanner(
+        'You escaped the Lantern',
+        'Free at last',
+        'The guardian is free and Morwen is gone. The Great Lantern carries you home. Thank you for playing.',
+        'This was the Judge’s Demo  ·  The full story has 17 levels across 5 worlds',
+      );
+      this.setCaption('The guardian is free. Thank you for playing!');
     } else {
       this.drawBanner(
         'You escaped the Lantern',
@@ -881,6 +1036,37 @@ export class ShadowGameSystem extends createSystem({
     this.bannerShown = true;
     this.setPhase('story');
     playPrompt();
+  }
+
+  /**
+   * Pause shows while a level is being played and freezes it (the dragon and
+   * the witch wait, nothing is judged); Exit shows while a level is on and
+   * leaves the headset view for the start page.
+   */
+  private updatePauseExit(dt: number): void {
+    // Pausing only holds within a level being played; anything else lets go of it.
+    if (this.phase !== 'matching' && this.paused) {
+      this.paused = false;
+      this.pauseButton.setText('Pause');
+    }
+    this.pauseButton.show(this.phase === 'matching' && !stage.menuOpen);
+    if (this.pauseButton.update(dt, this.liveTips, this.pauseClick)) {
+      playClick();
+      this.paused = !this.paused;
+      this.pauseButton.setText(this.paused ? 'Resume' : 'Pause');
+    }
+    this.pauseClick = false;
+    this.exitButton.show(this.puzzle !== null && SKIPPABLE.has(this.phase) && !stage.menuOpen);
+    if (this.exitButton.update(dt, this.liveTips, this.exitClick)) {
+      playClick();
+      if (this.paused) this.pauseButton.setText('Pause');
+      this.paused = false;
+      this.world.exitXR();
+    }
+    this.exitClick = false;
+    this.eraseButton.show(this.phase === 'matching' && this.shadowWorld.canDraw && !this.paused && !stage.menuOpen);
+    if (this.eraseButton.update(dt, this.liveTips, this.eraseClick) && this.shadowWorld.eraseLast()) playClick();
+    this.eraseClick = false;
   }
 
   /** Restart and Skip from the hand menu. */
@@ -904,6 +1090,10 @@ export class ShadowGameSystem extends createSystem({
 
   /** Moves on without stars; the level's friend still joins so later levels stay possible. */
   private skip(): void {
+    if (stage.demo) {
+      this.nextDemoLevel();
+      return;
+    }
     if (this.puzzle?.teach && !play.unlocked.includes(this.puzzle.teach)) {
       play.unlocked.push(this.puzzle.teach);
     }
@@ -998,11 +1188,15 @@ export class ShadowGameSystem extends createSystem({
     }
     this.matchTime += dt;
     let text = this.puzzle!.ask;
-    if (world.mood === 'gone') text = world.falls > 1 ? 'Oops! Hold your hand still while it crosses' : 'Whoops! It fell. Try again!';
+    if (world.mood === 'gone') {
+      text = world.canDraw
+        ? 'Whoops! It fell. Draw a ramp from the rabbit up to the ledge'
+        : world.falls > 1 ? 'Oops! Hold your hand still while it crosses' : 'Whoops! It fell. Try again!';
+    }
     else if (world.mood === 'edge' || world.mood === 'wall') {
       if (world.canDraw) {
         text = world.inkUsed === 0 || this.phaseTime < 8
-          ? 'Pinch your fingers and draw a ramp in the air'
+          ? 'Point one finger and draw a ramp in the air'
           : 'Draw it from the rabbit up to the ledge';
       } else {
         text = stage.handCount === 0 ? 'Raise your hand into the lantern light' : 'Lay your hand’s shadow across the gap';
@@ -1151,7 +1345,6 @@ export class ShadowGameSystem extends createSystem({
     const puzzle = this.puzzle;
     this.ring.visible = false;
     if (!puzzle) return;
-    if (puzzle.teach && !play.unlocked.includes(puzzle.teach)) play.unlocked.push(puzzle.teach);
     const stars = puzzle.warmup
       ? 3
       : puzzle.walk
@@ -1159,6 +1352,16 @@ export class ShadowGameSystem extends createSystem({
         : puzzle.handsOn
           ? 1 + ((stage.task?.mistakes ?? 0) === 0 ? 1 : 0) + (this.matchTime < HANDS_ON_FAST ? 1 : 0)
         : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
+    const row = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    if (stage.demo) {
+      // The demo keeps no stars, pages or place: just the card.
+      this.drawBanner(puzzle.title, row, solvedOf(puzzle), demoKicker(this.puzzleIndex));
+      this.bannerShown = true;
+      this.setCaption(stars === 3 ? 'Perfect!' : 'Level cleared!');
+      this.setPhase('cleared');
+      return;
+    }
+    if (puzzle.teach && !play.unlocked.includes(puzzle.teach)) play.unlocked.push(puzzle.teach);
     play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
     // The Inventor's Journal: the level's own numbers, or your friend's body from its shadow.
     const machine = stage.runNotes?.() ?? null;
@@ -1174,7 +1377,6 @@ export class ShadowGameSystem extends createSystem({
     saveProgress();
     play.puzzleIndex = this.puzzleIndex;
 
-    const row = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected${newPage ? '  ·  New page in your Journal!' : ''}`);
     this.bannerShown = true;
     this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');

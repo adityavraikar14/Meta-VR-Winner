@@ -55,6 +55,8 @@ export const stage = {
   arena: false,
   /** The level is being played right now (not the menu, the table or the story card). */
   playing: false,
+  /** The player pushed Pause: the level stands frozen but stays in view. */
+  paused: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */
   task: null as { caption: string; done: boolean; mistakes: number } | null,
   /** The level's own numbers for its Inventor's Journal page, read when it is cleared. */
@@ -63,6 +65,10 @@ export const stage = {
   fight: false,
   /** A level picked on the start page, started once the headset view is up. Consumed once. */
   startAt: null as number | null,
+  /** The Judge's Demo is running: a short cut of the story, told its own way, saving nothing. */
+  demo: false,
+  /** The Judge's Demo was picked on the start page; it begins once the headset view is up. Consumed once. */
+  startDemo: false,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
   grow: null as { from: Vector3 | null } | null,
 };

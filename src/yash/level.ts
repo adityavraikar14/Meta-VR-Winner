@@ -67,6 +67,9 @@ const BOSS_BUTTON_RIGHT = 0.26;
 const BOSS_BUTTON_AHEAD = 0.4;
 const BOSS_BUTTON_DROP = 0.12;
 /** The boss button names who comes next, by the current boss's name. */
+/** Pause and Exit float low on the left, mirroring the boss button, one above the other. */
+const PAUSE_BUTTON_DROP = 0.12;
+const EXIT_BUTTON_DROP = 0.21;
 const NEXT_BOSS_LABEL: Record<string, string> = {
   sentinel: '🐉 Fight the dragon',
   dragon: '🧙 Fight Morwen',
@@ -94,6 +97,11 @@ export class ArsenalLevelSystem extends createSystem({}) {
   /** Who the fight is against right now. */
   private boss!: Boss;
   private bossButton!: PokeButton;
+  /** Pause freezes the fight (and the tutorial); Exit leaves the headset view for the start page. */
+  private pauseButton!: PokeButton;
+  private exitButton!: PokeButton;
+  private paused = false;
+  private pausedLabel!: Label;
   private arsenal!: Arsenal;
   /** Stand-in hands for the test panel; real tracked hands always win. */
   private sim = new SimHands();
@@ -143,6 +151,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
     this.bossButton = new PokeButton(NEXT_BOSS_LABEL.sentinel, () => this.nextBoss());
     this.root.add(this.bossButton.root);
+    this.pauseButton = new PokeButton('⏸ Pause', () => this.togglePause());
+    this.exitButton = new PokeButton('🚪 Exit', () => this.exit());
+    this.root.add(this.pauseButton.root, this.exitButton.root);
     this.arsenal.onEvent = (event) => this.tutorial.notify(event);
     this.root.add(this.tutorial.root);
     this.skeletons = { left: new HandSkeleton(0xffd9b8), right: new HandSkeleton(0xffd9b8) };
@@ -179,6 +190,11 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.readHands(dt, time);
 
     const anyHand = this.hands.left.tracked || this.hands.right.tracked;
+    this.updatePauseExit(dt);
+    if (this.paused) {
+      this.updateHud(dt, anyHand);
+      return;
+    }
     // Lost tracking pauses the sign timers instead of failing them.
     if (anyHand) {
       classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
@@ -318,6 +334,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.handsLabel = new Label(0.07);
     this.handsLabel.set('✋ Show your hands', '#ffe9b0');
     this.statusLabel = new Label(0.12);
+    this.pausedLabel = new Label(0.07);
+    this.pausedLabel.set('⏸ Paused · poke Resume to carry on', '#ffe9b0');
+    this.pausedLabel.sprite.visible = false;
+    this.root.add(this.pausedLabel.sprite);
     this.icons = {} as Record<Item, Label>;
     for (const item of ITEMS) {
       const label = new Label(0.05);
@@ -391,6 +411,9 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.noHandsFor = handsGone ? this.noHandsFor + dt : 0;
     this.handsLabel.sprite.visible = this.noHandsFor > SHOW_HANDS_AFTER;
     this.handsLabel.sprite.position.copy(this.head).addScaledVector(this.look, 0.7);
+    this.pausedLabel.sprite.visible = this.paused;
+    this.pausedLabel.sprite.position.copy(this.head).addScaledVector(this.look, 0.7);
+    this.pausedLabel.sprite.position.y += 0.1;
 
     const o = this.boss;
     const loading = o.loadingText !== null;
@@ -554,6 +577,42 @@ export class ArsenalLevelSystem extends createSystem({}) {
       .addScaledVector(this.forward, BOSS_BUTTON_AHEAD);
     this.tmp.y -= BOSS_BUTTON_DROP;
     this.bossButton.update(dt, this.tmp, this.headQuat, this.right, this.forward, this.hands);
+  }
+
+  /** Pause and Exit, low on the left within reach; only in the headset, where they can be poked. */
+  private updatePauseExit(dt: number): void {
+    const show = this.inXR;
+    this.pauseButton.root.visible = show;
+    this.exitButton.root.visible = show;
+    if (!show) return;
+    for (const [button, drop] of [
+      [this.pauseButton, PAUSE_BUTTON_DROP],
+      [this.exitButton, EXIT_BUTTON_DROP],
+    ] as const) {
+      this.tmp
+        .copy(this.head)
+        .addScaledVector(this.right, -BOSS_BUTTON_RIGHT)
+        .addScaledVector(this.forward, BOSS_BUTTON_AHEAD);
+      this.tmp.y -= drop;
+      button.update(dt, this.tmp, this.headQuat, this.right, this.forward, this.hands);
+    }
+  }
+
+  private togglePause(): void {
+    this.paused = !this.paused;
+    this.pauseButton.setText(this.paused ? '▶ Resume' : '⏸ Pause');
+    sfx.success();
+    if (this.paused) {
+      // Nothing half-signed carries over: the ring and the item menu clear.
+      this.recognizer.reset();
+      this.bossButton.root.visible = false;
+    }
+  }
+
+  /** Back to the start page; the next visit starts unpaused. */
+  private exit(): void {
+    if (this.paused) this.togglePause();
+    this.world.exitXR();
   }
 
   /** Starts the tutorial from a clean slate. */
