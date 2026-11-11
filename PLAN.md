@@ -1,178 +1,279 @@
-# Shadowplay: Escape the Lantern (build plan v3)
+# Shadowplay — final-week plan (v4)
 
-Submission target: **Nov 17, 2026** (hard deadline Nov 19, 1:30am IST).
-Rule: every step ends playable. A tight, polished slice beats a broad one with gaps
-(Meta: "judges play what you submit"). Built brick by brick: one working piece at a time.
+**Deadline:** Nov 19, 2026, 1:30 am IST (Nov 18 in US time). We submit by **Nov 18 evening IST**.
+**Rule for the week:** every step ends playable and pushed. Tick a box only when it is built, tested and committed.
+Earlier plans: [docs/PLAN-v3.md](docs/PLAN-v3.md).
 
-## The pitch
-You wake up trapped inside an old shadow-theatre box. The only way out is the
-**Shadow Dragon's gate**. Your hands are your only tool: their shadows come alive, and
-every chapter teaches a new power. In the last chapter you combine every power, charge
-an attack with hand signs, throw it at the dragon, and escape.
+Priorities: **P0** = needed for a winning submission · **P1** = strongly wanted · **P2** = only if time is left.
 
-## Chapters (each unlocks a power)
-| # | Chapter | What you do | Power |
-|---|---|---|---|
-| 1 | Wake Up | your hand's shadow is solid: be the bridge ✅ | Shadow Hands |
-| 2 | Ink | pinch and draw a ramp in the air ✅ | Draw with Light |
-| 3 | Friends | hand-shadow animals come alive: horse hauls the cart, bird carries the rope | Summon |
-| 4 | Forge | gather wood, stone, herbs, ember; mix with real heat rules (charcoal, iron, axe, health potion) | Craft |
-| 5 | Camp | build brick by brick or draw parts: tent, wall, bridge, catapult; weak builds fall | Build |
-| 6 | The Dragon | hand-sign sequence charges a power, throw it with real throw physics; hide behind your wall, heal with potions | Escape |
-| ∞ | Ink Fight | casual duel vs a computer shadow-puppet: draw objects, throw them, health bars | — |
+---
 
-No online multiplayer (decided Oct 31): the duel is against the computer.
-Mounts never move the seated player; the world in front of you moves instead.
+## 1. What the competition actually wants (research, Nov 11)
 
-## Four real systems (no faked science)
-1. **Light / optics**: shadow size follows similar triangles (hand nearer the lantern =
-   bigger). Shadow size sets the size of the creature that comes alive. Soft edges from
-   the lantern's radius (penumbra). Later: coloured lanterns with additive mixing.
-2. **Shadow world (2D)**: tiny shadow creatures walk, jump and fall on the hand-shadow
-   mask and drawn lines, with real gravity and collision against the mask cells.
-3. **Rigid-body physics (3D, Havok)**: fixed step; per-material mass, friction,
-   restitution; "toy-scale" gravity so a 10 cm log falls like a real log looks.
-   Mechanisms: lever and seesaw (torque = F × d), pulley and counterweight,
-   spring (Hooke), pendulum, buoyancy (Archimedes), wind force.
-4. **Chemistry engine**: every object has a material and a temperature; elements route
-   through states. Fire heats → ice melts to water → water boils to steam (rises, lifts
-   a balloon) → cold freezes water into a walkable ice bridge; fire spreads on grass,
-   wind spreads fire, water + seed + light grows a plant. Same rule everywhere, no exceptions.
+Sources:
+- the Devpost overview text pasted by Aditya
+- Meta's 2026 announcement blog
+- Meta's 2025 "Meet the winners" post
+- UploadVR and Road to VR coverage
 
-## Hands, engineered precisely (from Meta's hand-tracking research)
-- Finger colliders are kinematic capsules moved by velocity, not teleported.
-- Grab = pinch or fist plus collider overlap; separate grab / release thresholds (hysteresis).
-- Release only after 75 ms of not grabbing, with good tracking confidence; wait 15 ms
-  after tracking returns.
-- Throw: keep a 1 s pose buffer, rewind ~40 ms for tracking latency, three confidence
-  tiers, and score the last second's vectors so throws never "dead drop".
-- Filtering: stillness freeze, small-change smoothing, extrapolate low-quality frames
-  with damping, blend back over 0.1 s.
+The Devpost rules and judging pages block automated reading. **Paste the judging criteria text here if you can see it.**
 
-## Friends with personality
-Look at your hands and face; per-spot touch reactions (pat, tickle, boop, tail pull);
-pick up by the scruff (legs dangle on springs), throw → arc, bounce, dizzy, grumpy return;
-squash and stretch (volume preserved); personality per friend; gibberish voices;
-trust memory; react to your shadows (wolf = hide, bird = chase, giant = cower);
-on device: hop onto the real table, hide behind real objects.
+- **Why Meta runs it:** content for **Meta VR Glasses**, which ship spring 2027. They run the same OS as Quest and support the Immersive Web SDK. Their input is "gaze to target, pinch to select", controllers are not in the box, and they have colour passthrough. Meta wants **hands-first apps for the store**.
+- **Gaming track:** "Puzzle, strategy, casual, social, narrative — genres that work well for seated play, without controllers."
+- **Hard rule:** the whole experience is usable with hands, end to end.
+- **Design tests:**
+  - *Airplane seat*: everything within a two-foot radius, seated.
+  - *One bus stop*: fast cold start, clean pause and resume, something satisfying in under 10 minutes.
+  - *Take it away*: original, not a wrapper around another service.
+- **Meta's own tip:** "Scope to one mechanic and finish it. A tight vertical slice is better than a broad prototype with gaps, because judges play what you submit."
+- **Prizes we can aim at:**
+  - Best New Gaming Experience ($100k, runner-up $50k)
+  - Boldest Original Concept, Best First Five Minutes, Best Reason to Come Back, Best Accessibility Forward ($25k each)
+  - Judge's Choice ($20k)
+- **Last year's winners have a pattern:**
+  - **Tiny Golf** (Best Casual): one gesture (pinch, pull, release) on a tiny tabletop course, plus *build your own course*. Bright toy colours; treated as a real product with brand, onboarding and trailer.
+  - **Pocket Lands, Hand Survivor, Awesome Hand** (Best Hand Interactions): your hands act *directly and physically* on a small world. They build, swat, block, and guide balls.
+  - **Saber Punks:** skill and combos. **DreamSpace and Inkphony:** your real room becomes the game.
+  - **The Nanauts and Dun Jun:** IWSDK winners. A web build can win.
 
-## Draw and build
-- **Draw with light**: pinch and draw in the air; the line casts a shadow on the paper and
-  is solid in the shadow world (bridge, ramp, wall). In the 3D world a drawn stroke becomes
-  a physical plank or rope. Draw a closed outline and it comes alive as your own creature.
-- **Workshop**: unlocked after the story. Place planks, springs, fans, seesaws, pulleys,
-  lanterns and build contraptions; friends ride them. Save and replay your own levels.
+## 2. Honest review of our build
 
-## Ideas borrowed from winners (inspiration, not copies)
-| From | We take |
+| Problem | Why it hurts |
 |---|---|
-| Little Critters | physical comedy: grab, slap, throw; white outline for readability in your room |
-| Tiny Golf | one simple gesture (pinch, pull, release); tiny tabletop course; build your own |
-| The Nanauts (IWSDK winner) | characters that notice your room and you |
-| Pocket Lands | build miniature worlds in mixed reality |
-| Breath of the Wild | the chemistry engine idea |
+| Reads as a children's game (cute rescue story, berries, glow caps, a hare walking on your hand) | Our players and judges are 15–35 |
+| The core trick, "make a fox shape → a fox appears", has no skill once you know the shape | No mastery, no reason to replay |
+| Very broad: 17 levels + duel + arena, each fairly shallow | Meta's tip: one mechanic, finished |
+| Dim and brown: lantern-lit palette, dark wood UI; Quest 2 passthrough is greyscale | "Dark and boring vibes" |
+| Slow first five minutes (table step → growing → menu → warm-up → hare) | The Best First Five Minutes award |
+| No creation mode | Tiny Golf won with "create your own" |
+| Synthesised animal voices sound alike; eating looks glitchy | Polish |
+| Target outline nearly invisible (brown, 35–45% opacity on beige); ghost hand off to the side | New players can't see what to make |
+| Hard to test on a laptop | Slows every fix |
 
-## Characters (adult style, decided Oct 31)
-- Real animals: Quaternius CC0 rigged glTF (horse, stag; wolf available), realistic
-  proportions, no cartoon faces. Restyled: matte, slightly desaturated, lantern-lit.
-  Personality through body language: head follows your hand, flinches from a poke on
-  the poked side, relaxes when stroked, kicks after repeated jabs, comes to sniff a still hand.
-- Bird and dragon: no good adult CC0 models exist (all cute), so they are authored
-  in-house as paper-cut shadow puppets (Lotte Reiniger style) and as a huge shadow
-  dragon on the backdrop.
-- The old plush pets (rabbit, snail, butterfly) are being phased out of the story.
+## 3. The new direction: one mechanic, finished
 
-## Already done
-- [x] Hand shadows, shape rules, matcher, ghost-hand guide, hand menu
-- [x] Start page, storybook cover with push button, intro shadow-puppet show
-- [x] One friend on stage at a time; stage cleared each level
-- [x] Chapter 1 Shadow Bridge, Chapter 2 drawn-ink ramp (2D shadow world)
-- [x] Rigged glTF animals (Beast): emerge from the paper, idle life, head tracking,
-      poke / stroke / temper reactions, synthesized snort, nicker and hooves
-- [x] Photo-real environment (Poly Haven CC0): walnut theatre with velvet curtains and brass
-      lip, walnut plinth with brass inlay, rolling forest-floor ground, swaying grass,
-      scanned ferns / flowers / mossy rocks / stump, pond with rippling water and pebble
-      bank, warm studio HDRI lighting. Credits in CREDITS.md
-- [x] Jungle grows into your room (Oct 31 feedback: no round table): an organic slab of
-      jungle earth with a ragged eroded edge, bamboo screen frame lashed with rope and ivy,
-      life-size tropical plants on the floor around the player, hanging vines, fireflies.
-      Scenery loads a few files at a time and retries failures.
-- [x] "Lay one hand flat on your table": a held flat palm finds the real table; the
-      jungle grows out of it (earth spreads from the palm, poles rise, room plants unfurl)
-- [x] Three themed worlds, each with its own earth, screen frame and room scenery:
-      Jungle (bamboo, ivy, tropical plants, fireflies), River (driftwood and moss, pond,
-      life-size reeds, river stones, moonlit fireflies), Dragon's Mountain (timber mine
-      entrance with hanging lantern, gravel, crystal clusters, boulders, rising embers)
-- [x] Menus: Home (Chapters / Play-Continue / Settings) on the screen with push buttons;
-      Chapters page with stars and locks where the room becomes each chapter's world as
-      you page through; Settings (mute, find table again, recenter); wrist menu gains Menu
-- [x] Shadow size is real optics and it matters: a friend's body size comes from its
-      shadow's size (hand nearer the lantern = bigger shadow = bigger friend, x0.7 to x1.45).
-      Bigger animals walk faster with slower strides (speed ~ sqrt of leg length) and pull
-      harder (strength ~ size squared, like muscle cross-section). A live readout shows the
-      size while you hold the shape on levels that need a big friend
-- [x] Chapter "Friends", level 1, The Old Well: a working horse whim. Crown wheel (36 cogs)
-      drives a lantern pinion (9 staves) at right angles, 4:1 to a winding drum; rope coils
-      on the drum in a helix, runs over a sheave at its tangent point and down a dark well;
-      an iron ratchet clicks every tooth and the pawl catches the load when the horse rests;
-      a brass gauge shows the horse's pull against what the bucket needs. A small horse digs
-      in, scrabbles and gives up (the load clunks back onto the pawl); a big horse walks the
-      circle and winds up the glowing Lantern Stone. Beasts are smooth-shaded now
-- [x] Chapter "The Old Mine", The Smithy (hands-on): Lantern Stone lights the charcoal;
-      bellows pump air (oxygen) and the fire climbs 650 → 1350 °C; iron heats by Newton's
-      law, cools by radiation (T^4) and convection, glows its Planck black-body colour
-      (CIE → sRGB) and matches the smith's colour chart; tongs (pinch), hammer (other hand)
-      shape it only at forging heat; six blows draw an axe head; quench from above 780 °C
-      to harden it in a burst of steam; bare fingers on hot iron hurt. Axe saved to items
-- [x] River level 2, The Broken Bridge (hands-on build): pinch-drag timbers between joints
-      across the river; Test runs a real pin-jointed truss (XPBD, EA/L springs, tension
-      limit, Euler buckling π²EI/L²) with blue/red stress view; squares fold, triangles
-      hold; the ore cart rides the deck and falls in the river if it fails
-- [x] Final chapter, The Shadow Dragon: a jointed Reiniger-style shadow-puppet dragon fills
-      the screen; three hand signs gather an orb of light; throws use a pose buffer with
-      40 ms latency rewind and a least-squares release velocity; fireballs come out of the
-      screen at you; an open palm reflects them (v' = v − 2(v·n)n) back at the dragon;
-      hearts and a health bar; defeat dissolves the shadow; an ending banner
-- [x] Jungle chapter rework: the fox (rigged CC0, classic fox hand shadow) replaces the
-      plush rabbit and snail; "tiny" levels use shadow-size optics (a small fox fits under
-      the roots and into the log); real props: bark log with end grain and moss, knotted
-      roots, a leafy tree, glow caps, hollow trunk, ember shards
-- [x] Ink Duel vs the computer (menu: Duel): draw in the air, the stroke becomes a solid with
-      mass = ink used; grab and throw it under real gravity; damage = ½mv² shown on the
-      screen; hanging drawings are shields; a Reiniger-style Rival with a giant quill draws
-      and throws back (ballistic aim v = d/T + ½gT), raises ink shields, topples when beaten
-- [x] Old Mine level 2, The Healing Draught: a copper cauldron on an iron trammel (notched
-      bar, clicks per notch) over a fire pit; radiant heat falls off with height, water
-      boils at 100 °C and evaporates; herbs (yarrow, comfrey, sage) steep at an Arrhenius
-      rate (Ea/R 4000 K) while heat breaks the oils down faster (Ea/R 15000 K), so a gentle
-      simmer is best and a hard boil weakens and boils dry; ladle it into two vials
-- [x] Wrist inventory: the palm menu shows what you carry (the axe, draughts) and a Drink
-      button that heals a heart in the dragon fight
-- [x] Polish (Nov 1): shadow dragon on the start page; prologue and level texts rewritten
-      for the escape story (fox puppet, dragon's breath scatters the Great Lantern); a
-      background soundscape per world (insects and birds, running water and frogs,
-      dripping mine, distant thunder); smithy verified with real emulated hand motions
-      (pinch the stone, press the bellows, tongs, hammer swing); draw calls cut ~30–40%
-- [x] Nov 2: Yash's Arsenal merged and hosted as the Arena (his code unchanged); HD models
-      (3D dragon boss, phoenix ending, realistic elk, fox); daylight lighting, soft grass,
-      colourful flowers, a proper bridge; a soundtrack (Kevin MacLeod, CC BY) that
-      cross-fades between exploring, the dragon battle and victory; an in-game Credits page
-- [ ] On a Quest (Nov 12): profile frame time (jungle is heaviest: ~186 calls both eyes,
-      ~360k triangles per eye); tune pinch/throw/strike thresholds and palm shield on real
-      hands; then the trailer
-- [ ] If time: use the axe (chop the iron roots with a real swing); horse ride (world moves)
+> **Your shadow is a real object.**
 
-## Schedule
-- [ ] **Nov 1 – 3** Chapter 3 Summon: horse hand shape, cart-hauling level, chapter map and saving
-- [ ] **Nov 4 – 6** Chapter 4 Forge: resources, cauldron with heat rules, health, wrist inventory
-- [ ] **Nov 7 – 9** Chapter 5 Camp: brick-by-brick build mode with physics
-- [ ] **Nov 9 – 12** Chapter 6 Dragon: hand-sign detection, charge and throw, boss fight
-- [ ] **Nov 12 – 14** On a Quest: tune hand feel; Ink Fight vs computer
-- [ ] **Nov 15 – 17** Art, music, polish, trailer, submit
+A spark of light lives on the shadow screen. It falls, rolls and bounces off **anything that casts a shadow**:
+- **your hands, live:** paddles, bridges, ramps, walls
+- **light shards you place** between the lantern and the screen
+- **lines you draw** with a pinch
 
-If behind, cut in this order: Ink Fight → catapult → bird chapter beat → extra recipes.
-Never cut: shadow world, summoned friends, crafting core, dragon finale.
+Get the spark to the lantern gate and collect the three motes on the way.
 
-## Risks
-- Real-hand feel needs a Quest by ~Nov 12.
-- Quest GPU budget: shadow map + mask pass + physics + outlines.
+The skill comes from real optics. **Shadow size = hand × D ÷ d.** A hand close to the lantern casts a huge, fast shadow: power, but coarse. A hand far from it casts a small, slow one: fine control. Every level is a choice between the two.
+
+Why this wins on the criteria:
+- **Original:** nobody makes hand-shadow physics. "Build in 3D, play in shadow."
+- **Skill for ages 15–35:** reflexes, aim, spatial reasoning, ranks and best times.
+- **Hands-first, seated, pinch-first:** fits the Glasses' input model.
+- **Build mode, like Tiny Golf's spirit:** the Workshop plus a daily challenge give a reason to come back.
+- **Real science:** the projection law *is* the controls.
+- **The story machines stay** as the campaign's later acts: the creature summon (now majestic, not cute), truss bridges, forge, brewing, sky lantern, lock, dragon.
+
+## 4. Game structure after the change
+
+| Mode | What it is |
+|---|---|
+| **Act I · Shadow** (new) | 6 spark levels with your hands only: bridge a gap, ramp, paddle-bounce, *big shadow* (D/d), *precise shadow*, two hands |
+| **Act II · Build** (new) | 6 spark levels with light shards: place a plank, *projection* (make a shard's shadow 3× bigger), wedge launch, budget (fewest shards), hands-off runs, a grand course |
+| **Act III · Machines** | The Old Well (horse whim, square–cube law), Broken Bridge, Ore Train, Smithy, Healing Draught, Strong Draught, Sky Lantern |
+| **Act IV · The Gate** | Dragon's Gate (lock picking), Shadow Dragon (Light or Arsenal) |
+| **Workshop** (new) | Sandbox: place shards, set start and gate, test, save 3 slots |
+| **Daily Light** (new) | One generated course per day, best time kept |
+| **Battles** | Ink Duel, Arena (Arsenal bosses) |
+| **Journal & Trophies** | Science pages with your numbers; trophy shelf |
+
+**Leave the main path:** Fallen Log, Tiny Tunnel, High Berries, Lost Star (the childish creature tasks) and the hare walks (Shadow Bridge, High Ledge). They stay in the code for free play, but are not in the story.
+
+**First five minutes:**
+1. Play.
+2. Optional table step (skippable).
+3. *Act I level 1 starts right away* (no menu on first run): within 60 s you are bouncing a spark with your hand.
+
+## 5. Engineering notes
+
+### 5.1 Projection (the core law)
+
+**Coordinates.** We work in paper space: the paper is the plane z = 0, with x right and y up. The lantern sits at L = (Lx, Ly, Lz), with Lz > 0 on the player's side.
+
+**Where a point's shadow lands.** A point P casts its shadow at
+
+  P′ = L + (P − L)·t,  where t = Lz ÷ (Lz − Pz) = D ÷ d.
+
+Here D is the lantern-to-screen distance and d is the lantern-to-point distance.
+
+**How fast a shadow moves.** Differentiate P′ for a moving point:
+
+  v′ = t·v + (P − L)·t²·vz ÷ Lz
+
+So a hand moving across the light moves its shadow D/d times faster, and a hand moving toward the lantern makes the shadow grow outward. Both terms feed the physics: a shadow that moves faster hits the spark harder.
+
+### 5.2 Hands as shadow colliders
+
+- **No latency from the shadow image.** We do not collide with the 80×56 shadow image, which is read back about 20 times a second and lags. Instead, each tracked joint is projected through the lantern onto the paper every frame (5.1).
+- **Capsules, not pixels.** Each bone becomes a 2D capsule: a segment plus a radius × t. That is the same joint radii the shadow rig draws, so physics matches what you see.
+- **Coverage:** every finger chain, the palm (capsules between the knuckles) and the forearm, about 26 capsules per hand.
+- **Velocities:** finite differences of the projected endpoints, low-passed over about 30 ms. A flick of the wrist becomes a fast-moving shadow paddle.
+
+### 5.3 Spark physics
+
+**The spark.**
+- A ball of radius 1.2 cm on the paper.
+- Toy-scale gravity of about 2.2 m/s², so the 1 m screen reads like a big wall and motion stays readable.
+- Speed is capped.
+
+**Integration.** Semi-implicit Euler with 8 substeps per frame, about 600 Hz. That is fine-grained enough that the spark cannot tunnel through a thin shadow.
+
+**Contacts:** circle against capsules (hands, ink), convex polygons (shards, cliffs) and the screen edges.
+- **Contact point and normal:** find the closest point q on the shape. If |c − q| < r, the normal is n = (c − q)/|c − q|.
+- **Push out:** move the spark back along n by the penetration depth.
+- **Moving surfaces:** compute the relative velocity against the surface's own velocity at q.
+- **Bounce:** restitution e. Hands 0.55 for lively paddles, cliffs 0.25.
+- **Grip:** Coulomb friction μ = 0.3, with the tangent impulse clamped to μ times the normal impulse.
+
+**Fail and win.**
+- *Fail:* leaving the screen or falling into an ink pit. Respawn at the start after 0.6 s; it counts as a retry.
+- *Win:* the spark's centre inside the gate ring for 0.3 s.
+
+**Cost:** about 60 shapes × 8 substeps × 72 fps, roughly 35 000 tests a second. That is trivial even on a Quest 2.
+
+### 5.4 Light shards (build pieces)
+
+**What they are.** Thin cut-glass shapes: plank, wedge, arch, disc, notch. Each is 4–10 cm across.
+
+**How you place one.**
+- **Grab:** pinch within 4 cm of a shard (pinch hysteresis 2.0 / 3.5 cm; release after 75 ms of no pinch).
+- **Move:** the shard follows the pinch point in 3D. Its depth is clamped between 15% and 85% of the lantern-to-screen distance.
+- **Rotate:** roll your wrist. The roll angle relative to the grab angle turns the shard; on release it snaps to 15°.
+- **While held:** the shard shows its live scale, "×2.4", and its outline ghosts on the screen before you let go.
+- Shards are on the shadow layer, so they cast real shadows, and their projected outline (5.1) is a collider.
+
+**Budgets.** Each level gives you a set of shards. Using fewer earns a better rank.
+
+### 5.5 Scoring, ranks, records
+
+- **Stars:** ★ for reaching the gate, ★ for all three motes, ★ for beating par time (or for the shard budget in build levels).
+- **Records:** best time per level, saved with the story in `play.runs`. Retries are counted, and ranks feed the trophies.
+
+### 5.6 Daily Light
+
+- **The course:** seed = YYYYMMDD → mulberry32 random numbers → 4–6 cliffs, with gaps no wider than the longest shadow a hand can cast, plus three motes on reachable arcs.
+- **Solvable by construction:** every gap ≤ 80% of a hand's shadow at d = 0.35 m.
+- **Best time** is kept per day.
+
+### 5.7 Workshop saves
+
+`localStorage['shadowplay.workshop.N']` = `{ v: 1, shards: [{ type, x, y, z, rot }], start: [x, y], gate: [x, y] }`. Three slots.
+
+### 5.8 Performance budget (Quest 2)
+
+- 72 fps target.
+- The shadow map is already the costliest pass: one 1024² light.
+- The spark is one sprite, a 24-point trail and pooled bounce particles.
+- Physics is about 0.1 ms per frame.
+
+## 6. Look and sound
+
+- **Brighter look:**
+  - The paper becomes warm white with crisp indigo shadows.
+  - Higher exposure and fill light on the diorama.
+  - UI panels: cream with teal, sunflower and coral accents instead of dark lacquered wood.
+  - The spark is cyan-white with a gold trail.
+- **Sky backdrop:** a bright gradient sky dome behind the scene. It hides greyscale passthrough on Quest 2 and the emulator's grey room. It is on by default on Quest 2 and can be switched in Settings (*Room / Sky*).
+- **Real animal voices:** horse (whinny, snort), stag (red deer roar), fox (bark), and layers for the dragon. Recordings come from Wikimedia Commons or OpenGameArt with CC0 or CC BY licences; we trim and level them with ffmpeg and credit them in CREDITS.md.
+- **Eating:**
+  - The stag plays its real `Stand_Eating_01` clip at the berries, and the berries shrink bite by bite with crumbs and a chewing sound.
+  - The fox has no eating clip, so it sniffs instead of pretending to eat.
+
+## 7. Testing
+
+- **Laptop mouse mode** (dev builds only):
+  - The right hand follows the mouse.
+  - The scroll wheel moves it nearer to or farther from the lantern.
+  - Left click pinches; keys 1–9 set the hand shape.
+  - Shift holds the left hand instead.
+- **Emulator scripts** for each new level.
+- A **spark physics test in Node**: a ball dropped on a capsule bounces to the expected height, and nothing tunnels at maximum speed.
+- **Quest 2 alignment checklist:** see the guide page.
+
+## 8. Submission package
+
+- **Hosting:** GitHub Pages. We need HTTPS, a public build and a stable URL. Deploy a first build early, then redeploy.
+- **Video (under 3 min), best material first:**
+  1. A spark bouncing off a live hand shadow.
+  2. Building with shards.
+  3. D/d explained in 5 seconds.
+  4. The machines.
+  5. The dragon.
+  6. The Workshop and Daily Light.
+- **Form:**
+  - tagline (≤ 140 characters)
+  - description (≤ 500 words: inspiration, how we built it, what's next)
+  - how hand interactions work
+  - team names and roles
+  - track: Gaming, division: New Experience
+
+## 9. Checklist
+
+### Day 1 — Wed Nov 11
+- [x] Research the competition, rules and last year's winners (section 1)
+- [x] Find why "I can't see what shadow to make": the outline is too faint and the ghost hand sits off to the side
+- [ ] P0 Make the target outline and ghost hand clearly visible
+- [ ] P0 Laptop mouse test mode (section 7)
+- [ ] P0 Spark physics engine with projected hand capsules (5.1–5.3) and a Node physics test
+- [ ] P0 Act I levels 1–3 playable
+
+### Day 2 — Thu Nov 12 (Quest 2 in hand)
+- [ ] P0 Quest 2 alignment pass with the checklist; fix what's off
+- [ ] P0 Act I levels 4–6
+- [ ] P0 Spark look and sound: glow, trail, bounce sparks, tink pitched by impact speed
+- [ ] P0 Stars, ranks and best times (5.5)
+
+### Day 3 — Fri Nov 13
+- [ ] P0 Light shards: grab, move, depth, rotate, budget (5.4)
+- [ ] P0 Act II levels 7–12
+- [ ] P0 First deploy to GitHub Pages
+
+### Day 4 — Sat Nov 14
+- [ ] P0 New story order (section 4); first run goes straight into Act I
+- [ ] P0 Rewrite every story line for ages 15–35
+- [ ] P1 Workshop sandbox with three save slots (5.7)
+- [ ] P1 Daily Light (5.6)
+
+### Day 5 — Sun Nov 15
+- [ ] P0 Brighter look and sky backdrop (section 6)
+- [ ] P1 Real animal voices with credits
+- [ ] P1 Eating fixed
+- [ ] P1 Journal pages for the spark levels: projection, collisions, restitution
+
+### Day 6 — Mon Nov 16 (feature freeze at night)
+- [ ] P0 Full playthrough on Quest; frame rate check; fix everything found
+- [ ] P1 Accessibility: one-hand mode, assist speed (0.6×), left-handed, sound captions
+- [ ] P0 Final deploy
+
+### Day 7 — Tue Nov 17
+- [ ] P0 Video: shot list, recording on Quest, edit
+- [ ] P0 Devpost text: tagline, description, hand interactions, team
+- [ ] P0 Submit (by Nov 18 evening IST)
+
+## 10. Risks and fallbacks
+
+- **The spark mode slips:** the existing campaign still stands. The spark levels go in as a new first act, and nothing old is deleted until the new act works.
+- **Hand-shadow physics feels laggy on the device:** raise the hand low-pass cut-off, add 20 ms of prediction, and give more weight to the velocity term.
+- **GitHub Pages is blocked by repo settings:** Vercel or Netlify from the `dist/` folder.
+- **Running out of time:** cut P2, then P1, in that order. P0 alone is a complete submission.
+
+## 11. Who does what
+
+- **Aditya:**
+  - Quest 2 tests and alignment notes
+  - enabling GitHub Pages on the repo
+  - recording the video on the headset
+  - final Devpost form
+- **Yash:**
+  - Arena balance and polish
+  - video editing
+  - a first draft of the Devpost text
+  - pull `shadowplay` before editing (Story mode copy is gone)
+- **Claude:** spark engine, levels, shards, Workshop, visuals, audio, fixes, and keeping this checklist ticked.
