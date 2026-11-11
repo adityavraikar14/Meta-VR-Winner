@@ -7,6 +7,8 @@ import type { HandState } from '../creatures/hand-input.js';
 import { ArsenalDragonBattle } from '../fight/arsenal-battle.js';
 import { DragonBattle } from '../fight/battle.js';
 import { PowerChoice } from '../fight/power-choice.js';
+import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
+import { ShadowRun } from '../run/shadow-run.js';
 import { InkDuel } from '../fight/duel.js';
 import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
@@ -774,8 +776,39 @@ export function puzzleAt(index: number): Puzzle | null {
   return index === DUEL_INDEX ? DUEL : PUZZLES[index] ?? null;
 }
 
+/** A Shadow Run level: the spark on the screen, your hands' shadows as its ground. */
+function runPuzzle(level: RunLevel): Puzzle {
+  return {
+    id: level.id,
+    world: 0,
+    title: level.title,
+    story: level.story,
+    ask: level.ask,
+    handsOn: true,
+    solved: 'Through the gate.',
+    build(root, kit) {
+      const run = new ShadowRun(root, level);
+      stage.runNotes = () => run.journal();
+      const task: { caption: string; done: boolean; mistakes: number; stars?: number } = { caption: level.ask, done: false, mistakes: 0 };
+      stage.task = task;
+      return {
+        start: new Vector3(0, kit.floor, 0.12),
+        attempt: () => ({ solved: false, steps: [], line: 'The spark needs your shadow.' }),
+        update: (dt) => {
+          run.update(dt);
+          task.caption = run.caption;
+          task.mistakes = run.sim.retries;
+          task.done = run.done;
+          if (run.done) task.stars = run.stars;
+        },
+      };
+    },
+  };
+}
+
 export const PUZZLES: Puzzle[] = [
   warmup,
+  ...RUN_LEVELS.map(runPuzzle),
   shadowBridge,
   highLedge,
   fallenLog,

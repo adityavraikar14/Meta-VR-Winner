@@ -28,6 +28,7 @@ import { diagnoseDragon } from './fight/dragon3d.js';
 import { installLevelTester, levelKeys } from './level-tester.js';
 import { drawInventory } from './inventory-art.js';
 import { drawJournal } from './journal-art.js';
+import { installMouseHands } from './mouse-hands.js';
 import { awardTrophies, trophyLine } from './trophies.js';
 import { friendRunLines, JOURNAL, noteRun, pagesFilled } from './journal.js';
 import { devActions, devInfo, installDevTools } from './dev-tools.js';
@@ -151,6 +152,10 @@ const THUMB_TIP = 4;
 
 const DIM_OUTLINE = new Color(0x9a7442);
 const HOT_OUTLINE = new Color(0xffc34d);
+/** The target shape: a cream line warming to gold as your shadow nears it, over a dark glow. */
+const TARGET_DIM = new Color(0xfff1c9);
+const TARGET_HOT = new Color(0xffa41c);
+const TARGET_HALO = 0x1b2340;
 
 const DEV = import.meta.env.DEV;
 const HAND_CHANNELS = [MaskChannel.Left, MaskChannel.Right] as const;
@@ -219,6 +224,9 @@ export class ShadowGameSystem extends createSystem({
   private outline!: Mesh;
   private outlineMaterial!: MeshBasicMaterial;
   private outlineCanvas!: HTMLCanvasElement;
+  private haloCanvas!: HTMLCanvasElement;
+  private haloTexture!: CanvasTexture;
+  private haloMaterial!: MeshBasicMaterial;
   private outlineTexture!: CanvasTexture;
   private cards: Card[] = [];
   private ring!: Mesh;
@@ -288,15 +296,23 @@ export class ShadowGameSystem extends createSystem({
       map: this.outlineTexture,
       transparent: true,
       depthWrite: false,
-      color: DIM_OUTLINE.clone(),
-      opacity: 0.45,
+      color: TARGET_DIM.clone(),
+      opacity: 0.95,
     });
     this.outline = new Mesh(new PlaneGeometry(1, 1), this.outlineMaterial);
     this.outline.name = 'TargetOutline';
     this.outline.scale.setScalar(OUTLINE_SIZE);
     this.outline.position.set(0, 0.02, 0.002);
-    this.outline.renderOrder = 1;
+    this.outline.renderOrder = 2;
     paper.add(this.outline);
+    // A dark glow under the line, so it reads on light paper and over the player's own shadow.
+    this.haloCanvas = makeCanvas(256, 256);
+    this.haloTexture = makeTexture(this.haloCanvas);
+    this.haloMaterial = new MeshBasicMaterial({ map: this.haloTexture, transparent: true, depthWrite: false, color: TARGET_HALO, opacity: 0.5 });
+    const halo = new Mesh(this.outline.geometry, this.haloMaterial);
+    halo.position.z = -0.001;
+    halo.renderOrder = 1;
+    this.outline.add(halo);
 
     for (let i = 0; i < LEVELS.length; i++) {
       const canvas = makeCanvas(128, 160);
@@ -581,6 +597,12 @@ export class ShadowGameSystem extends createSystem({
     this.rayClick = false;
     if (pressed) playClick();
     this.skipButton.show(this.puzzle !== null && SKIPPABLE.has(this.phase) && !stage.menuOpen);
+    const skipX = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
+    if (this.skipButton.root.position.x !== skipX) {
+      // Moved to the other side: turn its face to the player again.
+      this.skipButton.root.position.x = skipX;
+      this.skipButton.root.lookAt(stage.paper!.localToWorld(VIEWER.clone()));
+    }
     const skipped = this.skipButton.update(dt, this.liveTips, this.skipClick);
     this.skipClick = false;
     if (skipped) {
@@ -789,6 +811,7 @@ export class ShadowGameSystem extends createSystem({
    */
   private addDesktopPress(): void {
     const canvas = this.renderer.domElement;
+    installMouseHands(canvas, () => (this.renderer.xr.isPresenting ? this.renderer.xr.getCamera() : this.camera));
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
@@ -955,7 +978,10 @@ export class ShadowGameSystem extends createSystem({
 
     const teach = this.puzzle?.teach;
     if (teach) {
-      drawSilhouette(this.outlineCanvas, decodeCells(levelFor(teach).outline), 10, 0.75);
+      const cells = decodeCells(levelFor(teach).outline);
+      drawTargetLine(this.outlineCanvas, cells, false);
+      drawTargetLine(this.haloCanvas, cells, true);
+      this.haloTexture.needsUpdate = true;
       this.outlineTexture.needsUpdate = true;
       this.outline.visible = true;
       this.ghost.show(levelFor(teach));
@@ -1070,8 +1096,8 @@ export class ShadowGameSystem extends createSystem({
 
     if (teaching) {
       const warmth = this.warmth(score);
-      this.outlineMaterial.color.copy(DIM_OUTLINE).lerp(HOT_OUTLINE, warmth);
-      this.outlineMaterial.opacity = 0.35 + 0.55 * warmth;
+      this.outlineMaterial.color.copy(TARGET_DIM).lerp(TARGET_HOT, warmth);
+      this.haloMaterial.opacity = 0.45 + 0.3 * warmth;
       const pulse = 1 + Math.sin(this.phaseTime * 6) * 0.02 * warmth;
       this.outline.scale.setScalar(OUTLINE_SIZE * pulse);
     }
@@ -1187,7 +1213,7 @@ export class ShadowGameSystem extends createSystem({
       : puzzle.walk
         ? 1 + (this.shadowWorld.falls === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0)
         : puzzle.handsOn
-          ? 1 + ((stage.task?.mistakes ?? 0) === 0 ? 1 : 0) + (this.matchTime < HANDS_ON_FAST ? 1 : 0)
+          ? stage.task?.stars ?? 1 + ((stage.task?.mistakes ?? 0) === 0 ? 1 : 0) + (this.matchTime < HANDS_ON_FAST ? 1 : 0)
         : 1 + (!this.hintShown && this.wrongTries === 0 ? 1 : 0) + (this.matchTime < FAST_TIME ? 1 : 0);
     play.stars[puzzle.id] = Math.max(play.stars[puzzle.id] ?? 0, stars);
     // The Inventor's Journal: the level's own numbers, or your friend's body from its shadow.
@@ -1653,6 +1679,47 @@ function makeTexture(canvas: HTMLCanvasElement): CanvasTexture {
 }
 
 /** Draws a cell map as a soft-edged white silhouette filling the canvas width (a square at the top). */
+/**
+ * A shape as a clean line around its edge, for the target on the paper: the
+ * silhouette is grown in sixteen directions and the shape itself cut back
+ * out, which leaves a band hugging the outside. `halo` draws it wide and soft.
+ */
+function drawTargetLine(canvas: HTMLCanvasElement, cells: Uint8Array, halo: boolean): void {
+  const small = makeCanvas(GRID, GRID);
+  const sctx = small.getContext('2d')!;
+  const image = sctx.createImageData(GRID, GRID);
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      const o = ((GRID - 1 - gy) * GRID + gx) * 4;
+      image.data[o] = image.data[o + 1] = image.data[o + 2] = 255;
+      image.data[o + 3] = cells[gy * GRID + gx] ? 255 : 0;
+    }
+  }
+  sctx.putImageData(image, 0, 0);
+  const ctx = canvas.getContext('2d')!;
+  const s = canvas.width;
+  const px = s / 256;
+  ctx.clearRect(0, 0, s, s);
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  const reach = (halo ? 9 : 3.4) * px;
+  ctx.filter = `blur(${(halo ? 5 : 1.1) * px}px)`;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    ctx.drawImage(small, Math.cos(a) * reach, Math.sin(a) * reach, s, s);
+  }
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.filter = `blur(${0.8 * px}px)`;
+  ctx.drawImage(small, 0, 0, s, s);
+  if (!halo) {
+    // A faint fill: the place to put your shadow.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 0.14;
+    ctx.drawImage(small, 0, 0, s, s);
+  }
+  ctx.restore();
+}
+
 function drawSilhouette(
   canvas: HTMLCanvasElement,
   cells: Uint8Array,

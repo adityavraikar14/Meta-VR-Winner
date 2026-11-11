@@ -1,3 +1,4 @@
+import { mouseHandsOn, setMouseHands } from './mouse-hands.js';
 import { stage } from './stage-state.js';
 
 /**
@@ -19,7 +20,13 @@ const VIEWS: { name: string; at: [number, number, number]; pitch: number }[] = [
   { name: 'Wide', at: [0, 1.75, 0.4], pitch: -20 },
 ];
 
-interface EmulatedDevice {
+interface EmulatedHandInput {
+  position: { set(x: number, y: number, z: number): unknown };
+  updatePinchValue?(value: number): void;
+}
+
+export interface EmulatedDevice {
+  hands?: { left?: EmulatedHandInput; right?: EmulatedHandInput };
   position: { set(x: number, y: number, z: number): unknown };
   quaternion: { set(x: number, y: number, z: number, w: number): unknown };
   primaryInputMode: 'controller' | 'hand';
@@ -32,7 +39,7 @@ interface EmulatedDevice {
 }
 
 /** The emulated headset the dev server injects (the one its own controls drive). */
-function emulatedDevice(): EmulatedDevice | null {
+export function emulatedDevice(): EmulatedDevice | null {
   const injected = (window as unknown as { IWER_DEVICE?: EmulatedDevice }).IWER_DEVICE;
   if (injected) return injected;
   const xr = navigator.xr as unknown as Record<symbol, { device?: EmulatedDevice }> | undefined;
@@ -42,7 +49,7 @@ function emulatedDevice(): EmulatedDevice | null {
 }
 
 /** Change the emulated device so its panels keep the change instead of restoring their own state. */
-function driveEmulator(change: (device: EmulatedDevice) => void): void {
+export function driveEmulator(change: (device: EmulatedDevice) => void): void {
   const device = emulatedDevice();
   if (!device) return;
   const manual = device.controlMode === 'manual';
@@ -106,6 +113,9 @@ const KEYS: Record<string, string> = {
 };
 
 export function levelKeys(id: string, kind: string): string {
+  if (id.startsWith('run-')) {
+    return 'Shift+M: the mouse moves your hand (wheel: nearer/farther = bigger/smaller shadow) · [ drop the spark now · ] toggle a test shadow that solves the level';
+  }
   return KEYS[id] ?? KEYS[kind] ?? 'N to skip';
 }
 
@@ -152,7 +162,7 @@ export function installLevelTester(api: TesterApi): void {
     body.innerHTML = '';
     const intro = document.createElement('div');
     intro.className = 'help';
-    intro.textContent = 'Enter VR in the emulator first (Enter on the start screen), then pick a level, or use Page Down / Page Up to step through them (Home: first, End: the dragon). Mouse-drag looks around; Shift+V changes the view; the emulator panels move the hands.';
+    intro.textContent = 'Enter VR in the emulator first (Enter on the start screen), then pick a level, or use Page Down / Page Up to step through them (Home: first, End: the dragon). Mouse-drag looks around; Shift+V changes the view; Shift+M lets the mouse move a hand (wheel: nearer/farther, hold the right button to pinch).';
     body.appendChild(intro);
     // Where the emulated head sits, and hands (the game has no controller input).
     const views = document.createElement('div');
@@ -168,6 +178,15 @@ export function installLevelTester(api: TesterApi): void {
       };
       views.appendChild(b);
     });
+    const mouse = document.createElement('button');
+    mouse.textContent = mouseHandsOn() ? '🖱 Mouse hands: on' : '🖱 Mouse hands';
+    if (mouseHandsOn()) mouse.className = 'on';
+    mouse.title = 'Shift+M. The mouse moves a hand; wheel: nearer/farther; hold the right button to pinch; Shift: left hand.';
+    mouse.onclick = () => {
+      setMouseHands(!mouseHandsOn());
+      render();
+    };
+    views.appendChild(mouse);
     const device = emulatedDevice();
     if (device && device.primaryInputMode !== 'hand') {
       const hands = document.createElement('button');

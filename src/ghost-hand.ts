@@ -1,4 +1,5 @@
 import {
+  CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
@@ -9,6 +10,9 @@ import {
   type Object3D,
   Quaternion,
   SphereGeometry,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
 import type { Finger } from './hand-pose.js';
@@ -30,9 +34,9 @@ import { FINGER_BONES, PALM_BONES } from './stage.js';
  * Ghost position in paper space: beside the player's hands, just outside the
  * creature stage, so it never hides the paper or the diorama.
  */
-const GHOST_X = 0.3;
-const GHOST_Y = -0.1;
-const GHOST_Z = 0.62;
+const GHOST_X = 0.27;
+const GHOST_Y = -0.05;
+const GHOST_Z = 0.6;
 /** Where the player's eyes are in paper space (see ShadowStageSystem). */
 const VIEWER = new Vector3(0, 0.12, 1.0);
 
@@ -42,7 +46,7 @@ const OPEN_TIME = 0.5;
 const CLOSE_TIME = 0.8;
 const RELEASE_TIME = 0.35;
 
-const OPACITY = 0.55;
+const OPACITY = 0.72;
 const GLOW = new Color(0xcfe8ff);
 const FIX = new Color(0xffc34d);
 
@@ -89,6 +93,8 @@ export class GhostHand {
   private focus: GhostFocus = null;
   private colored: GhostFocus | undefined = undefined;
   private leftHanded = false;
+  private label: Sprite;
+  private labelMaterial: SpriteMaterial;
 
   private a = new Vector3();
   private b = new Vector3();
@@ -123,6 +129,27 @@ export class GhostHand {
     };
     this.hands = [make(), make()];
     parent.add(this.root);
+    // "Copy this hand", above the ghost (on the paper, so mirroring never flips the text).
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 96;
+    const g = canvas.getContext('2d')!;
+    g.fillStyle = 'rgba(27, 35, 64, 0.82)';
+    g.beginPath();
+    g.roundRect(4, 4, 504, 88, 44);
+    g.fill();
+    g.fillStyle = '#fff1c9';
+    g.font = '600 44px Georgia, serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('Copy this hand ↓', 256, 50);
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    this.labelMaterial = new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0 });
+    this.label = new Sprite(this.labelMaterial);
+    this.label.scale.set(0.15, 0.15 * (96 / 512), 1);
+    this.label.renderOrder = 6;
+    parent.add(this.label);
   }
 
   /** Starts demonstrating a friend's shape, or fades out for null. */
@@ -156,7 +183,9 @@ export class GhostHand {
     const target = this.level ? 1 : 0;
     this.appear += (target - this.appear) * Math.min(1, dt * 4);
     this.root.visible = this.appear > 0.02 && this.layout !== null;
+    this.label.visible = this.root.visible;
     if (!this.root.visible) return;
+    this.labelMaterial.opacity = 0.95 * this.appear;
     this.time += dt;
     this.material.opacity = OPACITY * this.appear * (1 - 0.75 * fade);
 
@@ -177,6 +206,7 @@ export class GhostHand {
     const mirror = this.leftHanded && !layout.pair;
     this.root.scale.set(mirror ? -1 : 1, 1, 1);
     this.root.position.set(mirror ? -GHOST_X : GHOST_X, GHOST_Y + Math.sin(this.time * 1.8) * 0.004, GHOST_Z);
+    this.label.position.set(this.root.position.x, GHOST_Y + 0.14, GHOST_Z);
     // Turn the back of the hand towards the player's eyes.
     this.root.rotation.set(0, Math.atan2(VIEWER.x - this.root.position.x, VIEWER.z - this.root.position.z), 0);
 

@@ -13,7 +13,9 @@
     "postinstall": "node scripts/patch-iwsdk-timeout.mjs",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:spark": "esbuild scripts/spark-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/spark-test.mjs --log-level=error && node .iwsdk/spark-test.mjs",
+    "test:levels": "esbuild scripts/run-levels-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/run-levels-test.mjs --log-level=error && node .iwsdk/run-levels-test.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

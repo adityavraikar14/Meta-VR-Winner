@@ -219,16 +219,16 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 ### Day 1 — Wed Nov 11
 - [x] Research the competition, rules and last year's winners (section 1)
 - [x] Find why "I can't see what shadow to make": the outline is too faint and the ghost hand sits off to the side
-- [ ] P0 Make the target outline and ghost hand clearly visible
-- [ ] P0 Laptop mouse test mode (section 7)
-- [ ] P0 Spark physics engine with projected hand capsules (5.1–5.3) and a Node physics test
-- [ ] P0 Act I levels 1–3 playable
+- [x] P0 Make the target outline and ghost hand clearly visible (cream line on a dark glow; ghost hand larger with a "Copy this hand" label; Skip moved to the other side)
+- [x] P0 Laptop mouse test mode (section 7): Shift+M; tested: the hand follows the pointer, the wheel moves it 2 cm per notch
+- [x] P0 Spark physics engine with projected hand capsules (5.1–5.3) and a Node physics test (`npm run test:spark`: 6 checks pass)
+- [x] P0 Act I levels 1–3 playable (First Light, The Climb, The Kick), proven finishable by `npm run test:levels`
 
 ### Day 2 — Thu Nov 12 (Quest 2 in hand)
 - [ ] P0 Quest 2 alignment pass with the checklist; fix what's off
-- [ ] P0 Act I levels 4–6
-- [ ] P0 Spark look and sound: glow, trail, bounce sparks, tink pitched by impact speed
-- [ ] P0 Stars, ranks and best times (5.5)
+- [x] P0 Act I levels 4–6 (Long Shadow, The Low Tunnel, Twin Gaps), proven finishable
+- [x] P0 Spark look and sound: glow, trail, bounce sparks, tink pitched by impact speed
+- [x] P0 Stars (gate, all motes, par time) on the level card · [ ] best times per level
 
 ### Day 3 — Fri Nov 13
 - [ ] P0 Light shards: grab, move, depth, rotate, budget (5.4)
@@ -256,6 +256,12 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [ ] P0 Video: shot list, recording on Quest, edit
 - [ ] P0 Devpost text: tagline, description, hand interactions, team
 - [ ] P0 Submit (by Nov 18 evening IST)
+
+### Notes from building (Nov 11)
+- The bottom ~40% of the paper is hidden behind the diorama island, so spark courses live in the top half (floor at y = −0.15 m). A spark that drops below y = −0.24 m has fallen out of sight: a miss.
+- A sliding-block friction model made the spark stick on gentle slopes; it is now a glassy ball (friction 0.02 on terrain, 0.06 on hands, rolling drag 8%/s).
+- Sharp corners eat the spark's speed (each corner removes the normal component); chutes are built from many short segments (`ground()` in run-levels.ts).
+- The Kick is forgiving by design: 67 of 88 flick strengths tested win; a cleaner flick collects all three motes.
 
 ## 10. Risks and fallbacks
 

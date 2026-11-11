@@ -56,7 +56,7 @@ export const stage = {
   /** The level is being played right now (not the menu, the table or the story card). */
   playing: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */
-  task: null as { caption: string; done: boolean; mistakes: number } | null,
+  task: null as { caption: string; done: boolean; mistakes: number; stars?: number } | null,
   /** The level's own numbers for its Inventor's Journal page, read when it is cleared. */
   runNotes: null as (() => string[]) | null,
   /** The Journal page a clear fills, when not the level's own (the dragon beaten with the Arsenal). */
