@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { preloadCalls } from './audio.js';
 import { createSystem, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { loadProgress, play, totalStars } from './progress.js';
 import { stage } from './stage-state.js';
@@ -48,8 +49,9 @@ export class PanelSystem extends createSystem({}) {
     if (returning && note) note.textContent = `${totalStars()} ★ collected so far  ·  ${trophiesEarned()} of ${TROPHIES.length} 🏆 trophies`;
 
     const launch = () => {
-      // The Arsenal's sounds (bosses, weapons) start on this click too.
+      // The Arsenal's sounds (bosses, weapons) and the recorded animal calls start on this click too.
       sfx.unlock();
+      preloadCalls();
       this.world.launchXR();
     };
     button.addEventListener('click', launch);

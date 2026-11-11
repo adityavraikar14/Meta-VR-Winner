@@ -243,13 +243,13 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 
 ### Day 5 — Sun Nov 15
 - [x] P0 Sky backdrop (golden-hour dome; on for Quest 2, desktop and the emulator; Settings → Sky / Room view) · [ ] brighter UI palette
-- [ ] P1 Real animal voices with credits
-- [ ] P1 Eating fixed
+- [x] P1 Real animal voices with credits: the horse neighs and whinnies with real recordings (public domain; CC BY 4.0), credited in CREDITS.md and in game
+- [x] P1 Eating: the berry-eating level left the story; the fox's "eating" (a sitting clip) is now a plain idle
 - [ ] P1 Journal pages for the spark levels: projection, collisions, restitution
 
 ### Day 6 — Mon Nov 16 (feature freeze at night)
 - [ ] P0 Full playthrough on Quest; frame rate check; fix everything found
-- [ ] P1 Accessibility: one-hand mode, assist speed (0.6×), left-handed, sound captions
+- [x] P1 Accessibility: Relaxed spark (60% speed) in Settings · left-handed ghost already · [ ] one-hand mode for Twin Gaps
 - [ ] P0 Final deploy
 
 ### Day 7 — Tue Nov 17

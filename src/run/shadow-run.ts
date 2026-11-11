@@ -1,3 +1,4 @@
+import { sparkPace } from '../assist.js';
 import {
   AdditiveBlending,
   CanvasTexture,
@@ -333,7 +334,8 @@ export class ShadowRun {
     const solids = this.devShadow && this.level.build
       ? this.level.solution.filter((s) => s.poly).map((s) => poly(s.poly!, TAG_SHARD))
       : this.shards?.shadows ?? [];
-    if (stage.playing || sim.state === 'won') sim.step(Math.min(dt, 1 / 30), shapes, solids);
+    // Relaxed (Settings): the spark's own time runs slower than real time.
+    if (stage.playing || sim.state === 'won') sim.step(Math.min(dt, 1 / 30) * sparkPace(), shapes, solids);
 
     for (const event of sim.events) {
       if (event.type === 'bounce') {

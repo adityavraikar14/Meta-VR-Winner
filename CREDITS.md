@@ -68,3 +68,8 @@ Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution
 Everything else (sounds, grass, water, bamboo, vines, giant leaves, fireflies,
 shadow puppets, driftwood, mine timbers, crystals, the earth slab, and the horse whim's
 gears, ratchet, rope, bucket, well and gauge) is made in code for this project.
+
+## Animal sounds
+
+- **Horse neigh** (`public/audio/horse-neigh.ogg`): "Wiehern.ogg" by Hü, Wikimedia Commons, public domain. https://commons.wikimedia.org/wiki/File:Wiehern.ogg (trimmed and loudness-normalized).
+- **Horse whinny** (`public/audio/horse-whinny.ogg`): Supplementary Audio S1 of Briefer E, Maigrot A, Mandel R, Freymond S, Bachmann I, Hillmann E (2015), "Segregation of information about emotional arousal and valence in horse whinnies", *Scientific Reports* 5:9989, via Wikimedia Commons, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). First whinny only, trimmed and loudness-normalized.

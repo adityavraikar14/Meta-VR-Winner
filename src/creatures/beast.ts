@@ -17,7 +17,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { playHoof, playNicker, playSnort } from '../audio.js';
+import { playHoof, playHorseCall, playNicker, playSnort } from '../audio.js';
 import type { Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
@@ -62,7 +62,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     file: 'gltf/fox-hd.glb', height: 0.085, walk: 0.8, gallop: 2.6, temper: 'Attack', voice: 1.7, hd: true,
     clips: {
       Idle: 'Fox_Idle', Walk: 'Fox_Walk_InPlace', Gallop: 'Fox_Run_InPlace', Gallop_Jump: 'Fox_Jump_Pivot_InPlace', Jump_toIdle: 'Fox_Idle',
-      Eating: 'Fox_Sit2_Idle', Idle_2: 'Fox_Sit_Idle_Break', Idle_Headlow: 'Fox_Sit_Yes', Idle_2_HeadLow: 'Fox_Sit_Yes',
+      Eating: 'Fox_Idle', Idle_2: 'Fox_Sit_Idle_Break', Idle_Headlow: 'Fox_Sit_Yes', Idle_2_HeadLow: 'Fox_Sit_Yes',
       Idle_HitReact_Left: 'Fox_Falling_Left', Idle_HitReact_Right: 'Fox_Falling', Attack: 'Fox_Attack_Paws', Attack_Headbutt: 'Fox_Attack_Paws', Attack_Kick: 'Fox_Attack_Tail',
     },
   },
@@ -341,7 +341,13 @@ export class Beast {
     if (this.state !== 'idle') return;
     this.happiness = 1;
     this.playOnce('Gallop_Jump', 1.1);
-    playNicker(this.spec.voice);
+    this.call();
+  }
+
+  /** Its voice: a real recording for the horse; the others keep their synthesized calls. */
+  private call(volume = 1): void {
+    if (this.kind === 'horse' && playHorseCall(0.45 * volume)) return;
+    playNicker(this.spec.voice, volume);
   }
 
   update(dt: number, time: number, ground: BeastGround, hands: HandState[]): void {
@@ -519,7 +525,7 @@ export class Beast {
       this.happiness = Math.min(1, this.happiness + dt * 0.4);
       if (!wasPetting && this.oneShot <= 0) {
         this.setMood('rest', 4);
-        playNicker(this.spec.voice, 0.6);
+        this.call(0.6);
       }
       this.moodTime = 0;
     }
@@ -580,7 +586,7 @@ export class Beast {
           this.taskLook.copy(step.look);
           this.taskLooking = true;
         }
-        if (step.pose === 'cheer') playNicker(this.spec.voice);
+        if (step.pose === 'cheer') this.call();
         if (step.pose === 'bonk') playSnort(0.06);
       }
     }

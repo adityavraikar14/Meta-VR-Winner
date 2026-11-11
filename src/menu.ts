@@ -1,3 +1,4 @@
+import { isRelaxed, setRelaxed } from './assist.js';
 import { setSky, skyOn } from './sky.js';
 import type { Object3D, Vector3 } from '@iwsdk/core';
 import { isMuted, playClick, playPrompt, playTinkle, playUnfold, setMuted } from './audio.js';
@@ -43,6 +44,7 @@ const LAYOUTS: Record<number, number[]> = {
   4: [-0.25, -0.083, 0.083, 0.25],
   5: [-0.3, -0.15, 0, 0.15, 0.3],
   6: [-0.325, -0.195, -0.065, 0.065, 0.195, 0.325],
+  7: [-0.336, -0.224, -0.112, 0, 0.112, 0.224, 0.336],
 };
 
 export class MainMenu {
@@ -57,7 +59,7 @@ export class MainMenu {
     private readonly viewer: Vector3,
     private readonly draw: Draw,
   ) {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       const button = new PushButton(parent, '');
       button.show(false);
       this.buttons.push(button);
@@ -131,7 +133,8 @@ export class MainMenu {
       }
       button.setText(slot.label);
       button.root.position.set(xs[i], ROW_Y, ROW_Z);
-      button.size = BUTTON_SCALE;
+      // Seven to a row is tight: a little smaller.
+      button.size = this.slots.length > 6 ? BUTTON_SCALE * 0.88 : BUTTON_SCALE;
       button.root.lookAt(eye);
       button.show(true);
     });
@@ -203,7 +206,7 @@ export class MainMenu {
     this.draw(
       'Shadowplay',
       'Settings',
-      `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}  ·  Around you: ${skyOn() ? 'sky' : 'your room'}`,
+      `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}  ·  Around you: ${skyOn() ? 'sky' : 'your room'}  ·  Spark: ${isRelaxed() ? 'relaxed (60%)' : 'full speed'}`,
       'During play, look at your open palm for the quick menu',
     );
     return [
@@ -221,6 +224,14 @@ export class MainMenu {
         label: skyOn() ? 'Room view' : 'Sky',
         run: () => {
           setSky(!skyOn());
+          this.layout();
+          return null;
+        },
+      },
+      {
+        label: isRelaxed() ? 'Full speed' : 'Relaxed',
+        run: () => {
+          setRelaxed(!isRelaxed());
           this.layout();
           return null;
         },
@@ -353,6 +364,7 @@ export class MainMenu {
 const CREDITS: Array<[string, string]> = [
   ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
+  ['Animal sounds', 'Horse neigh: Hü, Wikimedia Commons (public domain) · Horse whinny: Briefer, Maigrot, Mandel, Freymond, Bachmann & Hillmann 2015, Scientific Reports (CC BY 4.0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
   ['The World', 'Plants, rocks, textures and the daylight sky: Poly Haven (CC0) · Leaves: ambientCG (CC0)'],
   ['The Arena', 'The Arsenal, a hand-sign fight with sword, spear, power ball, wall and blaster, by Yash Ammanavar'],

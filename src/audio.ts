@@ -353,6 +353,50 @@ export function playSnort(volume = 0.05): void {
 }
 
 /** A soft, low nicker: a throaty call that steps down in pitch. */
+/** Recorded sounds (public/audio), decoded on first use; null while loading or if missing. */
+const samples: Record<string, AudioBuffer | null> = {};
+
+function sample(file: string): AudioBuffer | null {
+  const ctx = audio();
+  if (!ctx) return null;
+  if (file in samples) return samples[file];
+  samples[file] = null;
+  void fetch(`${import.meta.env.BASE_URL}audio/${file}`)
+    .then((response) => response.arrayBuffer())
+    .then((data) => ctx.decodeAudioData(data))
+    .then((buffer) => {
+      samples[file] = buffer;
+    })
+    .catch(() => {});
+  return null;
+}
+
+/** Starts loading the recorded animal calls (call from a user gesture, so audio can start). */
+export function preloadCalls(): void {
+  sample('horse-neigh.ogg');
+  sample('horse-whinny.ogg');
+}
+
+/**
+ * A real horse: a neigh (public domain, Wikimedia Commons) or a whinny (Briefer
+ * et al. 2015, CC BY 4.0), each at a slightly different pitch every time.
+ * Returns false if the recordings are not loaded yet (the caller falls back).
+ */
+export function playHorseCall(volume = 0.5): boolean {
+  const ctx = audio();
+  if (!ctx) return false;
+  const buffer = sample(Math.random() < 0.55 ? 'horse-neigh.ogg' : 'horse-whinny.ogg') ?? sample('horse-neigh.ogg');
+  if (!buffer) return false;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = 0.94 + Math.random() * 0.12;
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  source.connect(gain).connect(ctx.destination);
+  source.start();
+  return true;
+}
+
 export function playNicker(pitch = 1, volume = 1): void {
   const ctx = audio();
   if (!ctx) return;

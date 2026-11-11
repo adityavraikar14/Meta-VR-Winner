@@ -481,6 +481,10 @@ export class ShadowGameSystem extends createSystem({
     devActions.s = () => {
       if (this.phase === 'title') this.menu.open('journal');
     };
+    // Dev: E opens Settings from the menu.
+    devActions.e = () => {
+      if (this.phase === 'title') this.menu.open('settings');
+    };
     devActions.arrowleft = () => this.menu.turnJournal(-1);
     devActions.arrowright = () => this.menu.turnJournal(1);
     devInfo.table = () => ({
