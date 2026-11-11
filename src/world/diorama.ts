@@ -1,5 +1,5 @@
 import { Mentor } from '../creatures/mentor.js';
-import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
+import { Box3, Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
 import { playAwaken, playUnfold, setAmbience, tickAmbience } from '../audio.js';
@@ -167,16 +167,33 @@ export class Diorama {
     }
   }
 
-  /** Ada stands beside the screen, in the first spot clear of this level's machines. */
+  /**
+   * Ada stands beside the screen, in the spot with the most room: each
+   * candidate's distance to the nearest prop's actual bounding box (and to
+   * the machines' keep-clear circles), the largest wins.
+   */
   private placeMentor(): void {
-    const spots: Array<[number, number]> = [[-0.47, -0.3], [0.47, -0.3], [-0.5, 0.0], [0.5, 0.0], [-0.44, 0.16], [0.44, 0.16]];
+    const spots: Array<[number, number]> = [
+      [-0.47, -0.3], [0.47, -0.3], [-0.52, 0.02], [0.52, 0.02], [-0.56, -0.46], [0.56, -0.46], [-0.46, 0.17], [0.46, 0.17],
+    ];
+    this.props.updateMatrixWorld(true);
+    const boxes = this.props.children.filter((c) => c.visible).map((c) => new Box3().setFromObject(c));
     const at = new Vector3();
-    const free = spots.find(([x, z]) => {
-      this.stageRoot.localToWorld(at.set(x, this.floor, z));
-      return !this.blockers.some((b) => b.center.distanceTo(at) < b.radius + 0.07);
-    });
-    const [x, z] = free ?? spots[0];
-    this.mentor.place(x, this.floor, z);
+    let best = spots[0];
+    let bestRoom = -Infinity;
+    for (const spot of spots) {
+      this.stageRoot.localToWorld(at.set(spot[0], this.floor + 0.08, spot[1]));
+      let room = Infinity;
+      for (const box of boxes) if (!box.isEmpty()) room = Math.min(room, box.distanceToPoint(at));
+      for (const b of this.blockers) room = Math.min(room, b.center.distanceTo(at) - b.radius);
+      // A small preference for the earlier (nearer the screen) spots.
+      room -= spots.indexOf(spot) * 0.004;
+      if (room > bestRoom) {
+        bestRoom = room;
+        best = spot;
+      }
+    }
+    this.mentor.place(best[0], this.floor, best[1]);
   }
 
   private decorate(world: number): void {
