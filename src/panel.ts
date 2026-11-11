@@ -9,6 +9,7 @@ import { createSystem, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { loadProgress, play, totalStars } from './progress.js';
 import { stage } from './stage-state.js';
 import { DUEL, DUEL_INDEX, PUZZLES, WORLDS } from './world/puzzles.js';
+import { TROPHIES, trophiesEarned } from './trophies.js';
 import { sfx } from './yash/sfx.js';
 
 /**
@@ -44,7 +45,7 @@ export class PanelSystem extends createSystem({}) {
     const returning = play.puzzleIndex !== 0 || totalStars() > 0;
     button.disabled = false;
     button.textContent = returning ? 'Continue in VR' : 'Play in VR';
-    if (returning && note) note.textContent = `${totalStars()} ★ collected so far`;
+    if (returning && note) note.textContent = `${totalStars()} ★ collected so far  ·  ${trophiesEarned()} of ${TROPHIES.length} 🏆 trophies`;
 
     const launch = () => {
       // The Arsenal's sounds (bosses, weapons) start on this click too.

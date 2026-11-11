@@ -433,7 +433,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
         : o.alive
           ? `${o.title}  ♥ ${o.hp}/${o.maxHp}`
           : this.lastWin
-            ? `${o.title} defeated in ${Math.round(this.lastWin.seconds)} s! ${this.lastWin.newBest ? '★ New best' : `Best ${Math.round(this.lastWin.best)} s`}`
+            ? `${o.title} defeated in ${Math.round(this.lastWin.seconds)} s! ${this.lastWin.newBest ? '★ New best' : `Best ${Math.round(this.lastWin.best)} s`}${this.lastWin.trophies ? `  ${this.lastWin.trophies}` : ''}`
             : `${o.title} defeated! (${o.defeats})`,
       o.alive || loading ? '#ffffff' : '#ffe27a',
     );

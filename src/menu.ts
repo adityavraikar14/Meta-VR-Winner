@@ -2,6 +2,7 @@ import type { Object3D, Vector3 } from '@iwsdk/core';
 import { isMuted, playClick, playPrompt, playTinkle, playUnfold, setMuted } from './audio.js';
 import { craft, needsText, RECIPES } from './bag.js';
 import { JOURNAL, pagesFilled } from './journal.js';
+import { TROPHIES, trophiesEarned } from './trophies.js';
 import { play, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
@@ -262,11 +263,26 @@ export class MainMenu {
 
   private journalPage = 0;
 
+  /** Turn the open Journal by `d` pages (dev keys ← →); the Trophy Shelf is the last spread. */
+  turnJournal(d: number): void {
+    if (this.page !== 'journal') return;
+    const n = JOURNAL.length + 1;
+    this.journalPage = (this.journalPage + d + n) % n;
+    playUnfold();
+    this.layout();
+  }
+
   /** The Inventor's Journal: a page of real science per level, with your own numbers. */
   private journal(): Slot[] {
-    const n = JOURNAL.length;
-    const page = JOURNAL[this.journalPage];
-    this.draw(String(this.journalPage), JOURNAL_PAGE, `${pagesFilled()} of ${n} pages filled`);
+    // Every page, then the Trophy Shelf as the last spread.
+    const n = JOURNAL.length + 1;
+    const shelf = this.journalPage >= JOURNAL.length;
+    const page = JOURNAL[Math.min(this.journalPage, JOURNAL.length - 1)];
+    this.draw(
+      String(this.journalPage),
+      JOURNAL_PAGE,
+      shelf ? `${trophiesEarned()} of ${TROPHIES.length} trophies` : `${pagesFilled()} of ${JOURNAL.length} pages filled`,
+    );
     const step = (d: number) => () => {
       this.journalPage = (this.journalPage + d + n) % n;
       playUnfold();
@@ -274,12 +290,12 @@ export class MainMenu {
       return null;
     };
     const index = PUZZLES.findIndex((p) => p.id === (page.replay ?? page.id));
-    const earned = play.journal[page.id] !== undefined;
+    const earned = !shelf && play.journal[page.id] !== undefined;
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Prev', run: step(-1) },
       {
-        label: earned ? 'Replay' : 'Locked',
+        label: shelf ? 'Trophies' : earned ? 'Replay' : 'Locked',
         run: () => {
           if (!earned) {
             playPrompt();

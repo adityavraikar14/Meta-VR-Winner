@@ -1,5 +1,6 @@
 import { noteRun } from './journal.js';
 import { loadProgress, play, progressLoaded, saveProgress } from './progress.js';
+import { awardTrophies, trophyLine } from './trophies.js';
 
 /**
  * The Arena's records: each boss's best time and wins, kept with the story's
@@ -12,6 +13,8 @@ export interface ArenaWin {
   newBest: boolean;
   /** This win filled the Arsenal's Journal page for the first time. */
   newPage: boolean;
+  /** Trophies this win earned, as a line ("🏆 Boss Slayer"), or empty. */
+  trophies: string;
 }
 
 /** Bosses in the order the Arena offers them, for the Journal line. */
@@ -32,6 +35,7 @@ export function recordArenaWin(boss: string, title: string, seconds: number, blo
     `${blows} blows landed`,
     `Arena wins: ${tally}`,
   ]);
+  const trophies = trophyLine(awardTrophies());
   saveProgress();
-  return { seconds, best: record.best, newBest, newPage };
+  return { seconds, best: record.best, newBest, newPage, trophies };
 }

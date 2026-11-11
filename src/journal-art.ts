@@ -1,5 +1,6 @@
 import { type Diagram, JOURNAL } from './journal.js';
 import { play } from './progress.js';
+import { TROPHIES, trophiesEarned } from './trophies.js';
 import { PUZZLES, WORLDS } from './world/puzzles.js';
 
 /**
@@ -524,18 +525,8 @@ function paper(g: CanvasRenderingContext2D, x: number, w: number, spineLeft: boo
   g.fill();
 }
 
-/** Paint journal page `index` (of JOURNAL) as an open notebook. */
-export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
-  const g = canvas.getContext('2d')!;
-  g.clearRect(0, 0, W, H);
-  const page = JOURNAL[index];
-  const lines = play.journal[page.id];
-  const earned = lines !== undefined;
-  const level = page.id === 'duel' || page.title ? null : PUZZLES.find((p) => p.id === page.id);
-  const title = page.title ?? level?.title ?? 'Ink Duel';
-  const chapter = page.chapter ?? (level ? `Chapter ${level.world + 1} · ${WORLDS[level.world].name}` : 'Side game');
-  seed = 7 + index * 131;
-
+/** The open notebook: leather cover, two cream pages, the spine and its ribbon. */
+function book(g: CanvasRenderingContext2D): void {
   // The leather cover, then the two pages and the spine's shadow.
   g.fillStyle = '#5a3418';
   g.beginPath();
@@ -565,6 +556,24 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
   }
   // A red ribbon down from the top of the spine.
   wash(g, [[W / 2 + 10, 14], [W / 2 + 26, 14], [W / 2 + 26, 150], [W / 2 + 18, 140], [W / 2 + 10, 150]], '#a8282a');
+}
+
+/** Paint journal page `index` (of JOURNAL) as an open notebook; one past the last is the Trophy Shelf. */
+export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
+  const g = canvas.getContext('2d')!;
+  g.clearRect(0, 0, W, H);
+  if (index >= JOURNAL.length) {
+    drawShelf(g);
+    return;
+  }
+  const page = JOURNAL[index];
+  const lines = play.journal[page.id];
+  const earned = lines !== undefined;
+  const level = page.id === 'duel' || page.title ? null : PUZZLES.find((p) => p.id === page.id);
+  const title = page.title ?? level?.title ?? 'Ink Duel';
+  const chapter = page.chapter ?? (level ? `Chapter ${level.world + 1} · ${WORLDS[level.world].name}` : 'Side game');
+  seed = 7 + index * 131;
+  book(g);
 
   // Left page: the sketch and its caption.
   label(g, 'INVENTOR’S JOURNAL', 52, 46, 15, '#8a6a4a', 'left', false);
@@ -635,4 +644,92 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
     g.fillStyle = '#5a3418';
     wrap(g, `Clear ${title} to fill this page with your own numbers.`, rw - 180).forEach((line, i) => g.fillText(line, rx, by + 34 + i * 27));
   }
+}
+
+
+// ============================================================ Trophy Shelf
+
+/** A medal on a ribbon: gold when earned, a faint pencil outline when not. */
+function medal(g: CanvasRenderingContext2D, cx: number, cy: number, icon: string, earned: boolean): void {
+  if (earned) {
+    wash(g, [[cx - 16, cy - 58], [cx - 4, cy - 58], [cx + 4, cy - 24], [cx - 8, cy - 24]], '#a8282a');
+    wash(g, [[cx + 4, cy - 58], [cx + 16, cy - 58], [cx + 8, cy - 24], [cx - 4, cy - 24]], '#1f3f86');
+    const gold = g.createRadialGradient(cx - 9, cy - 9, 3, cx, cy, 32);
+    gold.addColorStop(0, '#fff1b0');
+    gold.addColorStop(0.55, '#e0a83a');
+    gold.addColorStop(1, '#9a6a1c');
+    g.fillStyle = gold;
+    g.beginPath();
+    g.arc(cx, cy, 30, 0, Math.PI * 2);
+    g.fill();
+    ring(g, cx, cy, 30, 2, '#7a4e14');
+    ring(g, cx, cy, 24, 1.2, 'rgba(122, 78, 20, 0.6)');
+    // A cream face, so the emblem reads against the gold.
+    g.fillStyle = '#fff6dc';
+    g.beginPath();
+    g.arc(cx, cy, 20, 0, Math.PI * 2);
+    g.fill();
+    g.font = '26px "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#000';
+    g.fillText(icon, cx, cy + 2);
+  } else {
+    g.save();
+    g.globalAlpha = 0.35;
+    g.setLineDash([5, 5]);
+    ring(g, cx, cy, 30, 1.6);
+    g.setLineDash([]);
+    label(g, '?', cx, cy + 2, 26, SEPIA, 'center', false);
+    g.restore();
+  }
+}
+
+function shelfCell(g: CanvasRenderingContext2D, cx: number, top: number, i: number): void {
+  const t = TROPHIES[i];
+  const earned = t.earned();
+  medal(g, cx, top + 74, t.icon, earned);
+  g.font = '700 15px Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = earned ? SEPIA : 'rgba(59, 42, 26, 0.55)';
+  g.fillText(t.title, cx, top + 126, 104);
+  g.font = 'italic 13px Georgia, serif';
+  g.fillStyle = earned ? '#5a3418' : 'rgba(90, 52, 24, 0.55)';
+  g.textAlign = 'center';
+  wrap(g, t.how, 104).slice(0, 3).forEach((line, j) => g.fillText(line, cx, top + 148 + j * 16));
+}
+
+/** Every trophy, earned in gold; and how many, with the next one to try. */
+function drawShelf(g: CanvasRenderingContext2D): void {
+  seed = 4242;
+  book(g);
+  const count = trophiesEarned();
+  label(g, 'TROPHY SHELF', 52, 46, 15, '#8a6a4a', 'left', false);
+  label(g, `${count} / ${TROPHIES.length}`, W / 2 - 44, 46, 15, '#8a6a4a', 'right', false);
+  // Four to a row: eight on the left page, the rest on the right with the tally.
+  const col = (page: number, c: number) => (page === 0 ? 84 : W / 2 + 78) + c * 112;
+  for (let i = 0; i < TROPHIES.length; i++) {
+    const page = i < 8 ? 0 : 1;
+    const k = page === 0 ? i : i - 8;
+    shelfCell(g, col(page, k % 4), 60 + Math.floor(k / 4) * 200, i);
+  }
+  // The tally, in the free cells at the bottom right.
+  const used = TROPHIES.length - 8;
+  const firstFree = used % 4 === 0 ? 4 : used % 4;
+  const x0 = col(1, firstFree) - 50;
+  const x1 = W - 44;
+  const y0 = 276;
+  g.fillStyle = 'rgba(201, 138, 28, 0.12)';
+  g.beginPath();
+  g.roundRect(x0, y0, x1 - x0, 172, 12);
+  g.fill();
+  label(g, `${count} of ${TROPHIES.length}`, (x0 + x1) / 2, y0 + 40, 30, GOLD, 'center', false);
+  label(g, 'trophies earned', (x0 + x1) / 2, y0 + 72, 17, '#8a6a4a');
+  const next = TROPHIES.find((t) => !t.earned());
+  g.font = 'italic 16px Georgia, serif';
+  g.fillStyle = BLUE;
+  g.textAlign = 'center';
+  const tip = next ? `Next: ${next.how.charAt(0).toLowerCase()}${next.how.slice(1)}` : 'Every trophy is yours!';
+  wrap(g, tip, x1 - x0 - 24).slice(0, 3).forEach((line, j) => g.fillText(line, (x0 + x1) / 2, y0 + 108 + j * 20));
 }

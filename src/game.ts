@@ -19,6 +19,7 @@ import {
   playClick,
   playGrow,
   playPrompt,
+  playTinkle,
   setMusic,
   tickMusic,
 } from './audio.js';
@@ -27,6 +28,7 @@ import { diagnoseDragon } from './fight/dragon3d.js';
 import { installLevelTester, levelKeys } from './level-tester.js';
 import { drawInventory } from './inventory-art.js';
 import { drawJournal } from './journal-art.js';
+import { awardTrophies, trophyLine } from './trophies.js';
 import { friendRunLines, JOURNAL, noteRun, pagesFilled } from './journal.js';
 import { devActions, devInfo, installDevTools } from './dev-tools.js';
 import { type GhostFocus, GhostHand } from './ghost-hand.js';
@@ -455,6 +457,8 @@ export class ShadowGameSystem extends createSystem({
     devActions.s = () => {
       if (this.phase === 'title') this.menu.open('journal');
     };
+    devActions.arrowleft = () => this.menu.turnJournal(-1);
+    devActions.arrowright = () => this.menu.turnJournal(1);
     devInfo.table = () => ({
       height: stage.tableHeight,
       progress: Number(this.table.reading.progress.toFixed(2)),
@@ -1188,13 +1192,20 @@ export class ShadowGameSystem extends createSystem({
         : friendRunLines(this.creatureSize, this.bodySize));
     // A lost duel fills no page.
     const newPage = runLines.length > 0 && noteRun(stage.journalPage ?? puzzle.id, runLines);
+    // Which powers beat the dragon, for the Trophy Shelf; then any trophies this clear earned.
+    if (puzzle.id === 'shadow-dragon') {
+      const feat = stage.journalPage === 'arsenal' ? 'dragon-arsenal' : 'dragon-light';
+      if (!play.feats.includes(feat)) play.feats.push(feat);
+    }
+    const trophies = trophyLine(awardTrophies());
     // Resume from the next level if the player leaves now.
     play.puzzleIndex = this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
     saveProgress();
     play.puzzleIndex = this.puzzleIndex;
 
     const row = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-    this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected${newPage ? '  ·  New page in your Journal!' : ''}`);
+    this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected${newPage ? '  ·  New page in your Journal!' : ''}${trophies ? `  ·  ${trophies}` : ''}`);
+    if (trophies) playTinkle();
     this.bannerShown = true;
     this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');
     this.setPhase('cleared');

@@ -30,6 +30,10 @@ export const play = {
   journal: {} as Record<string, string[]>,
   /** The Arena's bosses beaten: best time (seconds) and wins, by boss name. */
   arena: {} as Record<string, { best: number; wins: number }>,
+  /** Deeds a level can't tell from its stars, like which powers beat the dragon. */
+  feats: [] as string[],
+  /** Trophies already announced (they are judged from the save; see trophies.ts). */
+  trophies: [] as string[],
 };
 
 let loaded = false;
@@ -53,6 +57,8 @@ export function loadProgress(): void {
     if (saved.bag && typeof saved.bag === 'object') play.bag = saved.bag;
     if (saved.journal && typeof saved.journal === 'object') play.journal = saved.journal;
     if (saved.arena && typeof saved.arena === 'object') play.arena = saved.arena;
+    if (Array.isArray(saved.feats)) play.feats = saved.feats;
+    if (Array.isArray(saved.trophies)) play.trophies = saved.trophies;
   } catch {
     // Storage blocked or corrupt: start a fresh story.
   }
@@ -62,7 +68,7 @@ export function saveProgress(): void {
   try {
     localStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal, arena: play.arena }),
+      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal, arena: play.arena, feats: play.feats, trophies: play.trophies }),
     );
   } catch {
     // Not saved; the story still plays.
@@ -77,6 +83,8 @@ export function resetProgress(): void {
   play.bag = {};
   play.journal = {};
   play.arena = {};
+  play.feats = [];
+  play.trophies = [];
   saveProgress();
 }
 
