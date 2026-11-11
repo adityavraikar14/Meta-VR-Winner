@@ -1,3 +1,4 @@
+import { FONT } from './ui-theme.js';
 import { count, items, RECIPES, RESOURCE_ORDER, RESOURCES, type Resource } from './bag.js';
 import { play } from './progress.js';
 
@@ -212,7 +213,7 @@ export function drawIcon(g: CanvasRenderingContext2D, icon: Icon, cx: number, cy
 }
 
 function countLabel(g: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-  g.font = '800 34px "Trebuchet MS", Arial, sans-serif';
+  g.font = `900 34px ${FONT}`;
   g.textAlign = 'right';
   g.textBaseline = 'alphabetic';
   g.lineWidth = 6;
@@ -228,37 +229,32 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
   const w = canvas.width;
   const h = canvas.height;
   g.clearRect(0, 0, w, h);
-  // The panel: dark stone with a wooden rim.
+  // The panel: deep navy with a bright yellow rim, like the rest of the interface.
   const panel = g.createLinearGradient(0, 0, 0, h);
-  panel.addColorStop(0, '#2d3138');
-  panel.addColorStop(1, '#1d2026');
+  panel.addColorStop(0, '#22304f');
+  panel.addColorStop(1, '#14213d');
   g.fillStyle = panel;
   g.beginPath();
-  g.roundRect(10, 10, w - 20, h - 20, 26);
+  g.roundRect(10, 10, w - 20, h - 20, 30);
   g.fill();
-  g.lineWidth = 10;
-  g.strokeStyle = '#6b4424';
-  g.stroke();
-  g.lineWidth = 3;
-  g.strokeStyle = '#c99a4c';
-  g.beginPath();
-  g.roundRect(20, 20, w - 40, h - 40, 20);
+  g.lineWidth = 8;
+  g.strokeStyle = '#ffc928';
   g.stroke();
 
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillStyle = '#f3d28a';
-  g.font = '700 40px Georgia, serif';
+  g.fillStyle = '#ffc928';
+  g.font = `700 40px ${FONT}`;
   g.fillText('Your Bag', 46, 58);
-  g.fillStyle = '#c8ccd4';
-  g.font = 'italic 26px Georgia, serif';
+  g.fillStyle = '#e8eef8';
+  g.font = `600 26px ${FONT}`;
   g.textAlign = 'right';
   g.fillText(message || 'Gather in the worlds · craft with the buttons below', w - 46, 58, 600);
 
   // Gathered resources: two rows of three big slots.
   g.textAlign = 'left';
-  g.fillStyle = '#9aa3b0';
-  g.font = '600 22px Georgia, serif';
+  g.fillStyle = '#9fb3d9';
+  g.font = `600 22px ${FONT}`;
   g.fillText('GATHERED', 46, 104);
   const S = 112;
   RESOURCE_ORDER.forEach((r, i) => {
@@ -270,16 +266,16 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
     drawIcon(g, r, x + S / 2, y + S / 2 - 6, S * 0.34);
     g.globalAlpha = 1;
     countLabel(g, `${n}`, x + S - 12, y + S - 12);
-    g.fillStyle = '#c8ccd4';
-    g.font = '600 18px Georgia, serif';
+    g.fillStyle = '#e8eef8';
+    g.font = `600 18px ${FONT}`;
     g.textAlign = 'left';
     g.fillText(RESOURCES[r].plural, x + 10, y + 18);
   });
 
   // Crafted things you carry.
   const cx0 = 470;
-  g.fillStyle = '#9aa3b0';
-  g.font = '600 22px Georgia, serif';
+  g.fillStyle = '#9fb3d9';
+  g.font = `600 22px ${FONT}`;
   g.fillText('CARRYING', cx0, 104);
   const carried: Array<[Icon, number, string]> = [
     ['potion', items('potion'), 'Draught'],
@@ -295,15 +291,15 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
     drawIcon(g, icon, x + S / 2, y + S / 2 - 6, S * 0.34);
     g.globalAlpha = 1;
     countLabel(g, `${n}`, x + S - 12, y + S - 12);
-    g.fillStyle = '#c8ccd4';
-    g.font = '600 18px Georgia, serif';
+    g.fillStyle = '#e8eef8';
+    g.font = `600 18px ${FONT}`;
     g.textAlign = 'left';
     g.fillText(name, x + 10, y + 18);
   });
 
   // Recipes: ingredients → result.
-  g.fillStyle = '#9aa3b0';
-  g.font = '600 22px Georgia, serif';
+  g.fillStyle = '#9fb3d9';
+  g.font = `600 22px ${FONT}`;
   g.fillText('CRAFTING', cx0, 262);
   RECIPES.forEach((recipe, i) => {
     const y = 300 + i * 52;
@@ -316,12 +312,12 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
       g.fillText(`×${n}`, x + 42, y + 2);
       x += 96;
     }
-    g.fillStyle = '#f3d28a';
-    g.font = '700 30px Georgia, serif';
+    g.fillStyle = '#ffc928';
+    g.font = `700 30px ${FONT}`;
     g.fillText('→', x + 4, y);
     drawIcon(g, recipe.item, x + 64, y, 20);
-    g.fillStyle = '#f3e6c8';
-    g.font = '600 22px Georgia, serif';
+    g.fillStyle = '#ffffff';
+    g.font = `600 22px ${FONT}`;
     g.fillText(`${recipe.name}: ${recipe.does}`, x + 94, y + 1, w - x - 140);
   });
 }
