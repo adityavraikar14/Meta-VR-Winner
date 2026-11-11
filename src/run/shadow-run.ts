@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import { sparkPace } from '../assist.js';
 import {
   AdditiveBlending,
@@ -52,6 +53,8 @@ const HINT_AFTER = 3;
 const Z_COURSE = 0.0016;
 const Z_GATE = 0.003;
 const Z_SPARK = 0.0045;
+/** The course floor's height on the paper, for the readout's HEIGHT (see run-levels.ts). */
+const COURSE_FLOOR = -0.15;
 /** Where the player's eyes are in paper space (see ShadowStageSystem), for facing buttons. */
 const VIEWER = new Vector3(0, 0.12, 1.0);
 /** The Drop button (build levels), right of the paper, within reach. */
@@ -172,6 +175,8 @@ export class ShadowRun {
   private waitTime = 0;
   private lostTime = 0;
   private wonTime = 0;
+  /** The live physics readout at the top of the screen, and how long since it was redrawn. */
+  private readout: { canvas: HTMLCanvasElement; texture: CanvasTexture; mesh: Mesh; age: number } | null = null;
   /** Workshop: whether the star's and ring's shadows are on the screen, the reset button, the last time. */
   private startOk = true;
   private gateOk = true;
@@ -263,6 +268,8 @@ export class ShadowRun {
       this.reset.size = 0.6;
       this.reset.root.position.copy(RESET_AT);
     }
+
+    this.buildReadout();
 
     devInfo.run = () => `${level.id} ${this.sim.state} t=${this.sim.time.toFixed(1)} spark=(${this.sim.spark.x.toFixed(2)},${this.sim.spark.y.toFixed(2)}) motes=${this.sim.motesTaken} retries=${this.sim.retries} hands=${this.shadows.capsules.length} scale=${this.shadows.stats.scale.map((s) => s.toFixed(2)).join('/')}`;
     devActions[']'] = () => {
@@ -384,6 +391,59 @@ export class ShadowRun {
     }
     this.place(dt);
     this.updateCaption(scale);
+    this.updateReadout(dt, scale);
+  }
+
+  /**
+   * The live physics readout, a small navy panel at the top of the screen:
+   * the spark's speed (m/s), its height above the course floor (cm), and
+   * your shadow's magnification D ÷ d. Redrawn five times a second.
+   */
+  private buildReadout(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 96;
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    const mesh = new Mesh(new PlaneGeometry(0.3, 0.045), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0.92 }));
+    mesh.position.set(0, 0.318, Z_SPARK + 0.001);
+    mesh.renderOrder = 9;
+    this.paper.add(mesh);
+    this.readout = { canvas, texture, mesh, age: 1 };
+  }
+
+  private updateReadout(dt: number, scale: number): void {
+    const r = this.readout;
+    if (!r) return;
+    r.age += dt;
+    if (r.age < 0.2) return;
+    r.age = 0;
+    const { vx, vy, y } = this.sim.spark;
+    const speed = this.sim.state === 'live' ? Math.hypot(vx, vy) : 0;
+    const height = Math.max(0, (y - COURSE_FLOOR) * 100);
+    const g = r.canvas.getContext('2d')!;
+    g.clearRect(0, 0, r.canvas.width, r.canvas.height);
+    g.fillStyle = 'rgba(20, 33, 61, 0.88)';
+    g.beginPath();
+    g.roundRect(4, 4, r.canvas.width - 8, r.canvas.height - 8, 44);
+    g.fill();
+    const cells: Array<[string, string]> = [
+      ['SPEED', `${speed.toFixed(2)} m/s`],
+      ['HEIGHT', `${height.toFixed(0)} cm`],
+      ['SHADOW', scale > 0 ? `×${scale.toFixed(1)}` : '–'],
+    ];
+    cells.forEach(([name, value], i) => {
+      const x = 113 + i * 207;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = '#9fb3d9';
+      g.font = `800 19px ${FONT}`;
+      g.fillText(name, x, 28);
+      g.fillStyle = '#ffc928';
+      g.font = `800 33px ${FONT}`;
+      g.fillText(value, x, 64);
+    });
+    r.texture.needsUpdate = true;
   }
 
   /** Workshop: the star's shadow is the start, the ring's shadow the gate. */
