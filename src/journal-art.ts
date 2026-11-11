@@ -1,3 +1,4 @@
+import { FONT } from './ui-theme.js';
 import { type Diagram, JOURNAL } from './journal.js';
 import { play } from './progress.js';
 import { TROPHIES, trophiesEarned } from './trophies.js';
@@ -14,10 +15,11 @@ import { PUZZLES, WORLDS } from './world/puzzles.js';
 
 const W = 1024;
 const H = 512;
-const SEPIA = '#3b2a1a';
-const BLUE = '#1f3f86';
-const RED = '#b0302a';
-const GOLD = '#c98a1c';
+/** Navy ink for the sketches, bright blue for your own numbers, red and gold for accents. */
+const SEPIA = '#1d2b53';
+const BLUE = '#2f6bff';
+const RED = '#f0453a';
+const GOLD = '#f0a800';
 
 let seed = 1;
 function rand(): number {
@@ -37,12 +39,12 @@ function pen(g: CanvasRenderingContext2D, pts: Array<[number, number]>, width = 
     g.beginPath();
     const all = close ? [...pts, pts[0]] : pts;
     all.forEach(([x, y], i) => {
-      const jx = (rand() - 0.5) * 1.6;
-      const jy = (rand() - 0.5) * 1.6;
+      const jx = (rand() - 0.5) * 0.7;
+      const jy = (rand() - 0.5) * 0.7;
       if (i === 0) g.moveTo(x + jx, y + jy);
       else {
         const [px, py] = all[i - 1];
-        g.quadraticCurveTo((px + x) / 2 + (rand() - 0.5) * 2, (py + y) / 2 + (rand() - 0.5) * 2, x + jx, y + jy);
+        g.quadraticCurveTo((px + x) / 2 + (rand() - 0.5) * 0.8, (py + y) / 2 + (rand() - 0.5) * 0.8, x + jx, y + jy);
       }
     });
     g.stroke();
@@ -69,7 +71,7 @@ function arrow(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, 
 
 function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, size = 20, color = SEPIA, align: CanvasTextAlign = 'center', italic = true): void {
   g.fillStyle = color;
-  g.font = `${italic ? 'italic ' : ''}600 ${size}px Georgia, serif`;
+  g.font = `${italic ? 600 : 700} ${size}px ${FONT}`;
   g.textAlign = align;
   g.textBaseline = 'middle';
   g.fillText(text, x, y);
@@ -453,6 +455,131 @@ const DRAW: Record<Diagram, (g: CanvasRenderingContext2D) => void> = {
     label(g, '2× speed → 4× energy', 265, 380, 18);
   },
 
+  energy(g) {
+    // A curved chute: the spark trades height for speed, then climbs a shadow ramp to a ledge.
+    const chute: Array<[number, number]> = [];
+    for (let i = 0; i <= 16; i++) {
+      const k = i / 16;
+      chute.push([80 + 170 * k, 130 + 200 * (1 - Math.cos((k * Math.PI) / 2))]);
+    }
+    wash(g, [...chute, [250, 360], [80, 360]], 'rgba(29, 43, 83, 0.12)');
+    pen(g, chute, 2.6);
+    pen(g, [[250, 330], [262, 330]], 2.6);
+    // The hand's shadow as a ramp, and the ledge it reaches.
+    wash(g, [[262, 336], [400, 252], [404, 262], [266, 346]], 'rgba(29, 43, 83, 0.75)');
+    wash(g, [[404, 240], [470, 240], [470, 360], [404, 360]], 'rgba(29, 43, 83, 0.12)');
+    pen(g, [[404, 240], [470, 240], [470, 360]], 2.6);
+    label(g, 'your hand’s shadow', 380, 340, 15, SEPIA, 'center');
+    // The spark at the top, at rest; at the bottom, at full speed.
+    ring(g, 86, 118, 9, 2.4, GOLD);
+    label(g, 'v = 0', 120, 104, 17, SEPIA, 'left');
+    ring(g, 250, 320, 9, 2.4, GOLD);
+    arrow(g, 262, 312, 312, 300, RED, 2.6);
+    label(g, 'v = √(2gh)', 300, 276, 18, RED, 'left');
+    // The height it fell.
+    g.setLineDash([5, 5]);
+    pen(g, [[54, 118], [54, 330]], 1.6, BLUE);
+    g.setLineDash([]);
+    arrow(g, 54, 220, 54, 122, BLUE, 1.6);
+    arrow(g, 54, 228, 54, 326, BLUE, 1.6);
+    label(g, 'h', 42, 224, 20, BLUE, 'right');
+    label(g, 'm g h = ½ m v²', 265, 84, 24, BLUE);
+    label(g, 'a sharp corner throws speed away', 265, 386, 16, SEPIA);
+  },
+
+  bounce(g) {
+    // Left: a shadow paddle rising at u launches a resting spark at (1 + e)·u.
+    wash(g, [[60, 300], [210, 288], [212, 304], [62, 316]], 'rgba(29, 43, 83, 0.8)');
+    arrow(g, 120, 352, 120, 316, BLUE, 2.4);
+    label(g, 'u', 132, 340, 20, BLUE, 'left');
+    ring(g, 140, 278, 10, 2.4, GOLD);
+    arrow(g, 140, 262, 140, 160, RED, 3);
+    label(g, '(1 + e) · u', 152, 190, 20, RED, 'left');
+    label(g, 'a moving shadow', 135, 372, 15, SEPIA);
+    // Right: dropped from h, each bounce reaches e² of the last.
+    pen(g, [[270, 340], [480, 340]], 2.4);
+    const peaks = [200, 260, 294];
+    let x = 280;
+    let y0 = 130;
+    for (let i = 0; i < peaks.length; i++) {
+      const top = i === 0 ? y0 : peaks[i - 1];
+      const width = 60 - i * 14;
+      const pts: Array<[number, number]> = [];
+      for (let k = 0; k <= 10; k++) {
+        const s = k / 10;
+        pts.push([x + width * s, top + (340 - top) * s * s]);
+      }
+      g.setLineDash([4, 6]);
+      pen(g, pts, 1.8, BLUE);
+      g.setLineDash([]);
+      x += width;
+      y0 = peaks[i];
+      const span = 340 - peaks[i];
+      const rise: Array<[number, number]> = [];
+      for (let k = 0; k <= 10; k++) {
+        const s = k / 10;
+        rise.push([x + width * 0.8 * s, 340 - span * (1 - (1 - s) * (1 - s))]);
+      }
+      g.setLineDash([4, 6]);
+      pen(g, rise, 1.8, BLUE);
+      g.setLineDash([]);
+      x += width * 0.8;
+    }
+    label(g, 'h', 272, 130, 18, SEPIA, 'right');
+    label(g, 'e² h', 470, 200, 16, SEPIA, 'left');
+    label(g, 'e = 0: clay  ·  e = 1: perfect', 265, 92, 18, SEPIA);
+  },
+
+  triangles(g) {
+    // The lantern on the left, the screen on the right; one hand near the lantern, one near the screen.
+    const L: [number, number] = [70, 240];
+    pen(g, [[450, 110], [450, 370]], 3);
+    label(g, 'screen', 452, 388, 15, SEPIA);
+    ring(g, L[0], L[1], 11, 2.4, GOLD);
+    label(g, 'lantern', L[0], L[1] + 30, 15, SEPIA);
+    const hand = (x: number, color: string) => {
+      const top: [number, number] = [x, 228];
+      const bottom: [number, number] = [x, 252];
+      pen(g, [top, bottom], 6, color);
+      // Rays from the lantern past the hand's ends to the screen.
+      for (const [hx, hy] of [top, bottom]) {
+        const k = (450 - L[0]) / (hx - L[0]);
+        const sy = L[1] + (hy - L[1]) * k;
+        g.setLineDash([5, 5]);
+        pen(g, [L, [450, sy]], 1.4, color);
+        g.setLineDash([]);
+      }
+      const k = (450 - L[0]) / (x - L[0]);
+      pen(g, [[450, L[1] + (228 - L[1]) * k], [450, L[1] + (252 - L[1]) * k]], 8, color);
+    };
+    hand(150, RED);
+    hand(330, BLUE);
+    label(g, 'near the lantern: big, thick', 300, 120, 16, RED);
+    label(g, 'near the screen: small, thin', 300, 350, 16, BLUE);
+    label(g, 'every length × D ÷ d', 265, 84, 22, SEPIA);
+  },
+
+  timing(g) {
+    // Two gaps on the course; the spark's path marked every 0.2 s; get the shadow there first.
+    wash(g, [[50, 250], [150, 262], [150, 360], [50, 360]], 'rgba(29, 43, 83, 0.14)');
+    wash(g, [[240, 270], [300, 270], [300, 360], [240, 360]], 'rgba(29, 43, 83, 0.14)');
+    wash(g, [[390, 280], [480, 280], [480, 360], [390, 360]], 'rgba(29, 43, 83, 0.14)');
+    pen(g, [[50, 250], [150, 262], [150, 360]], 2.4);
+    pen(g, [[240, 360], [240, 270], [300, 270], [300, 360]], 2.4);
+    pen(g, [[390, 360], [390, 280], [480, 280]], 2.4);
+    // The shadow bridges, drawn where they must already be.
+    wash(g, [[146, 262], [244, 270], [244, 278], [146, 270]], 'rgba(29, 43, 83, 0.8)');
+    wash(g, [[296, 270], [394, 280], [394, 288], [296, 278]], 'rgba(29, 43, 83, 0.8)');
+    const ticks: Array<[number, number]> = [[70, 236], [128, 244], [186, 252], [244, 258], [300, 260], [356, 266], [414, 270]];
+    ticks.forEach(([x, y], i) => {
+      ring(g, x, y, 5, 1.8, GOLD);
+      label(g, `${(i * 0.2).toFixed(1)}`, x, y - 20, 13, BLUE);
+    });
+    label(g, 'seconds', 450, 230, 13, BLUE, 'left');
+    label(g, 'you react in ~0.25 s: read the path, be there first', 265, 392, 15, SEPIA);
+    label(g, 't = distance ÷ speed', 265, 92, 22, SEPIA);
+  },
+
   slingshot(g) {
     // A forked slingshot, its bands drawn back by x, and the stone's arc away.
     const forkX = 150;
@@ -514,48 +641,58 @@ function wrap(g: CanvasRenderingContext2D, text: string, width: number): string[
 
 function paper(g: CanvasRenderingContext2D, x: number, w: number, spineLeft: boolean): void {
   const grad = g.createLinearGradient(x, 0, x + w, 0);
-  const edge = 'rgba(214, 190, 150, 1)';
-  const cream = '#f6ead2';
-  grad.addColorStop(spineLeft ? 0 : 1, edge);
-  grad.addColorStop(spineLeft ? 0.08 : 0.92, cream);
-  grad.addColorStop(spineLeft ? 1 : 0, '#efe0c2');
+  grad.addColorStop(spineLeft ? 0 : 1, '#e7edf6');
+  grad.addColorStop(spineLeft ? 0.06 : 0.94, '#ffffff');
+  grad.addColorStop(spineLeft ? 1 : 0, '#f7f9fc');
   g.fillStyle = grad;
   g.beginPath();
-  g.roundRect(x, 20, w, H - 40, 8);
+  g.roundRect(x, 20, w, H - 40, 10);
   g.fill();
+  // Engineering graph paper: a light blue 5 mm grid, darker every centimetre.
+  g.save();
+  g.beginPath();
+  g.roundRect(x, 20, w, H - 40, 10);
+  g.clip();
+  for (let gx = x + 12; gx < x + w; gx += 16) {
+    g.strokeStyle = Math.round((gx - x - 12) / 16) % 5 === 0 ? 'rgba(47, 107, 255, 0.16)' : 'rgba(47, 107, 255, 0.07)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(gx, 20);
+    g.lineTo(gx, H - 20);
+    g.stroke();
+  }
+  for (let gy = 32; gy < H - 20; gy += 16) {
+    g.strokeStyle = Math.round((gy - 32) / 16) % 5 === 0 ? 'rgba(47, 107, 255, 0.16)' : 'rgba(47, 107, 255, 0.07)';
+    g.beginPath();
+    g.moveTo(x, gy);
+    g.lineTo(x + w, gy);
+    g.stroke();
+  }
+  g.restore();
 }
 
 /** The open notebook: leather cover, two cream pages, the spine and its ribbon. */
 function book(g: CanvasRenderingContext2D): void {
-  // The leather cover, then the two pages and the spine's shadow.
-  g.fillStyle = '#5a3418';
+  // The binder: navy, with a bright yellow edge; then the two pages and the spine's shadow.
+  g.fillStyle = '#1d2b53';
   g.beginPath();
   g.roundRect(4, 6, W - 8, H - 12, 22);
   g.fill();
-  g.strokeStyle = '#c99a4c';
-  g.lineWidth = 3;
+  g.strokeStyle = '#ffc928';
+  g.lineWidth = 4;
   g.beginPath();
   g.roundRect(10, 12, W - 20, H - 24, 18);
   g.stroke();
   paper(g, 24, W / 2 - 28, false);
   paper(g, W / 2 + 4, W / 2 - 28, true);
   const spine = g.createLinearGradient(W / 2 - 30, 0, W / 2 + 30, 0);
-  spine.addColorStop(0, 'rgba(90, 60, 30, 0)');
-  spine.addColorStop(0.5, 'rgba(90, 60, 30, 0.35)');
-  spine.addColorStop(1, 'rgba(90, 60, 30, 0)');
+  spine.addColorStop(0, 'rgba(29, 43, 83, 0)');
+  spine.addColorStop(0.5, 'rgba(29, 43, 83, 0.22)');
+  spine.addColorStop(1, 'rgba(29, 43, 83, 0)');
   g.fillStyle = spine;
   g.fillRect(W / 2 - 30, 20, 60, H - 40);
-  // Faint ruled lines on the right page.
-  g.strokeStyle = 'rgba(120, 150, 190, 0.18)';
-  g.lineWidth = 1;
-  for (let y = 120; y < H - 40; y += 27) {
-    g.beginPath();
-    g.moveTo(W / 2 + 24, y);
-    g.lineTo(W - 40, y);
-    g.stroke();
-  }
-  // A red ribbon down from the top of the spine.
-  wash(g, [[W / 2 + 10, 14], [W / 2 + 26, 14], [W / 2 + 26, 150], [W / 2 + 18, 140], [W / 2 + 10, 150]], '#a8282a');
+  // A yellow bookmark tab from the top of the spine.
+  wash(g, [[W / 2 + 10, 14], [W / 2 + 26, 14], [W / 2 + 26, 120], [W / 2 + 18, 112], [W / 2 + 10, 120]], '#ffc928');
 }
 
 /** Paint journal page `index` (of JOURNAL) as an open notebook; one past the last is the Trophy Shelf. */
@@ -576,14 +713,14 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
   book(g);
 
   // Left page: the sketch and its caption.
-  label(g, 'INVENTOR’S JOURNAL', 52, 46, 15, '#8a6a4a', 'left', false);
-  label(g, `${index + 1} / ${JOURNAL.length}`, W / 2 - 44, 46, 15, '#8a6a4a', 'right', false);
+  label(g, 'INVENTOR’S JOURNAL', 52, 46, 15, '#5b6782', 'left', false);
+  label(g, `${index + 1} / ${JOURNAL.length}`, W / 2 - 44, 46, 15, '#5b6782', 'right', false);
   g.save();
   g.globalAlpha = earned ? 1 : 0.18;
   DRAW[page.diagram](g);
   g.restore();
   label(g, title, W / 4, 432, 24, SEPIA, 'center', false);
-  label(g, chapter, W / 4, 462, 16, '#8a6a4a');
+  label(g, chapter, W / 4, 462, 16, '#5b6782');
 
   // Right page: the science.
   const rx = W / 2 + 40;
@@ -591,44 +728,44 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
   const stars = play.stars[page.id] ?? 0;
   if (stars > 0) label(g, '★'.repeat(stars) + '☆'.repeat(3 - stars), W - 48, 46, 22, GOLD, 'right', false);
   g.fillStyle = SEPIA;
-  g.font = '700 30px Georgia, serif';
+  g.font = `700 30px ${FONT}`;
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   g.fillText(page.topic, rx, 84, rw);
   // The formula, boxed like a fair copy.
-  g.font = 'italic 600 24px Georgia, serif';
+  g.font = `600 24px ${FONT}`;
   const fw = Math.min(rw, g.measureText(page.formula).width + 36);
-  g.fillStyle = 'rgba(201, 138, 28, 0.14)';
+  g.fillStyle = 'rgba(255, 201, 40, 0.22)';
   g.beginPath();
   g.roundRect(rx, 108, fw, 42, 8);
   g.fill();
-  g.strokeStyle = 'rgba(150, 100, 30, 0.6)';
+  g.strokeStyle = 'rgba(240, 168, 0, 0.8)';
   g.lineWidth = 1.5;
   g.stroke();
-  g.fillStyle = '#5a3418';
+  g.fillStyle = '#1d2b53';
   g.fillText(page.formula, rx + 18, 130, rw - 36);
   // The explanation.
-  g.font = '19px Georgia, serif';
-  g.fillStyle = earned ? '#2e2216' : 'rgba(46, 34, 22, 0.4)';
+  g.font = `500 19px ${FONT}`;
+  g.fillStyle = earned ? '#22304f' : 'rgba(34, 48, 79, 0.4)';
   wrap(g, page.body, rw).slice(0, 6).forEach((line, i) => g.fillText(line, rx, 176 + i * 27));
 
   // Your run, in blue ink; or the wax seal on a page not yet earned.
   const by = 344;
   if (earned) {
-    g.fillStyle = 'rgba(31, 63, 134, 0.07)';
+    g.fillStyle = 'rgba(47, 107, 255, 0.08)';
     g.beginPath();
     g.roundRect(rx - 10, by, rw + 20, 130, 10);
     g.fill();
-    label(g, 'YOUR RUN', rx, by + 20, 15, '#5a6a8a', 'left', false);
-    g.font = 'italic 19px Georgia, serif';
+    label(g, 'YOUR RUN', rx, by + 20, 15, '#2f6bff', 'left', false);
+    g.font = `600 19px ${FONT}`;
     g.fillStyle = BLUE;
     (lines.length ? lines : ['Cleared: the page is yours']).slice(0, 3).forEach((line, i) => g.fillText(line, rx, by + 50 + i * 27, rw));
   } else {
     const sx = W - 140;
     const sy = by + 60;
     const seal = g.createRadialGradient(sx - 10, sy - 10, 4, sx, sy, 46);
-    seal.addColorStop(0, '#d8463a');
-    seal.addColorStop(1, '#8a1a18');
+    seal.addColorStop(0, '#3a4d86');
+    seal.addColorStop(1, '#1d2b53');
     g.fillStyle = seal;
     g.beginPath();
     for (let i = 0; i < 18; i++) {
@@ -638,10 +775,10 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
     }
     g.closePath();
     g.fill();
-    label(g, '?', sx, sy + 2, 40, '#f6d0b0', 'center', false);
+    label(g, '🔒', sx, sy + 4, 38, '#ffffff', 'center', false);
     g.textAlign = 'left';
-    g.font = 'italic 19px Georgia, serif';
-    g.fillStyle = '#5a3418';
+    g.font = `600 19px ${FONT}`;
+    g.fillStyle = '#1d2b53';
     wrap(g, `Clear ${title} to fill this page with your own numbers.`, rw - 180).forEach((line, i) => g.fillText(line, rx, by + 34 + i * 27));
   }
 }
@@ -689,13 +826,13 @@ function shelfCell(g: CanvasRenderingContext2D, cx: number, top: number, i: numb
   const t = TROPHIES[i];
   const earned = t.earned();
   medal(g, cx, top + 74, t.icon, earned);
-  g.font = '700 15px Georgia, serif';
+  g.font = `700 15px ${FONT}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillStyle = earned ? SEPIA : 'rgba(59, 42, 26, 0.55)';
   g.fillText(t.title, cx, top + 126, 104);
-  g.font = 'italic 13px Georgia, serif';
-  g.fillStyle = earned ? '#5a3418' : 'rgba(90, 52, 24, 0.55)';
+  g.font = `600 13px ${FONT}`;
+  g.fillStyle = earned ? '#1d2b53' : 'rgba(90, 52, 24, 0.55)';
   g.textAlign = 'center';
   wrap(g, t.how, 104).slice(0, 3).forEach((line, j) => g.fillText(line, cx, top + 148 + j * 16));
 }
@@ -705,8 +842,8 @@ function drawShelf(g: CanvasRenderingContext2D): void {
   seed = 4242;
   book(g);
   const count = trophiesEarned();
-  label(g, 'TROPHY SHELF', 52, 46, 15, '#8a6a4a', 'left', false);
-  label(g, `${count} / ${TROPHIES.length}`, W / 2 - 44, 46, 15, '#8a6a4a', 'right', false);
+  label(g, 'TROPHY SHELF', 52, 46, 15, '#5b6782', 'left', false);
+  label(g, `${count} / ${TROPHIES.length}`, W / 2 - 44, 46, 15, '#5b6782', 'right', false);
   // Four to a row: eight on the left page, the rest on the right with the tally.
   const col = (page: number, c: number) => (page === 0 ? 84 : W / 2 + 78) + c * 112;
   for (let i = 0; i < TROPHIES.length; i++) {
@@ -725,9 +862,9 @@ function drawShelf(g: CanvasRenderingContext2D): void {
   g.roundRect(x0, y0, x1 - x0, 172, 12);
   g.fill();
   label(g, `${count} of ${TROPHIES.length}`, (x0 + x1) / 2, y0 + 40, 30, GOLD, 'center', false);
-  label(g, 'trophies earned', (x0 + x1) / 2, y0 + 72, 17, '#8a6a4a');
+  label(g, 'trophies earned', (x0 + x1) / 2, y0 + 72, 17, '#5b6782');
   const next = TROPHIES.find((t) => !t.earned());
-  g.font = 'italic 16px Georgia, serif';
+  g.font = `600 16px ${FONT}`;
   g.fillStyle = BLUE;
   g.textAlign = 'center';
   const tip = next ? `Next: ${next.how.charAt(0).toLowerCase()}${next.how.slice(1)}` : 'Every trophy is yours!';

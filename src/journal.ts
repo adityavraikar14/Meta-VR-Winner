@@ -23,7 +23,11 @@ export type Diagram =
   | 'reflection'
   | 'projectile'
   | 'pins'
-  | 'slingshot';
+  | 'slingshot'
+  | 'energy'
+  | 'bounce'
+  | 'triangles'
+  | 'timing';
 
 export interface JournalPage {
   /** The level's id. */
@@ -60,14 +64,14 @@ export const JOURNAL: JournalPage[] = [
     topic: 'Height Becomes Speed',
     formula: 'm g h = ½ m v²',
     body: 'Falling, the spark trades height for speed: from a drop h it reaches v = √(2gh). That speed can carry it back up a slope almost as high as it started. Every sharp corner throws some away, which is why the chute curves.',
-    diagram: 'ramp',
+    diagram: 'energy',
   },
   {
     id: 'run-kick',
     topic: 'Bounce',
     formula: 'struck at rest: v = (1 + e) · u',
     body: 'A still shadow only catches the spark; a moving one throws it. Hit by a surface moving at speed u, a resting spark leaves at (1 + e)·u, where e is its bounciness: 0 for clay, 1 for a perfect bounce. And your shadow moves D ÷ d times faster than your hand.',
-    diagram: 'reflection',
+    diagram: 'bounce',
   },
   {
     id: 'run-long',
@@ -81,14 +85,14 @@ export const JOURNAL: JournalPage[] = [
     topic: 'Similar Triangles',
     formula: 'every length × D ÷ d',
     body: 'Magnification stretches every length of the shadow by the same factor, its thickness too. To fit a low tunnel, shrink the whole shadow: move your hand away from the lantern, towards the screen, until a thin edge is all that is left.',
-    diagram: 'scaling',
+    diagram: 'triangles',
   },
   {
     id: 'run-twin',
     topic: 'Reaction Time',
     formula: 't = distance ÷ speed',
     body: 'Rolling at 0.6 m/s, the spark crosses a 25 cm gap in about 0.4 s, and a person needs about 0.25 s just to react. So you do not chase the spark: you read its path, and put the shadow there first.',
-    diagram: 'projectile',
+    diagram: 'timing',
   },
   {
     id: 'broken-bridge',
