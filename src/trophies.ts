@@ -23,11 +23,11 @@ const allCleared = (...ids: string[]) => ids.every(cleared);
 export const TROPHIES: Trophy[] = [
   { id: 'first-shadow', icon: '🌟', title: 'First Shadow', how: 'Bring your first shadow to life', earned: () => cleared('lantern') },
   {
-    id: 'jungle',
-    icon: '🌿',
-    title: 'Jungle Friend',
-    how: 'Clear every Jungle level',
-    earned: () => allCleared('lantern', 'shadow-bridge', 'high-ledge', 'fallen-log', 'tiny-tunnel', 'high-berries', 'lost-star'),
+    id: 'runner',
+    icon: '💫',
+    title: 'Spark Runner',
+    how: 'Guide the spark through all six gates',
+    earned: () => allCleared('run-bridge', 'run-ramp', 'run-kick', 'run-long', 'run-tunnel', 'run-twin'),
   },
   { id: 'engineer', icon: '🌉', title: 'Engineer', how: 'Build both bridges that hold', earned: () => allCleared('broken-bridge', 'ore-train') },
   { id: 'smith', icon: '⚒️', title: 'Blacksmith', how: 'Forge a blade in the Smithy', earned: () => cleared('smithy') },

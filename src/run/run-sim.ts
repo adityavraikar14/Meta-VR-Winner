@@ -1,5 +1,5 @@
 import type { RunLevel } from './run-levels.js';
-import { type Bounds, type Capsule, type Poly, poly, Spark } from './spark-physics.js';
+import { type Bounds, type Capsule, type Poly, poly, Spark, TAG_HAND_LEFT, TAG_HAND_RIGHT } from './spark-physics.js';
 
 /**
  * One Shadow Run level's rules, with no drawing: the spark, the course, the
@@ -31,6 +31,8 @@ export class RunSim {
   /** Seconds since the level began (all attempts). */
   total = 0;
   retries = 0;
+  /** The spark touched a hand's shadow this attempt (build levels give a star for hands-off). */
+  handTouched = false;
   readonly motes: boolean[];
   readonly events: RunEvent[] = [];
 
@@ -45,6 +47,7 @@ export class RunSim {
     this.spark.place(this.level.start[0], this.level.start[1]);
     this.state = 'live';
     this.time = 0;
+    this.handTouched = false;
   }
 
   /** Puts the spark back at the start, waiting; a retry unless it was never released. */
@@ -66,7 +69,10 @@ export class RunSim {
     this.time += dt;
     const polys = extra.length ? [...this.terrain, ...extra] : this.terrain;
     this.spark.step(dt, shadows, polys, PAPER_BOUNDS);
-    for (const c of this.spark.contacts) this.events.push({ type: 'bounce', speed: c.speed, tag: c.tag });
+    for (const c of this.spark.contacts) {
+      this.events.push({ type: 'bounce', speed: c.speed, tag: c.tag });
+      if (c.tag === TAG_HAND_LEFT || c.tag === TAG_HAND_RIGHT) this.handTouched = true;
+    }
     const { x, y } = this.spark;
     this.level.motes.forEach(([mx, my], i) => {
       if (!this.motes[i] && Math.hypot(x - mx, y - my) < MOTE_RADIUS) {
@@ -84,9 +90,10 @@ export class RunSim {
     }
   }
 
-  /** Stars: through the gate, all three motes, inside par time. */
+  /** Stars: through the gate, all three motes, and inside par time (build levels: hands-off). */
   stars(): number {
     if (this.state !== 'won') return 0;
-    return 1 + (this.motesTaken === this.motes.length ? 1 : 0) + (this.time <= this.level.par ? 1 : 0);
+    const third = this.level.build ? !this.handTouched : this.time <= this.level.par;
+    return 1 + (this.motesTaken === this.motes.length ? 1 : 0) + (third ? 1 : 0);
   }
 }

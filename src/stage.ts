@@ -1,3 +1,4 @@
+import { buildSky, skyOn } from './sky.js';
 import {
   CanvasTexture,
   Color,
@@ -97,6 +98,7 @@ interface HandRig {
  * shadow casters, and renders the shadow mask the game matches against.
  */
 export class ShadowStageSystem extends createSystem({}) {
+  private sky!: Mesh;
   private paper!: Group;
   private lantern!: SpotLight;
   private maskCamera!: PerspectiveCamera;
@@ -132,6 +134,8 @@ export class ShadowStageSystem extends createSystem({}) {
   private clearColor = new Color();
 
   init(): void {
+    // A bright sky around you where passthrough is black and white (Quest 2) or absent (desktop).
+    this.sky = buildSky(this.scene);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
@@ -199,6 +203,7 @@ export class ShadowStageSystem extends createSystem({}) {
   }
 
   update(delta: number): void {
+    this.sky.visible = skyOn();
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     if (stage.command === 'recenter') {
       stage.command = null;

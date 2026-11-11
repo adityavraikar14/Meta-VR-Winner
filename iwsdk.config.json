@@ -43,8 +43,7 @@
   },
   "dev": {
     "emulator": {
-      "device": "metaQuest3",
-      "environment": "living_room"
+      "device": "metaQuest3"
     }
   }
 }

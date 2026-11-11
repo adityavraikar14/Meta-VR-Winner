@@ -7,7 +7,7 @@
  */
 import { RUN_LEVELS, type RunLevel } from '../src/run/run-levels.js';
 import { RunSim } from '../src/run/run-sim.js';
-import { type Capsule, capsule, TAG_HAND_RIGHT } from '../src/run/spark-physics.js';
+import { type Capsule, capsule, type Poly, poly, TAG_HAND_RIGHT, TAG_SHARD } from '../src/run/spark-physics.js';
 
 const DT = 1 / 72;
 const LIMIT = 25;
@@ -19,8 +19,13 @@ function play(level: RunLevel, solved: boolean): { sim: RunSim; path: Array<[num
   while (sim.state === 'live' && sim.time < LIMIT) {
     const t = sim.time;
     const shapes: Capsule[] = [];
+    const shards: Poly[] = [];
     if (solved) {
       for (const s of level.solution) {
+        if (s.poly) {
+          shards.push(poly(s.poly, TAG_SHARD));
+          continue;
+        }
         const from = s.from ?? 0;
         const to = s.to ?? Infinity;
         if (t < from || t > to) continue;
@@ -32,7 +37,7 @@ function play(level: RunLevel, solved: boolean): { sim: RunSim; path: Array<[num
         shapes.push(c);
       }
     }
-    sim.step(DT, shapes);
+    sim.step(DT, shapes, shards);
     if (Math.round(sim.time * 72) % 9 === 0) path.push([sim.spark.x, sim.spark.y]);
   }
   return { sim, path };

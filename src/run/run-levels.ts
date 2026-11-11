@@ -8,6 +8,8 @@
  * finishable before anyone plays it.
  */
 
+import type { ShardSpec } from './shards.js';
+
 export type Pt = readonly [number, number];
 
 export interface SolutionShape {
@@ -20,6 +22,8 @@ export interface SolutionShape {
   /** Active from / until these times (s after the spark is released). */
   from?: number;
   to?: number;
+  /** Instead of a capsule: a shard's shadow on the screen (convex, any winding). */
+  poly?: Pt[];
 }
 
 export interface RunLevel {
@@ -38,6 +42,11 @@ export interface RunLevel {
   /** A shadow thinner than this (m) is needed somewhere: the caption reads out your scale. */
   showScale?: boolean;
   solution: SolutionShape[];
+  /** Chapter (WORLDS index); 0 if absent. */
+  world?: number;
+  /** A build level: light shards to place, the spark dropped with a button, a star for hands-off. */
+  build?: boolean;
+  shards?: ShardSpec[];
 }
 
 /**
@@ -169,5 +178,64 @@ export const RUN_LEVELS: RunLevel[] = [
       { a: [-0.32, 0.092], b: [-0.06, 0.08], r: 0.013 },
       { a: [0.04, 0.076], b: [0.3, 0.054], r: 0.013 },
     ],
+  },
+  // ---------------------------------------------------------------- Build: light shards
+  {
+    id: 'build-plank',
+    world: 1,
+    build: true,
+    title: 'The Plank',
+    story: 'Your hands are not the only things that cast shadows. Glass shards from the Great Lantern float in the light.',
+    ask: 'Pinch the shard, hold it in the light so its shadow bridges the gap, let go, then push Drop',
+    hint: 'Pinch the glowing shard by your chest and lift it to eye height: watch its shadow, and line it up with the gap',
+    terrain: [
+      [[-0.5, FLOOR], [-0.15, FLOOR], [-0.15, 0.1], [-0.5, 0.18]],
+      [[0.1, FLOOR], [0.5, FLOOR], [0.5, 0.08], [0.1, 0.08]],
+    ],
+    start: [-0.45, 0.24],
+    gate: [0.41, 0.11],
+    motes: [[-0.06, 0.115], [0.04, 0.11], [0.24, 0.105]],
+    par: 15,
+    shards: [{ kind: 'plank', at: [0.1, -0.2, 0.6] }],
+    solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.17, 0.066], [0.12, 0.054], [0.12, 0.086], [-0.17, 0.098]] }],
+  },
+  {
+    id: 'build-projection',
+    world: 1,
+    build: true,
+    title: 'Projection',
+    story: 'The gap is three times wider than the shard. But its shadow is the shard times D ÷ d.',
+    ask: 'Hold the shard close to the lantern, near your face, until its shadow spans the gap',
+    hint: 'The label on the shard reads its magnification: you need about ×3.5',
+    terrain: [
+      [[-0.5, FLOOR], [-0.3, FLOOR], [-0.3, 0.1], [-0.5, 0.17]],
+      [[0.12, FLOOR], [0.5, FLOOR], [0.5, 0.08], [0.12, 0.08]],
+    ],
+    start: [-0.45, 0.23],
+    gate: [0.41, 0.11],
+    motes: [[-0.2, 0.12], [-0.05, 0.11], [0.06, 0.105]],
+    par: 15,
+    showScale: true,
+    shards: [{ kind: 'plank', at: [0.1, -0.2, 0.6] }],
+    solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.33, 0.04], [0.15, 0.026], [0.15, 0.086], [-0.33, 0.1]] }],
+  },
+  {
+    id: 'build-launch',
+    world: 1,
+    build: true,
+    title: 'Launch',
+    story: 'A wedge of glass, a fast spark, a high ledge. Angles do the rest.',
+    ask: 'Set the wedge’s shadow as a ramp from the floor up to the ledge, then push Drop',
+    hint: 'The wedge’s high corner must sit just above the ledge’s edge, or the spark bounces back off it',
+    terrain: [
+      ...ground([-0.5, 0.33], [-0.44, 0.22], [-0.38, 0.13], [-0.31, 0.05], [-0.23, 0.0], [-0.13, -0.04], [0.04, -0.05]),
+      [[0.22, FLOOR], [0.5, FLOOR], [0.5, 0.04], [0.22, 0.04]],
+    ],
+    start: [-0.485, 0.33],
+    gate: [0.4, 0.06],
+    motes: [[0.06, -0.021], [0.16, 0.019], [0.3, 0.055]],
+    par: 15,
+    shards: [{ kind: 'wedge', at: [0.12, -0.2, 0.6] }],
+    solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.03, -0.055], [0.24, -0.055], [0.24, 0.053]] }],
   },
 ];

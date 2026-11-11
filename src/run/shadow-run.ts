@@ -10,14 +10,18 @@ import {
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
+  Vector3,
 } from '@iwsdk/core';
-import { playAwaken, playClunk, playHiss, playTink, playTinkle, playWhoosh } from '../audio.js';
+import { playAwaken, playClick, playClunk, playHiss, playTink, playTinkle, playWhoosh } from '../audio.js';
+import type { HandState } from '../creatures/hand-input.js';
+import { PushButton } from '../push-button.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
 import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim } from './run-sim.js';
-import { capsule, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT } from './spark-physics.js';
+import { ShardSet } from './shards.js';
+import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
 
 /**
  * A Shadow Run level on the paper screen: the spark, the cut-paper course,
@@ -46,6 +50,10 @@ const HINT_AFTER = 3;
 const Z_COURSE = 0.0016;
 const Z_GATE = 0.003;
 const Z_SPARK = 0.0045;
+/** Where the player's eyes are in paper space (see ShadowStageSystem), for facing buttons. */
+const VIEWER = new Vector3(0, 0.12, 1.0);
+/** The Drop button (build levels), right of the paper, within reach. */
+const DROP_AT = new Vector3(0.42, -0.02, 0.6);
 
 interface Burst {
   sprite: Sprite;
@@ -160,6 +168,11 @@ export class ShadowRun {
   private bestScale = 0;
   /** Dev: a still test shadow bridging the level ("]" toggles it). */
   private devShadow = false;
+  /** Build levels: the light shards, and the button that drops the spark. */
+  private shards: ShardSet | null = null;
+  private drop: PushButton | null = null;
+  private tips: Vector3[] = [];
+  private v = new Vector3();
   private m = new Matrix4();
 
   constructor(
@@ -226,6 +239,13 @@ export class ShadowRun {
       this.bursts.push({ sprite, vx: 0, vy: 0, life: 0 });
     }
 
+    if (level.shards?.length) this.shards = new ShardSet(level.shards, this.paper);
+    if (level.build) {
+      this.drop = new PushButton(this.paper, 'Drop');
+      this.drop.size = 0.75;
+      this.drop.root.position.copy(DROP_AT);
+    }
+
     devInfo.run = () => `${level.id} ${this.sim.state} t=${this.sim.time.toFixed(1)} spark=(${this.sim.spark.x.toFixed(2)},${this.sim.spark.y.toFixed(2)}) motes=${this.sim.motesTaken} retries=${this.sim.retries} hands=${this.shadows.capsules.length} scale=${this.shadows.stats.scale.map((s) => s.toFixed(2)).join('/')}`;
     devActions[']'] = () => {
       this.devShadow = !this.devShadow;
@@ -249,10 +269,21 @@ export class ShadowRun {
     playWhoosh(0.25);
   }
 
-  update(dt: number): void {
+  update(dt: number, hands: readonly HandState[] = []): void {
     this.time += dt;
     this.alignToPaper();
     this.shadows.update(dt);
+    this.shards?.update(dt, hands);
+    if (this.drop) {
+      this.drop.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
+      this.drop.show(this.sim.state === 'ready' && stage.playing);
+      this.tips.length = 0;
+      for (const hand of hands) if (hand.tracked) this.tips.push(hand.indexTip);
+      if (this.drop.update(dt, this.tips, false)) {
+        playClick();
+        this.release();
+      }
+    }
     const scale = Math.max(...this.shadows.stats.scale);
     if (scale > this.bestScale) this.bestScale = scale;
 
@@ -261,11 +292,15 @@ export class ShadowRun {
       : this.shadows.capsules;
     const sim = this.sim;
 
-    if (sim.state === 'ready' && stage.playing) {
+    // Hand levels drop the spark when a hand is in the light; build levels wait for the Drop button.
+    if (sim.state === 'ready' && stage.playing && !this.level.build) {
       this.waitTime += dt;
       if (this.shadows.capsules.length > 0 || this.devShadow || this.waitTime > WAIT) this.release();
     }
-    if (stage.playing || sim.state === 'won') sim.step(Math.min(dt, 1 / 30), shapes);
+    const solids = this.devShadow && this.level.build
+      ? this.level.solution.filter((s) => s.poly).map((s) => poly(s.poly!, TAG_SHARD))
+      : this.shards?.shadows ?? [];
+    if (stage.playing || sim.state === 'won') sim.step(Math.min(dt, 1 / 30), shapes, solids);
 
     for (const event of sim.events) {
       if (event.type === 'bounce') {
@@ -315,7 +350,9 @@ export class ShadowRun {
       return;
     }
     let text = sim.retries >= HINT_AFTER ? this.level.hint : this.level.ask;
-    if (this.shadows.capsules.length === 0 && sim.state === 'live') text = 'Raise your hand into the lantern light';
+    if (this.level.build) {
+      if (sim.state === 'live') text = 'There it goes…';
+    } else if (this.shadows.capsules.length === 0 && sim.state === 'live') text = 'Raise your hand into the lantern light';
     else if (this.level.showScale && scale > 0) text = `${text}  ·  your shadow ×${scale.toFixed(1)}`;
     const motes = `${sim.motesTaken}/${this.level.motes.length} ✦`;
     this.caption = `${text}  ·  ${motes}`;

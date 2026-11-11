@@ -31,7 +31,7 @@ const SKY = Array.from({ length: 14 }, (_, i) => ({
 
 const SCENES: Scene[] = [
   {
-    line: 'You wake inside an old shadow theatre. One lantern burns; beyond it, only dark.',
+    line: 'This is the Lantern: a machine that turns light into shadow, and shadow into things that move.',
     seconds: 5,
     sound: playTinkle,
     draw(ctx, t, k) {
@@ -46,19 +46,19 @@ const SCENES: Scene[] = [
     },
   },
   {
-    line: 'In its light, shadows wake and walk: a fox, a stag, a bird on the wing.',
-    seconds: 5,
-    sound: playChirp,
+    line: 'For a thousand years its light held the Shadow Dragon inside the paper.',
+    seconds: 4.5,
+    sound: playPrompt,
     draw(ctx, t, k) {
-      lantern(ctx, W / 2, 80, 0.8, Math.sin(t * 1.4) * 0.08, 1);
-      fox(ctx, -80 + k * 560, GROUND, 0.9, t * 9);
-      bird(ctx, W + 60 - k * 700, 200 + Math.sin(t * 2) * 20, 1.1, t * 14);
-      deer(ctx, 770, GROUND, 0.9);
+      lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t * 1.4) * 0.08, 1);
+      ctx.globalAlpha = 0.3 + 0.35 * ease(k * 2);
+      dragon(ctx, W / 2 + 120, GROUND, 1.1, 0);
+      ctx.globalAlpha = 1;
       grass(ctx);
     },
   },
   {
-    line: 'Then the Shadow Dragon came. One breath, and the Great Lantern\u2019s light was scattered.',
+    line: 'Tonight it broke free, and the Great Lantern shattered into sparks.',
     seconds: 5.5,
     sound: () => playRoar(0.1),
     draw(ctx, t, k) {
@@ -80,23 +80,29 @@ const SCENES: Scene[] = [
     },
   },
   {
-    line: 'The dark closed in. The shadows sank into the paper, and the way out was sealed.',
+    line: 'Light cannot rest on paper. A spark can only stand on shadow.',
     seconds: 5,
-    sound: playPrompt,
+    sound: playTinkle,
     draw(ctx, t, k) {
-      lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t) * 0.03, 0);
-      ctx.globalAlpha = 1 - ease(k * 1.4) * 0.75;
-      fox(ctx, 300, GROUND, 0.9, 0);
-      deer(ctx, 640, GROUND, 0.9);
-      ctx.globalAlpha = 1;
+      lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t) * 0.03, 0.25);
       grass(ctx);
-      ctx.fillStyle = `rgba(22, 12, 6, ${0.55 * ease(k * 2)})`;
-      ctx.fillRect(0, 0, W, H);
+      const hx = W / 2 + 60;
+      const hy = H + 60 - ease(k * 2) * 220;
+      hand(ctx, hx, hy, 1.4, 0);
+      // A spark drifts down and settles on the shadow of the middle fingertip.
+      const tipY = hy - 232 - 14;
+      const sy = Math.min(-20 + ease(k * 1.4) * 400, tipY);
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 214, 130, 0.95)';
+      ctx.shadowBlur = 26;
+      ctx.fillStyle = '#fff3c4';
+      star(ctx, hx + 14, sy, 15, t * 2);
+      ctx.restore();
     },
   },
   {
-    line: 'Only your hands can wake them, and light the way out.',
-    seconds: 5,
+    line: 'Your hands cast the only shadows left. Catch the sparks, rebuild the light, end the dragon.',
+    seconds: 5.5,
     sound: playAwaken,
     draw(ctx, t, k) {
       lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t * 1.4) * 0.08, ease(k * 3));

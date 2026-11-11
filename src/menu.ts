@@ -1,3 +1,4 @@
+import { setSky, skyOn } from './sky.js';
 import type { Object3D, Vector3 } from '@iwsdk/core';
 import { isMuted, playClick, playPrompt, playTinkle, playUnfold, setMuted } from './audio.js';
 import { craft, needsText, RECIPES } from './bag.js';
@@ -144,11 +145,11 @@ export class MainMenu {
     const fresh = resume === 0 && totalStars() === 0;
     const next = PUZZLES[resume];
     const body = fresh
-      ? 'Trapped inside an old shadow theatre, your hands are your only tool. Their shadows come alive.'
+      ? 'The Great Lantern has shattered. Its sparks can only stand on shadow, and your hands cast the only shadows left.'
       : next
         ? `${WORLDS[next.world].name}  ·  Next: ${next.title}`
         : 'Every chapter played. Pick any chapter to play again.';
-    const footer = fresh ? 'Hands only  ·  Play seated  ·  About 10 minutes a chapter' : `${totalStars()} ★ collected`;
+    const footer = fresh ? 'Hands only  ·  Seated  ·  Your shadow is the controller' : `${totalStars()} ★ collected`;
     this.draw('Escape the Lantern', 'Shadowplay', body, footer);
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
@@ -202,7 +203,7 @@ export class MainMenu {
     this.draw(
       'Shadowplay',
       'Settings',
-      `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}`,
+      `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}  ·  Around you: ${skyOn() ? 'sky' : 'your room'}`,
       'During play, look at your open palm for the quick menu',
     );
     return [
@@ -216,6 +217,14 @@ export class MainMenu {
         },
       },
       { label: 'Table', run: () => ({ do: 'table' }) },
+      {
+        label: skyOn() ? 'Room view' : 'Sky',
+        run: () => {
+          setSky(!skyOn());
+          this.layout();
+          return null;
+        },
+      },
       { label: 'Credits', run: () => this.go('credits') },
       {
         label: 'Recenter',

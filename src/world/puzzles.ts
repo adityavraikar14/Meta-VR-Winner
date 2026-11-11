@@ -120,11 +120,11 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 // ---------------------------------------------------------------- Worlds
 
 export const WORLDS: World[] = [
-  { name: 'The Jungle', grows: 'The jungle grows into your room…', decorate: decorateJungle, ambience: 'jungle', music: 'explore' },
-  { name: 'The River', grows: 'The river finds its way to you…', decorate: decorateRiver, ambience: 'river', music: 'river' },
-  { name: 'The Old Mine', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine', music: 'mine' },
-  { name: 'The Sky Lantern', grows: 'The cliffs rise into the evening sky…', decorate: decorateMountain, ambience: 'river', music: 'river' },
-  { name: "Dragon's Mountain", grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain', music: 'battle' },
+  { name: 'Light & Shadow', grows: 'The Lantern’s world unfolds on your table…', decorate: decorateJungle, ambience: 'jungle', music: 'explore' },
+  { name: 'Structures', grows: 'The river valley rises around you…', decorate: decorateRiver, ambience: 'river', music: 'river' },
+  { name: 'Fire & Iron', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine', music: 'mine' },
+  { name: 'Hot Air', grows: 'The cliffs rise into the evening sky…', decorate: decorateMountain, ambience: 'river', music: 'river' },
+  { name: 'The Dragon', grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain', music: 'battle' },
 ];
 
 // --------------------------------------------------------------- Puzzles
@@ -147,10 +147,10 @@ const warmup: Puzzle = {
   id: 'lantern',
   world: 0,
   title: 'The Lantern',
-  story: 'A lantern burns behind you. Its light is your way out, and your shadow answers to it.',
+  story: 'The lantern is just behind your eyes. Light travels in straight lines; put your hand in its way and the paper goes dark. Here, that dark is solid.',
   ask: 'Raise your hand into the lantern light',
   warmup: true,
-  solved: "That's your shadow. Now let's wake it.",
+  solved: 'That is your shadow. In this world, everything is built from it.',
   build(root, kit) {
     // A star waits on the stage, sleeping until the story begins.
     const star = goldStar(0.02);
@@ -409,11 +409,11 @@ const oldWell: Puzzle = {
   id: 'old-well',
   world: 1,
   title: 'The Old Well',
-  story: 'The Lantern Stone fell down the old well. Its bucket is far too heavy to wind up by hand.',
-  ask: 'Who is strong enough to turn the horse whim?',
+  story: 'A shard of the Great Lantern lies at the bottom of the old well, and the bucket is too heavy to wind. A shadow beast is as strong as its shadow is big.',
+  ask: 'Cast a horse big enough to turn the whim',
   teach: 'horse',
   needSize: WELL_NEED,
-  solved: 'The Horse wound it up! The Lantern Stone is ours.',
+  solved: 'The horse winds the bucket up: strength grows with size squared.',
   build(root, kit) {
     const f = kit.floor;
     const whim = new HorseWhim(f, WHIM_AT, WELL_AT, WELL_NEED);
@@ -780,7 +780,7 @@ export function puzzleAt(index: number): Puzzle | null {
 function runPuzzle(level: RunLevel): Puzzle {
   return {
     id: level.id,
-    world: 0,
+    world: level.world ?? 0,
     title: level.title,
     story: level.story,
     ask: level.ask,
@@ -794,8 +794,8 @@ function runPuzzle(level: RunLevel): Puzzle {
       return {
         start: new Vector3(0, kit.floor, 0.12),
         attempt: () => ({ solved: false, steps: [], line: 'The spark needs your shadow.' }),
-        update: (dt) => {
-          run.update(dt);
+        update: (dt, hands) => {
+          run.update(dt, hands);
           task.caption = run.caption;
           task.mistakes = run.sim.retries;
           task.done = run.done;
@@ -806,17 +806,17 @@ function runPuzzle(level: RunLevel): Puzzle {
   };
 }
 
+/**
+ * The story, in order: light and shadow (the spark), structures, fire and
+ * iron, hot air, the dragon. The early creature errands (Fallen Log, Tiny
+ * Tunnel, High Berries, Lost Star, the hare's walks, Deep Shaft) are retired
+ * from the story; their code stays for free play.
+ */
 export const PUZZLES: Puzzle[] = [
   warmup,
-  ...RUN_LEVELS.map(runPuzzle),
-  shadowBridge,
-  highLedge,
-  fallenLog,
-  tinyTunnel,
-  highBerries,
-  lostStar,
+  ...RUN_LEVELS.filter((l) => !l.build).map(runPuzzle),
+  ...RUN_LEVELS.filter((l) => l.build).map(runPuzzle),
   oldWell,
-  deepShaft,
   brokenBridge,
   oreTrain,
   smithy,

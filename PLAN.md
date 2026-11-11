@@ -231,18 +231,18 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [x] P0 Stars (gate, all motes, par time) on the level card · [ ] best times per level
 
 ### Day 3 — Fri Nov 13
-- [ ] P0 Light shards: grab, move, depth, rotate, budget (5.4)
-- [ ] P0 Act II levels 7–12
-- [ ] P0 First deploy to GitHub Pages
+- [x] P0 Light shards: pinch to grab, move in 3D, depth clamped, wrist roll turns them (snapped to 15°), live ×D/d label, Drop button · [ ] budget
+- [x] P0 Act II build levels: The Plank, Projection, Launch (proven finishable) · [ ] three more
+- [x] P0 GitHub Pages workflow (`.github/workflows/deploy.yml`, tests must pass first) · [ ] Aditya: Settings → Pages → Source: GitHub Actions
 
 ### Day 4 — Sat Nov 14
-- [ ] P0 New story order (section 4); first run goes straight into Act I
-- [ ] P0 Rewrite every story line for ages 15–35
+- [x] P0 New story order: Light & Shadow (spark), Structures (whim, bridges, build levels), Fire & Iron, Hot Air, The Dragon; creature errands retired · [ ] first run straight into Act I
+- [x] P0 New intro, start page, home card and chapter names for ages 15–35 · [ ] remaining machine-level lines
 - [ ] P1 Workshop sandbox with three save slots (5.7)
 - [ ] P1 Daily Light (5.6)
 
 ### Day 5 — Sun Nov 15
-- [ ] P0 Brighter look and sky backdrop (section 6)
+- [x] P0 Sky backdrop (golden-hour dome; on for Quest 2, desktop and the emulator; Settings → Sky / Room view) · [ ] brighter UI palette
 - [ ] P1 Real animal voices with credits
 - [ ] P1 Eating fixed
 - [ ] P1 Journal pages for the spark levels: projection, collisions, restitution
