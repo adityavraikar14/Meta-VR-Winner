@@ -30,6 +30,8 @@ import {
   stage,
 } from './stage-state.js';
 import { devInfo } from './dev-tools.js';
+import { webcam } from './webcam.js';
+import { HandSkeleton } from './yash/sim-hands.js';
 
 /** WebXR hand joint order: wrist, thumb (4), then index/middle/ring/pinky (5 each). */
 const JOINT_COUNT = 25;
@@ -122,6 +124,11 @@ export class ShadowStageSystem extends createSystem({}) {
   private up = new Vector3(0, 1, 0);
   private headPos = new Vector3();
   private headDir = new Vector3();
+  /** Webcam hand joints, before they are written into the poses. */
+  private camJoints = new Float32Array(JOINT_COUNT * 3);
+  private camQuat = new Quaternion();
+  /** Visible stand-ins for webcam hands; the shadow casters themselves draw nothing. */
+  private skeletons: HandSkeleton[] = [];
   private clearColor = new Color();
 
   init(): void {
@@ -142,6 +149,11 @@ export class ShadowStageSystem extends createSystem({}) {
       depthWrite: false,
     });
     this.hands = [this.buildHand('left', 0xff0000), this.buildHand('right', 0x00ff00)];
+    this.skeletons = [new HandSkeleton(0xffd9a8), new HandSkeleton(0xffd9a8)];
+    for (const skeleton of this.skeletons) {
+      skeleton.root.visible = false;
+      this.player.add(skeleton.root);
+    }
 
     this.maskTarget = new WebGLRenderTarget(MASK_WIDTH, MASK_HEIGHT, {
       depthBuffer: false,
@@ -186,14 +198,18 @@ export class ShadowStageSystem extends createSystem({}) {
     );
   }
 
-  update(): void {
+  update(delta: number): void {
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     if (stage.command === 'recenter') {
       stage.command = null;
       this.needsLayout = true;
     }
     if (this.needsLayout) this.layoutPaper();
-    this.updateHands();
+    // In the fights, webcam hands (dev only) stand in for the headset's.
+    const camera = webcam.poll(Math.min(delta, 0.1)) && stage.fight;
+    if (camera) this.updateWebcamHands();
+    else this.updateHands();
+    if (!camera) for (const skeleton of this.skeletons) skeleton.root.visible = false;
     this.frameCount++;
     if (
       !this.readPending &&
@@ -413,6 +429,43 @@ export class ShadowStageSystem extends createSystem({}) {
     }
   }
 
+  /** Webcam hands, placed in front of the eyes in the player's space, in place of tracked ones. */
+  private updateWebcamHands(): void {
+    stage.handCount = 0;
+    // The rigs hang under the player, so the eyes and their facing are taken in its space.
+    this.player.head.getWorldPosition(this.headPos);
+    this.player.worldToLocal(this.headPos);
+    this.player.head.getWorldQuaternion(this.camQuat).premultiply(this.player.getWorldQuaternion(this.quat).invert());
+    this.headDir.set(0, 0, -1).applyQuaternion(this.camQuat);
+    this.headDir.y = 0;
+    if (this.headDir.lengthSq() < 1e-6) this.headDir.set(0, 0, -1);
+    this.headDir.normalize();
+    for (let i = 0; i < this.hands.length; i++) {
+      const hand = this.hands[i];
+      hand.source = null;
+      hand.jointSpaces = null;
+      const seen = webcam.write(i === 0 ? 'left' : 'right', this.headPos, this.headDir, this.camJoints);
+      hand.root.visible = seen;
+      stage.tracked[i] = seen;
+      this.skeletons[i].root.visible = seen;
+      if (!seen) continue;
+      stage.handCount++;
+      stage.joints[i].set(this.camJoints);
+      const joints = this.camJoints;
+      this.skeletons[i].update({ joint: (j, out) => out.set(joints[j * 3], joints[j * 3 + 1], joints[j * 3 + 2]) });
+      this.poses.fill(0);
+      for (let j = 0; j < JOINT_COUNT; j++) {
+        const o = j * 16;
+        this.poses[o] = this.poses[o + 5] = this.poses[o + 10] = this.poses[o + 15] = 1;
+        this.poses[o + 12] = this.camJoints[j * 3];
+        this.poses[o + 13] = this.camJoints[j * 3 + 1];
+        this.poses[o + 14] = this.camJoints[j * 3 + 2];
+      }
+      this.radii.fill(MIN_JOINT_RADIUS * 1.3);
+      this.drawRig(hand);
+    }
+  }
+
   private poseHand(
     hand: HandRig,
     frame: XRFrame,
@@ -424,7 +477,12 @@ export class ShadowStageSystem extends createSystem({}) {
     if (!handFrame.fillJointRadii(spaces, this.radii)) {
       this.radii.fill(MIN_JOINT_RADIUS);
     }
+    this.drawRig(hand);
+    return true;
+  }
 
+  /** Places a hand's joints, bones and forearm from the current poses and radii. */
+  private drawRig(hand: HandRig): void {
     for (let i = 0; i < JOINT_COUNT; i++) {
       const r = Math.max(this.radii[i], MIN_JOINT_RADIUS);
       this.jointPosition(i, this.a);
@@ -448,7 +506,6 @@ export class ShadowStageSystem extends createSystem({}) {
     this.dir.subVectors(this.a, this.b).normalize();
     hand.forearm.position.copy(this.a).addScaledVector(this.dir, FOREARM_LENGTH / 2);
     hand.forearm.quaternion.setFromUnitVectors(this.up, this.dir);
-    return true;
   }
 
   private jointPosition(joint: number, out: Vector3): Vector3 {

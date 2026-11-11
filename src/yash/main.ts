@@ -1,31 +1,19 @@
 /**
- * Entry point for the Arsenal page (yash.html). It runs one of two modes:
- * the Arsenal (the hand-sign boss fights), or, at yash.html?mode=story, Story
- * mode, a copy of Shadowplay that lives in src/yash/story. Each mode loads
- * only its own systems, and switching reloads the page.
+ * Entry point for the Arsenal page (yash.html): the hand-sign boss fights.
+ * Its Story button opens Shadowplay itself (index.html), the one game both
+ * of us build; the Arsenal also lives inside it as the Arena, and the
+ * Shadow Dragon can be fought with Arsenal weapons there.
  */
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { ArsenalLevelSystem } from './level.js';
 
-const STORY = new URLSearchParams(location.search).get('mode') === 'story';
-
-if (STORY) {
-  // The Arsenal's splash makes way for the story's own start page.
-  document.getElementById('splash')?.remove();
-  const page = document.getElementById('story-page') as HTMLTemplateElement;
-  document.body.prepend(page.content.cloneNode(true));
-  document.body.style.background = '#120b06';
-  document.title = 'Shadowplay · Story mode';
-  void import('./story/main.js').then((story) => story.startStory());
-} else {
-  document.getElementById('splash-story')?.addEventListener('click', () => {
-    location.search = '?mode=story';
-  });
-  World.create(
-    document.getElementById('scene-container') as HTMLDivElement,
-    projectOptions,
-  ).then((world) => {
-    world.registerSystem(ArsenalLevelSystem);
-  });
-}
+document.getElementById('splash-story')?.addEventListener('click', () => {
+  location.href = './index.html';
+});
+World.create(
+  document.getElementById('scene-container') as HTMLDivElement,
+  projectOptions,
+).then((world) => {
+  world.registerSystem(ArsenalLevelSystem);
+});

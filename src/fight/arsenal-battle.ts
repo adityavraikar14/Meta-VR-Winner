@@ -14,7 +14,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { playBoom, playCharge, playClang, playFireball, playHiss } from '../audio.js';
-import { sfx } from '../../sfx.js';
+import { sfx } from '../yash/sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
@@ -66,7 +66,7 @@ interface Fireball {
   age: number;
 }
 
-export class DragonBattle {
+export class ArsenalDragonBattle {
   readonly group = new Group();
   caption = '';
   done = false;

@@ -59,6 +59,14 @@ export const stage = {
   task: null as { caption: string; done: boolean; mistakes: number } | null,
   /** The level's own numbers for its Inventor's Journal page, read when it is cleared. */
   runNotes: null as (() => string[]) | null,
+  /** The Journal page a clear fills, when not the level's own (the dragon beaten with the Arsenal). */
+  journalPage: null as string | null,
+  /** A fight level is on (the Shadow Dragon or the Ink Duel): webcam hands may drive it (dev only). */
+  fight: false,
+  /** A level picked on the start page, started once the headset view is up. Consumed once. */
+  startAt: null as number | null,
+  /** The start page's Arsenal button: straight into the Arena once the headset view is up. */
+  startArena: false,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
   grow: null as { from: Vector3 | null } | null,
 };

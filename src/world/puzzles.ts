@@ -4,7 +4,9 @@ import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
 import type { AmbienceKind, MusicTrack } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
+import { ArsenalDragonBattle } from '../fight/arsenal-battle.js';
 import { DragonBattle } from '../fight/battle.js';
+import { PowerChoice } from '../fight/power-choice.js';
 import { InkDuel } from '../fight/duel.js';
 import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
@@ -590,19 +592,31 @@ const shadowDragon: Puzzle = {
   world: 4,
   title: 'The Shadow Dragon',
   story: 'At the top of the mountain the Shadow Dragon guards the Great Lantern, the way home.',
-  ask: 'Gather light with your hands and throw it',
+  ask: 'Choose your powers: Light or the Arsenal',
   handsOn: true,
   solved: 'The shadow breaks into light. The Great Lantern is free, and so are you!',
   build(root, kit) {
-    const battle = new DragonBattle(root);
-    root.add(battle.group);
-    stage.runNotes = () => battle.journal();
-    const task = { caption: '', done: false, mistakes: 0 };
+    // First the choice of powers: the story's Light, or Yash's Arsenal of seven weapons.
+    const choice = new PowerChoice(kit.floor);
+    root.add(choice.group);
+    let battle: DragonBattle | ArsenalDragonBattle | null = null;
+    stage.runNotes = () => battle?.journal() ?? [];
+    const task = { caption: choice.caption, done: false, mistakes: 0 };
     stage.task = task;
     return {
       start: new Vector3(0, kit.floor, 0.12),
       attempt: () => ({ solved: false, steps: [], line: 'This one is yours to fight.' }),
       update: (dt, hands, head) => {
+        if (!battle) {
+          const power = choice.update(dt, hands, head);
+          task.caption = choice.caption;
+          if (!power) return;
+          choice.dispose();
+          battle = power === 'light' ? new DragonBattle(root) : new ArsenalDragonBattle(root);
+          root.add(battle.group);
+          // Beating it with the Arsenal fills the Arsenal's own Journal page.
+          stage.journalPage = power === 'arsenal' ? 'arsenal' : null;
+        }
         battle.update(dt, hands, head);
         task.caption = battle.caption;
         task.done = battle.done;

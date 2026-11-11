@@ -28,11 +28,21 @@ export const play = {
   bag: {} as Record<string, number>,
   /** Inventor's Journal: each cleared level's "your run" lines, by puzzle id. */
   journal: {} as Record<string, string[]>,
+  /** The Arena's bosses beaten: best time (seconds) and wins, by boss name. */
+  arena: {} as Record<string, { best: number; wins: number }>,
 };
+
+let loaded = false;
+
+/** Whether the save has been read this session (the Arsenal page doesn't, until a record needs it). */
+export function progressLoaded(): boolean {
+  return loaded;
+}
 
 const SAVE_KEY = 'shadowplay.progress.v1';
 
 export function loadProgress(): void {
+  loaded = true;
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
     if (!saved) return;
@@ -42,6 +52,7 @@ export function loadProgress(): void {
     if (Array.isArray(saved.items)) play.items = saved.items;
     if (saved.bag && typeof saved.bag === 'object') play.bag = saved.bag;
     if (saved.journal && typeof saved.journal === 'object') play.journal = saved.journal;
+    if (saved.arena && typeof saved.arena === 'object') play.arena = saved.arena;
   } catch {
     // Storage blocked or corrupt: start a fresh story.
   }
@@ -51,7 +62,7 @@ export function saveProgress(): void {
   try {
     localStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal }),
+      JSON.stringify({ puzzleIndex: play.puzzleIndex, unlocked: play.unlocked, stars: play.stars, items: play.items, bag: play.bag, journal: play.journal, arena: play.arena }),
     );
   } catch {
     // Not saved; the story still plays.
@@ -65,6 +76,7 @@ export function resetProgress(): void {
   play.items = [];
   play.bag = {};
   play.journal = {};
+  play.arena = {};
   saveProgress();
 }
 

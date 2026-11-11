@@ -15,6 +15,8 @@
  *   H / J  call the horse / the stag
  */
 
+import { stage } from './stage-state.js';
+
 /** Extra debug readouts other systems add to the `I` info dump. */
 export const devInfo: Record<string, () => unknown> = {};
 /** Extra keys a scene can claim while it is on stage (dev builds only). */
@@ -102,6 +104,8 @@ export function installDevTools(api: DevApi): void {
   if (!import.meta.env.DEV) return;
   let posesAdded = false;
   window.addEventListener('keydown', async (event) => {
+    // In the Arena, Yash's test panel owns the keyboard (its R recenters; ours would reset the story).
+    if (stage.arena) return;
     const hands = emulatedHands();
     if (hands && !posesAdded) {
       posesAdded = true;

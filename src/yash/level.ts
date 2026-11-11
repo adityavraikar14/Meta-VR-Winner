@@ -29,6 +29,7 @@ import {
   isOpen,
   ITEMS,
   Reading,
+  ITEM_LABELS,
   SIGN_LABELS,
 } from './gestures.js';
 import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
@@ -36,6 +37,7 @@ import { DragonBoss } from './dragon-boss.js';
 import { WitchBoss } from './witch-boss.js';
 import { Boss, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
+import { type ArenaWin, recordArenaWin } from '../arena-records.js';
 import { HandSkeleton, SimHands } from './sim-hands.js';
 import { PokeButton, Tutorial } from './tutorial.js';
 import { WebcamHands } from './webcam-hands.js';
@@ -56,6 +58,8 @@ const ICON_ROW_GAP = 0.065;
 const SHOW_HANDS_AFTER = 0.8;
 /** A held item stays where a lost hand was last seen for this long, instead of jumping away. */
 const KEEP_THROUGH_LOSS = 0.5;
+/** Seconds idle, empty-handed and unarmed, before the arming reminder shows. */
+const ARM_HINT_AFTER = 4;
 /** The in-headset readout floats this far ahead, left and down from the eyes (inside a comfortable view). */
 const READOUT_AHEAD = 0.8;
 const READOUT_LEFT = 0.36;
@@ -113,7 +117,14 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private hurtLeft = 0;
   /** Development-only readout visible inside the headset, where the browser panel isn't. */
   private headsetReadout: TextPanel | null = null;
-  private readoutOn = true;
+  private readoutOn = false;
+  /** How to arm, shown after a few idle seconds; and those seconds. */
+  private armHint!: Label;
+  private idleFor = 0;
+  /** Seconds into the fight with the current boss (tutorial time not counted), and its last win. */
+  private fightTime = 0;
+  private wasAlive = true;
+  private lastWin: ArenaWin | null = null;
   private readoutTimer = 0;
 
   private inXR = false;
@@ -193,6 +204,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.tutorial.update(dt, time, this.head, this.headQuat, this.forward, this.hands, () => this.boss.fireNow());
     this.arsenal.update(dt, this.forward, this.head);
     this.boss.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
+    // Time the fight; a win is recorded (best time, wins, the Arsenal's Journal page).
+    if (this.boss.alive) {
+      if (!this.wasAlive) this.fightTime = 0;
+      if (!this.tutorial.active) this.fightTime += dt;
+      this.wasAlive = true;
+    } else if (this.wasAlive) {
+      this.wasAlive = false;
+      this.lastWin = this.tutorial.active ? null : recordArenaWin(this.boss.name, this.boss.title, this.fightTime, this.boss.hitsTaken);
+    }
     // A boss beaten, or its model unavailable: back to the sentinel.
     if (this.boss !== this.opponent && (this.boss.finished || this.boss.failed)) {
       this.selectBoss(this.opponent);
@@ -317,11 +337,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.armedLabel.set('Armed! Make a sign:', '#bff0ff');
     this.handsLabel = new Label(0.07);
     this.handsLabel.set('✋ Show your hands', '#ffe9b0');
+    this.armHint = new Label(0.045);
+    this.armHint.set('🤲 Hold an invisible ball to arm, then make a sign', '#ffe9b0');
+    this.armHint.sprite.visible = false;
+    this.root.add(this.armHint.sprite);
     this.statusLabel = new Label(0.12);
     this.icons = {} as Record<Item, Label>;
     for (const item of ITEMS) {
       const label = new Label(0.05);
-      label.set(SIGN_LABELS[item]);
+      label.set(`${SIGN_LABELS[item]} → ${ITEM_LABELS[item]}`);
       this.icons[item] = label;
       this.root.add(label.sprite);
     }
@@ -345,6 +369,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private updateHud(dt: number, anyHand: boolean): void {
     const r = this.recognizer;
     const armed = r.phase === 'armed';
+
+    // Idle with nothing in hand: remind how to arm (the tutorial teaches it while it runs).
+    const idle = this.inXR && anyHand && !armed && r.progress === 0 && !this.arsenal.held && !this.tutorial.active;
+    this.idleFor = idle ? this.idleFor + dt : 0;
+    this.armHint.sprite.visible = this.idleFor > ARM_HINT_AFTER;
+    if (this.armHint.sprite.visible) {
+      this.armHint.sprite.position.copy(this.head).addScaledVector(this.forward, ICON_DISTANCE);
+      this.armHint.sprite.position.y = this.head.y - ICON_DROP - 0.05;
+    }
 
     // Ring: filling while arming, gold while summoning, draining while armed and waiting.
     const left = this.hands.left;
@@ -398,8 +431,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
       o.loadingText !== null
         ? o.loadingText
         : o.alive
-          ? `${o.title} ${o.hp}/${o.maxHp} · hits taken ${o.hitsTaken}`
-          : `${o.title} defeated! (${o.defeats})`,
+          ? `${o.title}  ♥ ${o.hp}/${o.maxHp}`
+          : this.lastWin
+            ? `${o.title} defeated in ${Math.round(this.lastWin.seconds)} s! ${this.lastWin.newBest ? '★ New best' : `Best ${Math.round(this.lastWin.best)} s`}`
+            : `${o.title} defeated! (${o.defeats})`,
       o.alive || loading ? '#ffffff' : '#ffe27a',
     );
     this.statusLabel.sprite.position.copy(o.center).setY(o.center.y + o.labelRise);
@@ -517,12 +552,16 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.recognizer.reset();
     boss.setActive(true);
     boss.reset();
+    this.fightTime = 0;
+    this.wasAlive = true;
+    this.lastWin = null;
     this.placed = false;
     this.bossButton.setText(NEXT_BOSS_LABEL[boss.name] ?? NEXT_BOSS_LABEL.sentinel);
   }
 
   /** Sentinel, then the dragon, then Morwen, then back to the sentinel. */
   private nextBoss(): void {
+    this.tutorial.stop();
     if (this.boss === this.opponent) this.fightDragon();
     else if (this.boss === this.dragon) this.fightWitch();
     else this.selectBoss(this.opponent);

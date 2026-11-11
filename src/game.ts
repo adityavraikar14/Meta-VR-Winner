@@ -63,6 +63,7 @@ import { IntroShow } from './intro.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
+import { installWebcamPanel } from './webcam.js';
 import { TableFinder } from './table.js';
 import { loadProgress, play, resetProgress, saveProgress, totalStars } from './progress.js';
 import {
@@ -135,6 +136,11 @@ const CARD_Y = PAPER_HEIGHT / 2 - 0.075;
 const RING_STEPS = 40;
 /** The title screen's Play button, in paper space: low and within easy reach. */
 const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
+/** The Skip button, off to the right of the paper and clear of the hands-on machines. */
+const SKIP_BUTTON = new Vector3(0.42, 0.02, 0.6);
+const SKIP_SIZE = 0.75;
+/** Phases in which a level is under way and can be skipped. */
+const SKIPPABLE: ReadonlySet<Phase> = new Set(['story', 'matching', 'awakening', 'solving', 'oops']);
 const VIEWER = new Vector3(0, 0.12, 1.0);
 const INDEX_TIP = 9;
 const THUMB_TIP = 4;
@@ -231,6 +237,10 @@ export class ShadowGameSystem extends createSystem({
   private ghost!: GhostHand;
   private leftHanded = false;
   private playButton!: PushButton;
+  /** Always-there Skip while a level is on, so any level can be passed over. */
+  private skipButton!: PushButton;
+  private skipEntity!: Entity;
+  private skipClick = false;
   private buttonEntity!: Entity;
   private intro!: IntroShow;
   private table!: TableFinder;
@@ -341,9 +351,11 @@ export class ShadowGameSystem extends createSystem({
     this.captionTexture = makeTexture(this.captionCanvas);
     const captionMesh = new Mesh(
       new PlaneGeometry(PAPER_WIDTH * 0.9, (PAPER_WIDTH * 0.9 * 112) / 1024),
-      new MeshBasicMaterial({ map: this.captionTexture, transparent: true }),
+      // Drawn over everything: a dragon's wing or a boss in front of the screen never hides what to do.
+      new MeshBasicMaterial({ map: this.captionTexture, transparent: true, depthTest: false, depthWrite: false }),
     );
     captionMesh.name = 'Caption';
+    captionMesh.renderOrder = 20;
     // In front of every world's frame, so no beam or crossbar can cover it.
     captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.115, 0.075);
     paper.add(captionMesh);
@@ -355,8 +367,15 @@ export class ShadowGameSystem extends createSystem({
     // Mouse, controller and pinch rays can press it too, not only a fingertip.
     this.buttonEntity = this.world.createTransformEntity(this.playButton.root, { parent: stage.paperEntity! });
     this.buttonEntity.addComponent(RayInteractable);
+    this.skipButton = new PushButton(paper, 'Skip');
+    this.skipButton.size = SKIP_SIZE;
+    this.skipButton.root.position.copy(SKIP_BUTTON);
+    this.skipButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
+    this.skipEntity = this.world.createTransformEntity(this.skipButton.root, { parent: stage.paperEntity! });
+    this.skipEntity.addComponent(RayInteractable);
     this.queries.rayPressed.subscribe('qualify', (entity) => {
       if (entity === this.buttonEntity) this.rayClick = true;
+      if (entity === this.skipEntity) this.skipClick = true;
     });
     this.addDesktopPress();
     this.intro = new IntroShow(paper);
@@ -466,6 +485,7 @@ export class ShadowGameSystem extends createSystem({
       },
       status: () => `phase: ${this.phase} · ${stage.task?.caption ?? this.caption}`,
     });
+    installWebcamPanel();
     installDevTools({
       capture: () => (this.hasShadow ? encodeCells(this.shadow) : ''),
       maskVersion: () => stage.maskVersion,
@@ -508,6 +528,9 @@ export class ShadowGameSystem extends createSystem({
         const [l, r] = stage.joints;
         return {
           phase: this.phase,
+          playing: stage.playing,
+          menuOpen: stage.menuOpen,
+          visibility: this.visibilityState.peek(),
           puzzle: this.puzzle?.id ?? 'free',
           candidates: this.candidates.map((c, i) => `${c.id}:${(this.smooth[i] ?? 0).toFixed(2)}`),
           unlocked: play.unlocked,
@@ -529,17 +552,39 @@ export class ShadowGameSystem extends createSystem({
     this.phaseTime += dt;
     this.readShadows();
     this.handleCommand();
+    // A level picked on the start page: straight into it once the headset view is up.
+    if (stage.startAt !== null && this.visibilityState.peek() === VisibilityState.Visible) {
+      const index = stage.startAt;
+      stage.startAt = null;
+      this.leaveTable();
+      playAwaken();
+      this.startPuzzle(index);
+    }
+    if (stage.startArena && this.visibilityState.peek() === VisibilityState.Visible) {
+      stage.startArena = false;
+      this.leaveTable();
+      this.enterArena();
+    }
 
     this.readTips();
     const pressed = this.playButton.update(dt, this.liveTips, this.rayClick);
     this.rayClick = false;
     if (pressed) playClick();
+    this.skipButton.show(this.puzzle !== null && SKIPPABLE.has(this.phase) && !stage.menuOpen);
+    const skipped = this.skipButton.update(dt, this.liveTips, this.skipClick);
+    this.skipClick = false;
+    if (skipped) {
+      playClick();
+      if (this.puzzle?.id === 'duel') this.showTitle();
+      else this.skip();
+    }
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
 
     stage.playing = this.phase === 'matching' && !stage.menuOpen;
+    stage.fight = this.puzzle?.id === 'shadow-dragon' || this.puzzle?.id === 'duel';
     stage.titleMenu = this.phase === 'title';
     // Music only in the headset; the Arena keeps Yash's own soundscape.
     const inHeadset = this.visibilityState.peek() === VisibilityState.Visible;
@@ -631,6 +676,16 @@ export class ShadowGameSystem extends createSystem({
     this.playButton.show(true);
     this.setCaption('Lay one hand flat on your table');
     this.setPhase('table');
+  }
+
+  /** A start-page shortcut skips finding the table: the world grows in at the default height. */
+  private leaveTable(): void {
+    if (this.phase !== 'table') return;
+    this.table.hide();
+    this.playButton.show(false);
+    stage.sceneryHidden = false;
+    stage.grow = { from: null };
+    playGrow();
   }
 
   private updateTable(dt: number, skip: boolean): void {
@@ -726,13 +781,14 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
-      if (!this.playButton.visible && this.menu.roots.length === 0) return;
+      if (!this.playButton.visible && !this.skipButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       const camera = this.renderer.xr.isPresenting ? this.renderer.xr.getCamera() : this.camera;
       raycaster.setFromCamera(ndc, camera);
       if (this.playButton.visible && raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
+      if (this.skipButton.visible && raycaster.intersectObject(this.skipButton.root, true).length > 0) this.skipClick = true;
       this.menu.roots.forEach((root, i) => {
         if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
       });
@@ -1131,7 +1187,7 @@ export class ShadowGameSystem extends createSystem({
         ? [`Crossed in ${Math.round(this.matchTime)} s`, this.shadowWorld.falls ? `Your friend fell ${this.shadowWorld.falls} time${this.shadowWorld.falls > 1 ? 's' : ''} on the way` : 'Not one fall on the way']
         : friendRunLines(this.creatureSize, this.bodySize));
     // A lost duel fills no page.
-    const newPage = runLines.length > 0 && noteRun(puzzle.id, runLines);
+    const newPage = runLines.length > 0 && noteRun(stage.journalPage ?? puzzle.id, runLines);
     // Resume from the next level if the player leaves now.
     play.puzzleIndex = this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
     saveProgress();

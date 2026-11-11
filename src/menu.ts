@@ -252,7 +252,7 @@ export class MainMenu {
   }
 
   private battles(): Slot[] {
-    this.draw('Side games', 'Battles', 'Ink Duel: draw in the air and throw your drawings at Morwen, the Ink Witch.  ·  Arena: Yash\u2019s hand-sign fight against a sentinel.', 'Bring draughts, wards and sun shards from your bag');
+    this.draw('Side games', 'Battles', 'Ink Duel: draw in the air and throw your drawings at Morwen, the Ink Witch.  ·  Arena: the Arsenal\u2019s seven weapons against a sentinel, the dragon and Morwen.', 'Bring draughts, wards and sun shards from your bag');
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Duel', run: () => ({ do: 'duel' }) },
@@ -273,7 +273,7 @@ export class MainMenu {
       this.layout();
       return null;
     };
-    const index = PUZZLES.findIndex((p) => p.id === page.id);
+    const index = PUZZLES.findIndex((p) => p.id === (page.replay ?? page.id));
     const earned = play.journal[page.id] !== undefined;
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
@@ -335,13 +335,10 @@ function worldOf(index: number): number {
   return PUZZLES[Math.min(index, PUZZLES.length - 1)]?.world ?? 0;
 }
 
-/** A chapter opens once the player has reached its first level. */
-function unlocked(world: number): boolean {
-  const first = PUZZLES.findIndex((p) => p.world === world);
-  if (first <= 0) return true;
-  let furthest = resumeIndex();
-  PUZZLES.forEach((p, i) => {
-    if ((play.stars[p.id] ?? 0) > 0) furthest = Math.max(furthest, i + 1);
-  });
-  return first <= furthest;
+/**
+ * Every chapter is open, so any level can be played straight away (Yash's
+ * call, for anyone short of time). Continue still follows the story in order.
+ */
+function unlocked(_world: number): boolean {
+  return true;
 }

@@ -249,6 +249,76 @@
       @media (prefers-reduced-motion: reduce) {
         #sp-splash *, #sp-splash *::before, #sp-splash *::after { animation: none !important; }
       }
+
+      /* A level picker (any level, straight in) and the Arsenal's boss fights. */
+      #sp-splash .row-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+      #sp-splash button.secondary {
+        min-width: 0;
+        margin-top: 0;
+        padding: 10px 22px;
+        font-size: 16px;
+        color: #ffe9c4;
+        background: rgba(30, 14, 40, 0.55);
+        border: 1px solid rgba(255, 210, 140, 0.4);
+        box-shadow: none;
+        animation: none;
+      }
+      #sp-splash .levels {
+        max-width: min(680px, 92vw);
+        color: #ffe9c4;
+        font-size: 15px;
+      }
+      #sp-splash .levels summary {
+        cursor: pointer;
+        padding: 6px 16px;
+        border-radius: 999px;
+        background: rgba(30, 14, 40, 0.45);
+        border: 1px solid rgba(255, 210, 140, 0.35);
+      }
+      #sp-splash .level-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 34vh;
+        overflow-y: auto;
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(20, 8, 30, 0.6);
+        text-align: left;
+      }
+      #sp-splash .level-list h3 {
+        margin: 6px 0 0;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #f3c98a;
+      }
+      #sp-splash .level-list .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      #sp-splash .level-list button {
+        min-width: 0;
+        margin: 0;
+        padding: 6px 12px;
+        font-size: 14px;
+        font-weight: 400;
+        color: #ffe9c4;
+        background: rgba(255, 210, 140, 0.12);
+        border: 1px solid rgba(255, 210, 140, 0.3);
+        box-shadow: none;
+        animation: none;
+      }
+      #sp-splash .level-list button:hover {
+        background: rgba(255, 210, 140, 0.28);
+      }
     </style>
   </head>
   <body style="margin: 0; overflow: hidden; background: #120b06">
@@ -285,8 +355,15 @@
         <li><span>IV</span>The Sky Lantern</li>
         <li><span>V</span>Dragon&#8217;s Mountain</li>
       </ul>
+      <details class="levels" id="sp-levels">
+        <summary>Choose a level</summary>
+        <div class="level-list" id="sp-level-list"></div>
+      </details>
       <div class="bar" id="sp-bar"><span></span></div>
       <button id="sp-play" disabled>Loading…</button>
+      <div class="row-buttons">
+        <button id="sp-arena" class="secondary" disabled>⚔️ The Arsenal: boss fights</button>
+      </div>
       <ul class="hints">
         <li>✋ Hands only, no controllers</li>
         <li>🪑 Play seated</li>

@@ -27,7 +27,7 @@ import {
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-const DRAGON_URL = 'yash/story/gltf/dragon.glb';
+const DRAGON_URL = 'gltf/dragon.glb';
 /** The length the original's sprite sizes and bob were tuned for, metres. */
 const ORIGINAL_LENGTH = 0.78;
 

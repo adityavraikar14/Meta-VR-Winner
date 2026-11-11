@@ -1,4 +1,4 @@
-import { WebcamHands } from '../webcam-hands.js';
+import { WebcamHands } from './yash/webcam-hands.js';
 import { stage } from './stage-state.js';
 
 /**

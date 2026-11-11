@@ -451,6 +451,48 @@ const DRAW: Record<Diagram, (g: CanvasRenderingContext2D) => void> = {
     label(g, 'E = ½ m v²', 265, 100, 24, BLUE);
     label(g, '2× speed → 4× energy', 265, 380, 18);
   },
+
+  slingshot(g) {
+    // A forked slingshot, its bands drawn back by x, and the stone's arc away.
+    const forkX = 150;
+    pen(g, [[forkX, 340], [forkX, 270]], 5);
+    pen(g, [[forkX, 270], [forkX - 34, 200]], 5);
+    pen(g, [[forkX, 270], [forkX + 34, 200]], 5);
+    label(g, 'fork', forkX + 56, 316, 16);
+    // Bands from the prongs back to the pouch, pulled down-left.
+    const pouch: [number, number] = [70, 250];
+    pen(g, [[forkX - 34, 200], pouch], 2, RED);
+    pen(g, [[forkX + 34, 200], pouch], 2, RED);
+    wash(g, [[pouch[0] - 12, pouch[1] - 10], [pouch[0] + 8, pouch[1] - 12], [pouch[0] + 8, pouch[1] + 12], [pouch[0] - 12, pouch[1] + 10]], 'rgba(120, 80, 40, 0.6)');
+    ring(g, pouch[0] - 2, pouch[1], 7, 2.2);
+    // The pull, x, measured from rest (between the prongs) back to the pouch.
+    g.setLineDash([5, 6]);
+    pen(g, [[forkX, 200], [pouch[0], pouch[1]]], 1.6, BLUE);
+    g.setLineDash([]);
+    label(g, 'x', 100, 210, 22, BLUE);
+    // The stone's flight: launched up and right, bending down under gravity.
+    const pts: Array<[number, number]> = [];
+    for (let i = 0; i <= 18; i++) {
+      const t = i / 18;
+      pts.push([forkX + 10 + t * 300, 196 - 150 * t + 170 * t * t]);
+    }
+    g.setLineDash([4, 7]);
+    pen(g, pts, 2.2, BLUE);
+    g.setLineDash([]);
+    arrow(g, forkX + 10, 196, forkX + 70, 150, RED, 3);
+    label(g, 'v', forkX + 52, 132, 22, RED);
+    arrow(g, 380, 110, 380, 160, SEPIA, 2.6);
+    label(g, 'g', 396, 136, 22, SEPIA, 'left');
+    // Energy bars: x and 2x.
+    wash(g, [[300, 300], [330, 300], [330, 340], [300, 340]], 'rgba(176, 48, 42, 0.45)');
+    wash(g, [[360, 220], [390, 220], [390, 340], [360, 340]], 'rgba(176, 48, 42, 0.7)');
+    pen(g, [[290, 340], [400, 340]], 2);
+    label(g, 'x', 315, 360, 18, BLUE);
+    label(g, '2x', 375, 360, 18, BLUE);
+    label(g, 'E', 315, 288, 18);
+    label(g, '4E', 375, 208, 18);
+    label(g, '½ k x² → ½ m v²', 250, 92, 24, BLUE);
+  },
 };
 
 // ================================================================== Page
@@ -489,9 +531,9 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
   const page = JOURNAL[index];
   const lines = play.journal[page.id];
   const earned = lines !== undefined;
-  const level = page.id === 'duel' ? null : PUZZLES.find((p) => p.id === page.id);
-  const title = level?.title ?? 'Ink Duel';
-  const chapter = level ? `Chapter ${level.world + 1} · ${WORLDS[level.world].name}` : 'Side game';
+  const level = page.id === 'duel' || page.title ? null : PUZZLES.find((p) => p.id === page.id);
+  const title = page.title ?? level?.title ?? 'Ink Duel';
+  const chapter = page.chapter ?? (level ? `Chapter ${level.world + 1} · ${WORLDS[level.world].name}` : 'Side game');
   seed = 7 + index * 131;
 
   // The leather cover, then the two pages and the spine's shadow.

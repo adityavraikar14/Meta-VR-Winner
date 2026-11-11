@@ -22,7 +22,8 @@ export type Diagram =
   | 'balloon'
   | 'reflection'
   | 'projectile'
-  | 'pins';
+  | 'pins'
+  | 'slingshot';
 
 export interface JournalPage {
   /** The level's id. */
@@ -32,6 +33,10 @@ export interface JournalPage {
   formula: string;
   body: string;
   diagram: Diagram;
+  /** For a page that is not a level's own: its heading, chapter line, and the level Replay opens. */
+  title?: string;
+  chapter?: string;
+  replay?: string;
 }
 
 /** In story order, the Ink Duel last. */
@@ -154,6 +159,16 @@ export const JOURNAL: JournalPage[] = [
     formula: "v' = v − 2(v·n)n",
     body: 'Fire and light bounce off a mirror at the angle they arrive. Tilt your palm and you aim the bounce: the fireball’s direction flips about the line straight out of your palm (its normal, n). Your shield of light even adds a quarter more speed.',
     diagram: 'reflection',
+  },
+  {
+    id: 'arsenal',
+    title: 'The Arsenal',
+    chapter: 'Arsenal fights: the dragon, or the Arena',
+    replay: 'shadow-dragon',
+    topic: 'Stretch, Snap, Arc',
+    formula: '½kx² = ½mv²',
+    body: 'A slingshot’s bands store energy as you pull: pull twice as far and they hold four times as much. Let go and that energy becomes the stone’s speed, so the speed grows in step with the pull. Then gravity bends every shot, stone, spear or power ball, into an arc: aim a little high for a far target.',
+    diagram: 'slingshot',
   },
   {
     id: 'duel',

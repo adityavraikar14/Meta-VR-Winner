@@ -1,5 +1,5 @@
 import { Group, type Mesh, type MeshBasicMaterial, Quaternion, Vector3 } from '@iwsdk/core';
-import { type Anchor, Arsenal } from '../../arsenal.js';
+import { type Anchor, Arsenal } from '../yash/arsenal.js';
 import {
   ARMED_WINDOW,
   classify,
@@ -7,14 +7,15 @@ import {
   GestureRecognizer,
   ITEMS,
   type Item,
+  ITEM_LABELS,
   type Reading,
   SIGN_LABELS,
-} from '../../gestures.js';
-import { HandState, JOINT_COUNT, type Side, SIDES } from '../../hands.js';
-import type { Foe, RayHit } from '../../opponent.js';
-import { rayToSphere } from '../../orbs.js';
-import { sfx } from '../../sfx.js';
-import { Bursts, Label, makeRing, setRing } from '../../visuals.js';
+} from '../yash/gestures.js';
+import { HandState, JOINT_COUNT, type Side, SIDES } from '../yash/hands.js';
+import type { Foe, RayHit } from '../yash/opponent.js';
+import { rayToSphere } from '../yash/orbs.js';
+import { sfx } from '../yash/sfx.js';
+import { Bursts, Label, makeRing, setRing } from '../yash/visuals.js';
 import { devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
 
@@ -91,7 +92,7 @@ export class ArsenalPlayer implements Foe {
     this.root.add(this.ring, this.armedLabel.sprite);
     for (const item of ITEMS) {
       const label = new Label(0.04);
-      label.set(SIGN_LABELS[item]);
+      label.set(`${SIGN_LABELS[item]} → ${ITEM_LABELS[item]}`);
       label.sprite.visible = false;
       this.icons[item] = label;
       this.root.add(label.sprite);

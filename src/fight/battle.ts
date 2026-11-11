@@ -15,7 +15,8 @@ import {
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
-import { playBoom, playCharge, playClang, playFireball, playHiss, playRoar, playSign, playThrow } from '../audio.js';
+import { playBoom, playCharge, playClang, playFireball, playHiss, playSign, playThrow } from '../audio.js';
+import { sfx } from '../yash/sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import type { Extension } from '../hand-pose.js';
@@ -265,7 +266,7 @@ export class DragonBattle {
           break;
         }
         this.caption = 'The Shadow Dragon bursts out! It guards the Great Lantern';
-        if (this.modeTime > 0.4 && this.modeTime - dt <= 0.4) playRoar();
+        if (this.modeTime > 0.4 && this.modeTime - dt <= 0.4) sfx.roar();
         if (this.modeTime > 3.2) this.setMode('fight');
         break;
       case 'fight':
@@ -573,13 +574,14 @@ export class DragonBattle {
     playBoom(0.08 + 0.05 * damage);
     if (this.dragonHealth <= 0.01) {
       this.setMode('won');
-      playRoar(0.14);
+      sfx.dragonDeath();
       for (const f of this.fireballs) this.group.remove(f.sprite);
       this.fireballs.length = 0;
       return;
     }
-    playRoar(0.06);
     const enraged = this.dragonHealth <= DRAGON_HEALTH / 2 && this.dragonHealth + damage > DRAGON_HEALTH / 2;
+    if (enraged) sfx.dragonRoar(1);
+    else sfx.dragonGrunt();
     this.flash(enraged
       ? 'The dragon is enraged! Twin fireballs: shield with both palms'
       : damage >= 1 ? 'A direct hit! The dragon reels' : 'It stings! Hit the head or heart for more');
@@ -609,10 +611,11 @@ export class DragonBattle {
     if (this.nextBreath <= 0 && this.dragon3d && Math.random() < 0.4) {
       this.diveTime = 0.001;
       this.nextBreath = 3.5 + Math.random();
-      playRoar(0.09);
+      sfx.roar();
       this.flash('It dives at you! Make a fist for your sword, and slash', 2);
     } else if (this.nextBreath <= 0) {
       this.breathTime = 0.001;
+      sfx.dragonSnarl();
       // Angrier as it weakens.
       this.nextBreath = this.dragonHealth > DRAGON_HEALTH / 2 ? 4.2 + Math.random() : 2.8 + Math.random();
     }

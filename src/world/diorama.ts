@@ -138,6 +138,7 @@ export class Diorama {
     this.blockers = [];
     stage.task = null;
     stage.runNotes = null;
+    stage.journalPage = null;
     stage.music = null;
     // Build at full size (scenes measure the stage as they are made), then unfold.
     if (this.growTime >= 4) this.props.scale.set(1, 1, 1);

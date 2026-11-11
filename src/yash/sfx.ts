@@ -2,12 +2,15 @@
  * Synthesized sound effects for the Arsenal level, so it ships no audio files.
  * Every call is fire-and-forget and silently does nothing without Web Audio.
  */
+import { isMuted } from '../audio.js';
 import type { Item } from './gestures.js';
 
 let ctx: AudioContext | null = null;
 let noiseBuffer: AudioBuffer | null = null;
 
 function audio(): AudioContext | null {
+  // One game, one Mute switch: the menu's Settings silence these too.
+  if (isMuted()) return null;
   if (!ctx) {
     try {
       ctx = new AudioContext();
