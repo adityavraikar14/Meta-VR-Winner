@@ -5,7 +5,7 @@ import { isMuted, playClick, playPrompt, playTinkle, playUnfold, setMuted } from
 import { craft, needsText, RECIPES } from './bag.js';
 import { JOURNAL, pagesFilled } from './journal.js';
 import { TROPHIES, trophiesEarned } from './trophies.js';
-import { play, totalStars } from './progress.js';
+import { play, saveProgress, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
 import { PUZZLES, WORLDS } from './world/puzzles.js';
@@ -73,7 +73,7 @@ export class MainMenu {
   }
 
   open(page: MenuPage): void {
-    if (page === 'chapters' && this.page !== 'chapters') this.chapter = worldOf(resumeIndex());
+    if (page === 'chapters' && this.page !== 'chapters') this.pick = Math.min(resumeIndex(), PUZZLES.length - 1);
     // The journal opens at the newest story page you have earned.
     if (page === 'journal' && this.page !== 'journal') {
       const earned = JOURNAL.map((p, i) => (play.journal[p.id] && p.id !== 'duel' ? i : -1)).filter((i) => i >= 0);
@@ -97,6 +97,10 @@ export class MainMenu {
    */
   update(dt: number, tips: readonly Vector3[], clicked: number, enter: boolean): MenuAction | null {
     let action: MenuAction | null = null;
+    if (this.confirmNew > 0) {
+      this.confirmNew -= dt;
+      if (this.confirmNew <= 0 && this.page === 'home') this.layout();
+    }
     let pressed = -1;
     const roots = this.roots;
     this.buttons.forEach((button, i) => {
@@ -162,6 +166,26 @@ export class MainMenu {
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
       { label: fresh ? 'Play' : next ? 'Continue' : 'Replay', run: () => ({ do: 'play' }), primary: true },
+      ...(fresh
+        ? []
+        : [
+            {
+              label: 'New game',
+              run: (): MenuAction | null => {
+                // Two pushes, so a stray finger cannot throw the story's place away.
+                if (this.confirmNew <= 0) {
+                  this.confirmNew = 4;
+                  playPrompt();
+                  this.draw('New game?', 'Start from Level 1', 'Push New game again to begin the story from the first level. Your stars, Journal pages and trophies are kept.', '');
+                  return null;
+                }
+                this.confirmNew = 0;
+                play.puzzleIndex = 0;
+                saveProgress();
+                return { do: 'chapter', index: 0 };
+              },
+            },
+          ]),
       { label: 'Journal', run: () => this.go('journal') },
       { label: 'Bag', run: () => this.go('bag') },
       { label: 'Battles', run: () => this.go('battles') },
@@ -169,41 +193,46 @@ export class MainMenu {
     ];
   }
 
+  /**
+   * Chapters: step through every level of the story, one at a time (Prev and
+   * Next cross into the next chapter, and the world around you changes with
+   * it), and push Play to start exactly that level.
+   */
   private chapters(): Slot[] {
-    const w = this.chapter;
+    const n = PUZZLES.length;
+    this.pick = ((this.pick % n) + n) % n;
+    const puzzle = PUZZLES[this.pick];
+    const w = puzzle.world;
+    this.chapter = w;
     stage.previewWorld = w;
     const levels = PUZZLES.map((p, index) => ({ p, index })).filter(({ p }) => p.world === w);
-    const open = unlocked(w);
-    const done = levels.filter(({ p }) => (play.stars[p.id] ?? 0) > 0).length;
-    const stars = levels.reduce((sum, { p }) => sum + (play.stars[p.id] ?? 0), 0);
-    const nextLevel = levels.find(({ p }) => !(play.stars[p.id] > 0)) ?? levels[0];
-    const body = open
-      ? `${done} of ${levels.length} levels played  ·  ${stars} of ${levels.length * 3} ★  ·  ${done < levels.length ? `Next: ${nextLevel.p.title}` : 'Play starts from the beginning'}`
-      : `Locked. Finish ${WORLDS[w - 1]?.name ?? 'the chapter before'} to open the way here.`;
-    this.draw(`Chapter ${w + 1} of ${WORLDS.length}`, WORLDS[w].name, body, open ? 'Push Play to start here' : '');
+    const within = levels.findIndex(({ index }) => index === this.pick) + 1;
+    const stars = play.stars[puzzle.id] ?? 0;
+    const chapterStars = levels.reduce((sum, { p }) => sum + (play.stars[p.id] ?? 0), 0);
+    this.draw(
+      `Chapter ${w + 1} · ${WORLDS[w].name}  ·  Level ${within} of ${levels.length}`,
+      puzzle.title,
+      `${stars > 0 ? `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}  ·  ` : 'Not played yet  ·  '}${puzzle.ask ?? ''}`,
+      `Level ${this.pick + 1} of ${n} in the story  ·  ${chapterStars} of ${levels.length * 3} ★ in this chapter`,
+    );
     const step = (d: number) => () => {
-      this.chapter = (this.chapter + d + WORLDS.length) % WORLDS.length;
+      this.pick = (this.pick + d + n) % n;
+      playUnfold();
       this.layout();
       return null;
     };
     return [
       { label: 'Back', run: () => this.go('home') },
       { label: 'Prev', run: step(-1) },
-      {
-        label: open ? 'Play' : 'Locked',
-        primary: true,
-        run: () => {
-          if (!open) {
-            playPrompt();
-            return null;
-          }
-          const start = done < levels.length ? nextLevel.index : levels[0].index;
-          return { do: 'chapter', index: start };
-        },
-      },
+      { label: 'Play', primary: true, run: () => ({ do: 'chapter', index: this.pick }) },
       { label: 'Next', run: step(1) },
     ];
   }
+
+  /** The level shown on the Chapters page (an index into the story). */
+  private pick = 0;
+  /** Seconds left to confirm New game with a second push. */
+  private confirmNew = 0;
 
   private settings(): Slot[] {
     stage.previewWorld = null;
@@ -476,9 +505,6 @@ export function resumeIndex(): number {
   return play.puzzleIndex < 0 ? PUZZLES.length : play.puzzleIndex;
 }
 
-function worldOf(index: number): number {
-  return PUZZLES[Math.min(index, PUZZLES.length - 1)]?.world ?? 0;
-}
 
 /**
  * Every chapter is open, so any level can be played straight away (Yash's

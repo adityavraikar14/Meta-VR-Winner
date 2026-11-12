@@ -22,7 +22,7 @@ import { devActions, devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
 import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
-import { GATE_RADIUS, PAPER_BOUNDS, RunSim } from './run-sim.js';
+import { GATE_RADIUS, PAPER_BOUNDS, RunSim, THORN_RADIUS } from './run-sim.js';
 import { ShardSet } from './shards.js';
 import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
 import { currentSlot, DEMO, nextSlot, resetWorkshop, saveWorkshop } from './workshop.js';
@@ -312,6 +312,34 @@ function guideTexture(level: RunLevel): CanvasTexture | null {
   return texture;
 }
 
+/** An ink thorn: a black burr of spikes with a red-hot core. */
+function thornTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 96;
+  const g = canvas.getContext('2d')!;
+  const glow = g.createRadialGradient(48, 48, 0, 48, 48, 46);
+  glow.addColorStop(0, 'rgba(255, 70, 40, 0.65)');
+  glow.addColorStop(1, 'rgba(255, 40, 20, 0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, 96, 96);
+  g.fillStyle = '#120a10';
+  g.beginPath();
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const r = i % 2 ? 13 : 30 + (i % 4) * 2;
+    g.lineTo(48 + Math.cos(a) * r, 48 + Math.sin(a) * r);
+  }
+  g.closePath();
+  g.fill();
+  g.fillStyle = '#ff5a2a';
+  g.beginPath();
+  g.arc(48, 48, 6, 0, Math.PI * 2);
+  g.fill();
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
 function moteTexture(): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
@@ -368,6 +396,8 @@ export class ShadowRun {
   /** The Prism's dotted path ahead. */
   private ahead: Mesh[] = [];
   private aheadAt: Array<[number, number]> = [];
+  /** Ink thorns on the course. */
+  private thorns: Sprite[] = [];
   /** The dashed "your shadow here" guide. */
   private guide: Mesh | null = null;
   private trail: Sprite[] = [];
@@ -439,6 +469,16 @@ export class ShadowRun {
       this.guide.renderOrder = 4;
       this.guide.visible = false;
       this.paper.add(this.guide);
+    }
+
+    const thorn = thornTexture();
+    for (const [x, y] of level.thorns ?? []) {
+      const sprite = new Sprite(new SpriteMaterial({ map: thorn, transparent: true, depthWrite: false }));
+      sprite.position.set(x, y, Z_GATE);
+      sprite.scale.setScalar(THORN_RADIUS * 3.4);
+      sprite.renderOrder = 5;
+      this.paper.add(sprite);
+      this.thorns.push(sprite);
     }
 
     const mote = moteTexture();
@@ -624,6 +664,11 @@ export class ShadowRun {
         stage.say = 'The Phoenix core reignites on the last ledge!';
       } else if (event.type === 'lost') {
         this.lostTime = 0;
+        if (event.thorn !== undefined) {
+          const [tx, ty] = this.level.thorns![event.thorn];
+          this.burst(tx, ty, 16, 0.6);
+          stage.say = 'Caught on an ink thorn! Keep the spark clear of them';
+        }
         stage.cue = 'oops';
         // After a few misses Ada gives the level's hint; before that, a word of encouragement.
         stage.say = sim.retries + 1 >= HINT_AFTER ? this.level.hint : ['Close!', 'Again: you’ve got this.', 'Almost. Watch where it falls.'][sim.retries % 3];
@@ -829,6 +874,11 @@ export class ShadowRun {
     this.gateGlow.position.set(gx, gy, Z_GATE);
     this.gateRing.visible = this.gateGlow.visible = this.gateOk;
     this.gateGlow.scale.setScalar(GATE_RADIUS * (3 + 0.25 * Math.sin(this.time * 2.4) + 4 * flare));
+    // Thorns turn slowly and pulse, so they read as alive and dangerous.
+    this.thorns.forEach((t, i) => {
+      t.material.rotation = this.time * 0.7 + i;
+      t.scale.setScalar(THORN_RADIUS * (3.3 + 0.25 * Math.sin(this.time * 3 + i)));
+    });
     // Motes bob gently; a collected one flies into the spark and is gone.
     this.motes.forEach((m, i) => {
       if (!m.visible) return;

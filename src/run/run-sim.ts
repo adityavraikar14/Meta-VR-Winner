@@ -11,6 +11,8 @@ export const PAPER_BOUNDS: Bounds = { hw: 0.5, hh: 0.35 };
 /** The spark is through the gate once its centre is this close to the gate's. */
 export const GATE_RADIUS = 0.04;
 export const MOTE_RADIUS = 0.028;
+/** An ink thorn's reach (the spark's own radius is added). */
+export const THORN_RADIUS = 0.02;
 /** Below this the spark has dropped out of sight behind the diorama: lost. */
 export const LOST_Y = -0.24;
 
@@ -20,7 +22,7 @@ export type RunEvent =
   | { type: 'bounce'; speed: number; tag: number }
   | { type: 'mote'; index: number }
   | { type: 'revive'; from: [number, number] }
-  | { type: 'lost' }
+  | { type: 'lost'; thorn?: number }
   | { type: 'won' };
 
 /** A spark's special power (see spark-face.ts). None of them is needed to finish a level. */
@@ -104,6 +106,15 @@ export class RunSim {
         this.events.push({ type: 'mote', index: i });
       }
     });
+    // An ink thorn: the spark is lost at once (Ember's second chance does not save it).
+    const thorns = this.level.thorns ?? [];
+    for (let i = 0; i < thorns.length; i++) {
+      if (Math.hypot(x - thorns[i][0], y - thorns[i][1]) < THORN_RADIUS + this.spark.r) {
+        this.state = 'lost';
+        this.events.push({ type: 'lost', thorn: i });
+        return;
+      }
+    }
     const [gx, gy] = this.level.gate;
     if (Math.hypot(x - gx, y - gy) < GATE_RADIUS) {
       this.state = 'won';

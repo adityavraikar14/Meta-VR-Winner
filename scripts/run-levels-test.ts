@@ -48,6 +48,9 @@ for (const level of RUN_LEVELS) {
   const { sim, path } = play(level, true);
   const bare = play(level, false).sim;
   const ok = sim.state === 'won';
+  // How close the solution's path comes to any ink thorn (it must not touch one, or it would not win).
+  const thorns = level.thorns ?? [];
+  const clearance = thorns.length ? Math.min(...path.flatMap(([x, y]) => thorns.map(([tx, ty]) => Math.hypot(x - tx, y - ty)))) : Infinity;
   const needsYou = bare.state !== 'won';
   if (!ok || !needsYou) failed++;
   const trace = path
@@ -56,7 +59,7 @@ for (const level of RUN_LEVELS) {
     .join(' ');
   console.log(
     `${ok && needsYou ? 'PASS' : 'FAIL'}  ${level.id.padEnd(12)} solved:${ok ? `gate in ${sim.time.toFixed(1)} s` : `no (${sim.state}, ended at ${sim.spark.x.toFixed(2)},${sim.spark.y.toFixed(2)})`}` +
-      `  motes ${sim.motesTaken}/${sim.motes.length}  stars ${sim.stars()}  · without you: ${bare.state}`,
+      `  motes ${sim.motesTaken}/${sim.motes.length}  stars ${sim.stars()}  · without you: ${bare.state}${thorns.length ? `  · thorns ${thorns.length}, closest ${(clearance * 100).toFixed(1)} cm` : ''}`,
   );
   if (!ok || process.argv.includes('--trace')) console.log(`      path: ${trace}`);
 }

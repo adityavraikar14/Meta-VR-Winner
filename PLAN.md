@@ -315,6 +315,13 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [ ] Story levels: make the tasks more interactive, medium difficulty (not too easy), with a twist each; not childish
 - [ ] Super move for the Arena too (the Arsenal already has seven weapons)
 
+### Nov 13, fourth pass: buttons, levels from the start (Aditya: "buttons look plain and odd; entering VR drops me mid-story; I want levels from the start and to move freely")
+- [x] Every push button is a lantern lens: coloured glass in a brushed-brass bezel on a dark iron plate, lit from inside (it glows brighter as a finger nears, and a soft ring of light swells around it), deep jewel colours instead of toy colours, an engraved icon (book, play, notebook, pouch, crossed swords, gear, dice, sun, hammer, quill, shield…) and the word in spaced capitals
+- [x] Chapters steps through every level of the story one by one (Prev / Next cross chapters and the world changes with them); Play starts exactly that level; the card shows its chapter, number, stars and task
+- [x] Home has **New game** once you have progress: push it twice to start the story from Level 1 (stars, Journal and trophies are kept). Continue still resumes where you left off
+- [x] Story levels, first twist: **ink thorns** (black burrs with a red-hot core) beside the spark's path in Long Shadow, The Low Tunnel, Twin Gaps and Two Pieces: touch one and the spark is lost. The level test proves each solution clears every thorn (by 6–10 cm) and still wins
+- [ ] Story levels: a twist for the machine levels too (forge, brewing, sky lantern, lock)
+
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
 - Fixed: winning the Ink Duel saved the story as finished, so Continue restarted at level 1. Side games (duel, Daily Light) now keep the story's place.

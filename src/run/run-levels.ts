@@ -51,6 +51,8 @@ export interface RunLevel {
   bestKey?: string;
   /** The Workshop: the star and ring markers set the start and gate; a success starts the next try. */
   workshop?: boolean;
+  /** Ink thorns: touch one and the spark is lost. Placed beside the path, to punish a careless shadow. */
+  thorns?: Pt[];
 }
 
 /**
@@ -140,6 +142,7 @@ export const RUN_LEVELS: RunLevel[] = [
     start: [-0.44, 0.25],
     gate: [0.41, 0.095],
     motes: [[-0.15, 0.085], [0.0, 0.08], [0.12, 0.075]],
+    thorns: [[-0.06, 0.15], [0.19, 0.135]],
     par: 12,
     showScale: true,
     solution: [{ a: [-0.31, 0.07], b: [0.23, 0.048], r: 0.02 }],
@@ -159,6 +162,7 @@ export const RUN_LEVELS: RunLevel[] = [
     start: [-0.45, 0.22],
     gate: [0.4, 0.028],
     motes: [[-0.06, 0.035], [0.08, 0.03], [0.25, 0.028]],
+    thorns: [[-0.04, -0.07]],
     par: 12,
     showScale: true,
     solution: [{ a: [-0.14, -0.008], b: [0.06, -0.01], r: 0.01 }],
@@ -177,6 +181,7 @@ export const RUN_LEVELS: RunLevel[] = [
     start: [-0.45, 0.26],
     gate: [0.42, 0.095],
     motes: [[-0.195, 0.09], [0.195, 0.07], [0.0, 0.12]],
+    thorns: [[-0.19, -0.02], [0.2, -0.04], [0.0, 0.19]],
     par: 14,
     solution: [
       { a: [-0.29, 0.092], b: [-0.1, 0.08], r: 0.013 },
@@ -275,6 +280,7 @@ export const RUN_LEVELS: RunLevel[] = [
     start: [-0.45, 0.24],
     gate: [0.41, 0.095],
     motes: [[-0.16, 0.1], [0.01, 0.115], [0.18, 0.09]],
+    thorns: [[0.0, -0.03], [0.17, 0.17]],
     par: 15,
     shards: [
       { kind: 'plank', at: [-0.02, -0.2, 0.6] },
