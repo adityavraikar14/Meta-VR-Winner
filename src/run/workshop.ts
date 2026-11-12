@@ -54,9 +54,38 @@ export const DEMO: ShardSpec[] = [
   DEFAULT[7],
 ];
 
-function load(): ShardSpec[] {
+/** Three save slots; slot 1 keeps the original key so earlier designs survive. */
+export const SLOTS = 3;
+const SLOT_KEY = 'shadowplay.workshop.slot';
+
+function slotKey(slot: number): string {
+  return slot === 1 ? KEY : `${KEY}.slot${slot}`;
+}
+
+/** The slot in use (1–3), remembered on the device. */
+export function currentSlot(): number {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { shards?: ShardSpec[] } | null;
+    const n = Number(localStorage.getItem(SLOT_KEY));
+    return n >= 1 && n <= SLOTS ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** Switch to the next slot (1 → 2 → 3 → 1) and return its design. */
+export function nextSlot(): { slot: number; shards: ShardSpec[] } {
+  const slot = (currentSlot() % SLOTS) + 1;
+  try {
+    localStorage.setItem(SLOT_KEY, String(slot));
+  } catch {
+    // Not remembered; it still switches now.
+  }
+  return { slot, shards: load(slot) };
+}
+
+function load(slot = currentSlot()): ShardSpec[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(slotKey(slot)) ?? 'null') as { shards?: ShardSpec[] } | null;
     const shards = saved?.shards;
     if (
       Array.isArray(shards) &&
@@ -71,17 +100,19 @@ function load(): ShardSpec[] {
   return DEFAULT;
 }
 
+/** Saves the design in the current slot. */
 export function saveWorkshop(shards: ShardSpec[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ v: 1, shards }));
+    localStorage.setItem(slotKey(currentSlot()), JSON.stringify({ v: 1, shards }));
   } catch {
     // Not saved; the design still plays.
   }
 }
 
+/** Clears the current slot back to the default layout. */
 export function resetWorkshop(): ShardSpec[] {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem(slotKey(currentSlot()));
   } catch {
     // Fine: the default is used anyway.
   }

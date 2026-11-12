@@ -232,13 +232,13 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 
 ### Day 3 — Fri Nov 13
 - [x] P0 Light shards: pinch to grab, move in 3D, depth clamped, wrist roll turns them (snapped to 15°), live ×D/d label, Drop button · [ ] budget
-- [x] P0 Act II build levels: The Plank, Projection, Launch (proven finishable) · [ ] three more
+- [x] P0 Act II build levels: The Plank, Projection, Launch, The Slide (wrist tilt), Two Pieces (two shards), all proven finishable
 - [x] P0 GitHub Pages workflow (`.github/workflows/deploy.yml`, tests must pass first) · [ ] Aditya: Settings → Pages → Source: GitHub Actions
 
 ### Day 4 — Sat Nov 14
 - [x] P0 New story order: Light & Shadow (spark), Structures (whim, bridges, build levels), Fire & Iron, Hot Air, The Dragon; creature errands retired · [x] first run: table → world grows → prologue → level 1, no menu
 - [x] P0 New intro, start page, home card and chapter names for ages 15–35 · [ ] remaining machine-level lines
-- [x] P1 Workshop: build in 3D, play in shadow (the star's shadow is the start, the ring's the gate, glass is the ground); Drop saves the design, Reset restores; the demo course is proven by `npm run test:workshop` · [ ] three save slots
+- [x] P1 Workshop: build in 3D, play in shadow (the star's shadow is the start, the ring's the gate, glass is the ground); Drop saves the design, Reset restores; the demo course is proven by `npm run test:workshop` · [x] three save slots (Slot button)
 - [x] P1 Daily Light (5.6): seeded, every course proven by simulation (`npm run test:daily`: 120 days, 0 fallbacks), best time per day, day streak, Regular trophy
 
 ### Day 5 — Sun Nov 15

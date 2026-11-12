@@ -23,7 +23,7 @@ import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim } from './run-sim.js';
 import { ShardSet } from './shards.js';
-import { DEMO, resetWorkshop, saveWorkshop } from './workshop.js';
+import { currentSlot, DEMO, nextSlot, resetWorkshop, saveWorkshop } from './workshop.js';
 import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
 
 /**
@@ -60,6 +60,7 @@ const VIEWER = new Vector3(0, 0.12, 1.0);
 /** The Drop button (build levels), right of the paper, within reach. */
 const DROP_AT = new Vector3(0.42, -0.02, 0.6);
 const RESET_AT = new Vector3(0.42, -0.15, 0.6);
+const SLOT_AT = new Vector3(0.42, 0.11, 0.6);
 
 /** A marker's shadow counts only where it is on the visible part of the screen. */
 function onScreen([x, y]: [number, number]): boolean {
@@ -181,6 +182,8 @@ export class ShadowRun {
   private startOk = true;
   private gateOk = true;
   private reset: PushButton | null = null;
+  /** Workshop: switches between the three saved designs. */
+  private slot: PushButton | null = null;
   private lastTime = 0;
   private time = 0;
   private bestScale = 0;
@@ -267,6 +270,10 @@ export class ShadowRun {
       this.reset = new PushButton(this.paper, 'Reset');
       this.reset.size = 0.6;
       this.reset.root.position.copy(RESET_AT);
+      this.slot = new PushButton(this.paper, `Slot ${currentSlot()}`);
+      this.slot.setColor(0x7b5cff);
+      this.slot.size = 0.6;
+      this.slot.root.position.copy(SLOT_AT);
     }
 
     this.buildReadout();
@@ -315,6 +322,20 @@ export class ShadowRun {
           if (this.level.workshop && this.shards) saveWorkshop(this.shards.layout());
           this.release();
         }
+      }
+    }
+    if (this.slot && this.shards) {
+      this.slot.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
+      this.slot.show(this.sim.state === 'ready' && stage.playing);
+      if (this.slot.update(dt, this.tips, false)) {
+        playClick();
+        // Keep the design you leave, then bring up the next slot's.
+        saveWorkshop(this.shards.layout());
+        const { slot, shards } = nextSlot();
+        this.shards.restore(shards);
+        this.slot.setText(`Slot ${slot}`);
+        stage.say = `Design ${slot} of 3. Each one is saved when you push Drop.`;
+        this.lastTime = 0;
       }
     }
     if (this.reset && this.shards) {
