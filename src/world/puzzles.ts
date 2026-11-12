@@ -12,6 +12,7 @@ import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
 import { workshopLevel } from '../run/workshop.js';
 import { ShadowRun } from '../run/shadow-run.js';
 import { InkDuel } from '../fight/duel.js';
+import { currentRival } from '../fight/rivals.js';
 import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
 import { Brew } from '../machines/brew.js';
@@ -751,8 +752,11 @@ export const DUEL: Puzzle = {
   id: 'duel',
   world: 0,
   title: 'Ink Duel',
-  story: 'Morwen, the Ink Witch, steps out of the screen and challenges you. Draw in the air, then throw your drawings at her.',
-  ask: 'Pinch and draw a shape in the air',
+  get story(): string {
+    const rival = currentRival();
+    return `${rival.name}, ${rival.title}, steps out of the screen and challenges you. Draw in the air: a line is ink to throw, and a closed shape comes alive and fights beside you.`;
+  },
+  ask: 'Pinch and draw in the air',
   handsOn: true,
   solved: 'A duel well fought.',
   build(root, kit) {
@@ -769,7 +773,7 @@ export const DUEL: Puzzle = {
         task.caption = duel.caption;
         task.done = duel.done;
         task.mistakes = duel.mistakes;
-        DUEL.solved = duel.won ? 'You won the duel! Your ink flew true.' : 'Morwen won this time. Try again!';
+        DUEL.solved = duel.won ? `You beat ${duel.spec.name}! Your ink flew true.` : `${duel.spec.name} won this time. Try again!`;
       },
     };
   },

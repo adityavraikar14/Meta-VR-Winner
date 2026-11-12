@@ -76,4 +76,5 @@ gears, ratchet, rope, bucket, well and gauge) is made in code for this project.
 
 ## Characters
 
-- **Ada, the Lantern's engineer** (`public/gltf/ada.glb`): "Animated Woman" by Quaternius, CC0 1.0 (public domain), via poly.pizza (https://poly.pizza/m/qJ2gsTUBHL). Recoloured in game; the hard hat and headlamp are built in code.
+- **Vex, the Acrobat** (`public/gltf/ada.glb`): "Animated Woman" by Quaternius, CC0 1.0 (public domain), via poly.pizza (https://poly.pizza/m/qJ2gsTUBHL).
+- **Sgt. Vance, Captain Rook, Mako and Kai** (`public/gltf/rival-vance.glb`, `rival-rook.glb`, `rival-mako.glb`, `rival-kai.glb`): animated characters by Quaternius, CC0 1.0 (public domain), downloaded from Poly Pizza (https://poly.pizza/u/Quaternius).

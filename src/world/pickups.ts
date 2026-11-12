@@ -18,7 +18,7 @@ import {
   TorusGeometry,
   Vector3,
 } from '@iwsdk/core';
-import { playChirp, playTinkle } from '../audio.js';
+import { playCollect } from '../audio.js';
 import { add, RESOURCES, type Resource } from '../bag.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { type NatureModel, piece, surface } from './nature.js';
@@ -282,7 +282,6 @@ export class Pickups {
     const info = RESOURCES[node.resource];
     node.label = labelSprite(`+1 ${info.name}`, info.color);
     this.group.add(node.label);
-    playTinkle();
-    playChirp();
+    playCollect();
   }
 }

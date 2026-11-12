@@ -65,6 +65,7 @@ import {
 } from './matcher.js';
 import { IntroShow } from './intro.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
+import { currentRival } from './fight/rivals.js';
 import { PushButton } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
 import { installWebcamPanel } from './webcam.js';
@@ -460,8 +461,9 @@ export class ShadowGameSystem extends createSystem({
     devActions.y = () => {
       if (this.phase === 'title') this.menuAction({ do: 'arena' });
     };
+    // Dev: D opens the duel's roster (arrows step through it, Enter fights).
     devActions.d = () => {
-      if (this.phase === 'title') this.menuAction({ do: 'duel' });
+      if (this.phase === 'title') this.menu.open('rivals');
     };
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
     // Dev: F9 times each step of loading the dragon.
@@ -952,7 +954,7 @@ export class ShadowGameSystem extends createSystem({
       const firstOfWorld = PUZZLES.findIndex((p) => p.world === puzzle.world) === index;
       const side = isSideGame(this.puzzleIndex);
       const kicker = puzzle.id === 'duel'
-        ? 'Side game · vs Morwen the Ink Witch'
+        ? `Side game · vs ${currentRival().name} ${currentRival().title}`
         : puzzle.id === 'daily'
           ? 'Side game · a new course every day'
           : puzzle.id === 'workshop'

@@ -1,9 +1,11 @@
 import { FONT } from '../ui-theme.js';
 import {
+  AdditiveBlending,
   BoxGeometry,
   CanvasTexture,
   CatmullRomCurve3,
   CircleGeometry,
+  DoubleSide,
   Group,
   Matrix4,
   Mesh,
@@ -13,37 +15,46 @@ import {
   type Object3D,
   PlaneGeometry,
   Raycaster,
+  RingGeometry,
   Shape,
   ShapeGeometry,
+  SphereGeometry,
   SRGBColorSpace,
   TubeGeometry,
   Vector3,
 } from '@iwsdk/core';
-import { playBoom, playInk, playSplat, playThrow } from '../audio.js';
+import { playBoing, playBonk, playBoom, playChuckle, playInk, playPop, playSplat, playThrow, playWhee, playWhoosh } from '../audio.js';
 import { sfx } from '../yash/sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
 import { stage } from '../stage-state.js';
-import { ribbon, silhouette } from './dragon.js';
-import { NamePlate, preloadWitch, Witch3D, WITCH_HEIGHT, witchLoad } from './witch3d.js';
+import { Comic } from './comic.js';
+import { Doodle, type DoodleWorld, isClosedLoop } from './doodle.js';
+import { FlatRival } from './flat-rival.js';
+import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
+import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 
 /**
- * Ink Duel: a fight against Morwen, the Ink Witch.
+ * Ink Duel: a fight against a rival of your choice, six of them, who step
+ * out of the screen and stand on the hill in front of it.
  *
- * She steps out of the screen and stands on the hill in front of it. Pinch
- * and draw in the air: your stroke of light-ink hangs there, a solid thing
- * whose mass is the ink you used. Grab it and throw it at her. It flies
- * under real gravity, and the hit does damage by its kinetic energy, ½mv²:
- * a big drawing hits hard but is heavy to throw; a small one flies fast. A
- * hit on the head counts half again. Drawings left hanging in the air are
- * shields that stop her ink. She hurls ink in arcs, flicks fast straight
- * bolts, and raises a ward of runes that stops your throws until it fades.
- * First to run out loses.
+ * Pinch and draw in the air. An open line is ink: it hangs there, a solid
+ * thing whose mass is the ink you used. Grab it and throw it. It flies under
+ * real gravity, and the hit does damage by its kinetic energy, ½mv²: a big
+ * drawing hits hard but is heavy to throw; a small one flies fast. A hit on
+ * the head counts half again. Drawings left hanging are shields.
+ *
+ * A closed shape comes alive: it puffs into a creature with your outline,
+ * drops to the ground, hops at the rival and head-butts them. You can pick
+ * it up and throw it too. The rival's ink can pop it.
+ *
+ * Each rival fights their own way (rivals.ts): a ward that stops throws, a
+ * three-shot burst, a duck, a tumble, a hide that only real energy gets
+ * through, a parry that sends your ink back. First to run out loses.
  */
 
 const PLAYER_HEARTS = 5;
-const RIVAL_HEALTH = 100;
 const INK_DENSITY = 0.5;
 const MAX_INK = 0.6;
 const STEP = 0.007;
@@ -54,13 +65,22 @@ const GRAB_REACH = 0.035;
 const DAMAGE_PER_JOULE = 40;
 /** A hit on the head counts this much more. */
 const HEAD_BONUS = 1.5;
-/** How far in front of the screen the witch stands, metres. */
-const WITCH_OUT = 0.3;
+/** How far in front of the screen the rival stands, metres. */
+const RIVAL_OUT = 0.3;
+/** How far to either side a dodge can take them. */
+const DODGE_RANGE = 0.26;
 /** Seconds to walk out of the screen, then a breath before the fight. */
 const WALK_TIME = 2.6;
-const READY_TIME = WALK_TIME + 1.6;
-/** The flat puppet stands in only if the 3D witch never arrives. */
+const READY_TIME = WALK_TIME + 1.8;
+/** The flat puppet stands in only if the 3D rival never arrives. */
 const FLAT_AFTER = 20;
+/** Living drawings at once, and head-butts each gets before it pops. */
+const MAX_DOODLES = 3;
+const DOODLE_BONKS = 3;
+/** After a hit you are safe for this long, so a volley of three costs one heart, not three. */
+const GRACE = 0.9;
+/** Thick Hide: hits softer than this mostly bounce off. */
+const ARMOR_THRESHOLD = 14;
 
 type Mode = 'ready' | 'fight' | 'won' | 'lost';
 type InkState = 'drawing' | 'hanging' | 'held' | 'flying' | 'gone';
@@ -71,6 +91,8 @@ interface Ink {
   points: Vector3[];
   pos: Vector3;
   vel: Vector3;
+  /** A steady sideways push (a curveball), m/s². */
+  accel: Vector3 | null;
   spin: number;
   mass: number;
   state: InkState;
@@ -78,12 +100,34 @@ interface Ink {
   hand: number;
   grabOffset: Vector3;
   rival: boolean;
+  /** How close to the player's head counts as a hit. */
+  reach: number;
+  /** The rival has seen this one coming (and dodged, or not). */
+  seen: boolean;
 }
 
 interface Sample {
   t: number;
   p: Vector3;
 }
+
+/** A shot still to come from a volley. */
+interface Pending {
+  delay: number;
+  hand: Object3D;
+  shot: Shot;
+  flight?: number;
+  curve?: number;
+}
+
+/** Each kind of shot: drawing size, seconds to reach you, spin, and how close counts. */
+const SHOTS: Record<Shot, { size: number; flight: number; spin: number; reach: number; scatter: number }> = {
+  arc: { size: 1.4, flight: 1.35, spin: 5, reach: 0.17, scatter: 0.15 },
+  bolt: { size: 0.9, flight: 0.75, spin: 12, reach: 0.17, scatter: 0.15 },
+  pellet: { size: 0.5, flight: 0.58, spin: 18, reach: 0.14, scatter: 0.06 },
+  curve: { size: 1.0, flight: 1.15, spin: 9, reach: 0.17, scatter: 0.08 },
+  heavy: { size: 2.1, flight: 1.5, spin: 3, reach: 0.2, scatter: 0.1 },
+};
 
 const SHAPES: Array<Array<[number, number]>> = [
   // Zigzag, spiral, star, arrow, a scribbled blob.
@@ -101,46 +145,69 @@ export class InkDuel {
   won = false;
   mistakes = 0;
 
+  /** Who you are fighting (picked on the roster). */
+  readonly spec: RivalSpec = currentRival();
   private mode: Mode = 'ready';
   private modeTime = 0;
   private time = 0;
   private hearts = PLAYER_HEARTS;
-  private rivalHealth = RIVAL_HEALTH;
+  private rivalHealth = this.spec.health;
   private readonly paper = new Group();
-  private readonly rival: Rival;
+  private readonly rival: FlatRival;
   private readonly inks: Ink[] = [];
+  private readonly doodles: Doodle[] = [];
   private readonly drawing: Array<Ink | null> = [null, null];
   private readonly history: [Sample[], Sample[]] = [[], []];
   private readonly light: MeshStandardMaterial;
   private readonly dark: MeshStandardMaterial;
-  private readonly splashes = new ParticlePool({ count: 200, additive: false, soft: true });
-  private readonly sparks = new ParticlePool({ count: 120, additive: true, soft: false });
+  private readonly splashes = new ParticlePool({ count: 240, additive: false, soft: true });
+  private readonly sparks = new ParticlePool({ count: 140, additive: true, soft: false });
+  private readonly comic = new Comic();
   private readonly splats: Mesh[] = [];
   private readonly splatMaterial: MeshBasicMaterial;
   private readonly heartMeshes: Mesh[] = [];
   private readonly frame: Mesh;
   private readonly bar: Mesh;
   private readonly score: { mesh: Mesh; canvas: HTMLCanvasElement; texture: CanvasTexture; time: number };
+  /** A glowing nib at each pinch point: where your ink will come from. */
+  private readonly nibs: Mesh[] = [];
+  /** A ring of light that bursts from a big hit. */
+  private readonly shock: Mesh;
+  private shockTime = 1;
   private nextRival = 3;
+  private justRolled = false;
+  /** Seconds of safety left after the last hit on you. */
+  private grace = 0;
+  /** Dev: hits on you cost nothing. */
+  private god = false;
+  private readonly pending: Pending[] = [];
   private note = '';
   private noteTime = 0;
-  /** The 3D witch, once her model has loaded. */
-  private witch: Witch3D | null = null;
-  /** For her laughs: the ward going up, and her first wound past 70%. */
+  /** The 3D rival, once their model has loaded. */
+  private foe: Rival3D | null = null;
+  /** For Morwen's laughs: the ward going up, and her first wound past 70%. */
   private wasWarded = false;
   private laughedHurt = false;
   /** The flat puppet stands in (the model never arrived). */
   private flat = false;
-  private readonly plate = new NamePlate('Morwen the Ink Witch');
-  private readonly witchFrom = new Vector3();
-  private readonly witchSpot = new Vector3();
+  private readonly plate: NamePlate;
+  /** Where they stand: the centre spot, the way "sideways" runs, and how far along it they are. */
+  private readonly rivalFrom = new Vector3();
+  private readonly rivalSpot = new Vector3();
+  private readonly side = new Vector3(1, 0, 0);
+  private offset = 0;
   private emerged = false;
+  private taunted = false;
+  /** Ground heights already measured, by 2.5 cm cell. */
+  private readonly groundCache = new Map<number, number>();
+  private readonly doodleWorld: DoodleWorld;
   /** How the duel went, for the Inventor's Journal. */
-  private readonly tally = { hits: 0, heads: 0, blocked: 0, best: { energy: 0, mass: 0, speed: 0 } };
+  private readonly tally = { hits: 0, heads: 0, blocked: 0, bonks: 0, best: { energy: 0, mass: 0, speed: 0 } };
   private readonly head = new Vector3();
   private readonly headWorld = new Vector3();
   private readonly v = new Vector3();
   private readonly w = new Vector3();
+  private readonly u = new Vector3();
 
   constructor(
     root: Group,
@@ -150,15 +217,16 @@ export class InkDuel {
     root.updateWorldMatrix(true, false);
     const toPaper = new Matrix4().copy(root.matrixWorld).invert().multiply(stage.paper!.matrixWorld);
     toPaper.decompose(this.paper.position, this.paper.quaternion, this.paper.scale);
-    this.group.add(this.paper, this.splashes.points, this.sparks.points);
-    this.rival = new Rival();
+    this.group.add(this.paper, this.splashes.points, this.sparks.points, this.comic.group);
+    this.rival = new FlatRival();
     this.rival.root.visible = false;
     this.paper.add(this.rival.root);
-    void preloadWitch();
+    void preloadRival(this.spec);
+    this.plate = new NamePlate(this.spec.name, this.spec.accent);
 
     this.light = new MeshStandardMaterial({ color: 0x9fd8ff, emissive: 0x4aa8ff, emissiveIntensity: 0.9, roughness: 0.3 });
-    // Her ink: near black, with a violet glow so it shows against the sky.
-    this.dark = new MeshStandardMaterial({ color: 0x1a0c24, emissive: 0x6a20a8, emissiveIntensity: 0.7, roughness: 0.25, metalness: 0.3 });
+    // Their ink: near black, glowing in their own colour so it shows against the room.
+    this.dark = new MeshStandardMaterial({ color: this.spec.ink, emissive: this.spec.glow, emissiveIntensity: 0.75, roughness: 0.25, metalness: 0.3 });
     this.splatMaterial = new MeshBasicMaterial({ map: splatTexture(), transparent: true, depthWrite: false });
 
     // Hearts and the Rival's strength on the screen.
@@ -196,15 +264,49 @@ export class InkDuel {
     this.plate.mesh.visible = false;
     this.group.add(this.plate.mesh);
 
+    // The nibs: a small glow at each pinch point, brighter while you draw.
+    for (let i = 0; i < 2; i++) {
+      const nib = new Mesh(new SphereGeometry(0.006, 12, 8), new MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.5, blending: AdditiveBlending, depthWrite: false }));
+      nib.visible = false;
+      nib.userData.keep = true;
+      this.nibs.push(nib);
+      this.group.add(nib);
+    }
+    this.shock = new Mesh(new RingGeometry(0.82, 1, 40), new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }));
+    this.shock.visible = false;
+    this.shock.renderOrder = 8;
+    this.group.add(this.shock);
+
+    this.side.set(1, 0, 0).applyQuaternion(this.paper.quaternion).setY(0).normalize();
+    this.doodleWorld = { ground: (p) => this.groundFast(p), viewer: this.head, target: null, head: null, reach: this.spec.girth + 0.1 };
+
     devInfo.duel = () => this.state;
     devActions['['] = () => this.devDraw();
     devActions[']'] = () => this.devThrow();
-    devActions[';'] = () => this.devRival();
+    devActions[';'] = () => this.devRival('throw');
+    devActions["'"] = () => this.devDoodle();
+    devActions['/'] = () => this.devRival('skill');
+    // Dev: . lands the winning blow, , takes your last heart.
+    devActions['.'] = () => {
+      this.rivalHealth = 0;
+      this.end(true);
+    };
+    devActions[','] = () => {
+      this.hearts = 0;
+      this.end(false);
+    };
+    // Dev: = toggles god mode (their ink costs you nothing).
+    devActions['='] = () => {
+      this.god = !this.god;
+    };
   }
 
   get state(): string {
-    const who = this.witch ? `witch=${this.witch.moving}${this.witch.warded ? '+ward' : ''}` : this.flat ? 'flat' : `witch:${witchLoad.state}`;
-    return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)} inks=${this.inks.map((i) => i.state[0]).join('')}`;
+    const who = this.foe
+      ? `${this.spec.id}=${this.foe.moving}${this.foe.warded ? '+ward' : ''}${this.foe.parrying ? '+parry' : ''}${this.foe.ducking ? '+duck' : ''}`
+      : this.flat ? 'flat' : `${this.spec.id}:${rivalLoadState(this.spec)}`;
+    const doodles = this.doodles.map((d) => `${d.name}(${d.kind},${d.state},${d.bonks})`).join(',');
+    return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)}/${this.spec.health} inks=${this.inks.map((i) => i.state[0]).join('')} doodles=[${doodles}]`;
   }
 
   // ================================================================ Update
@@ -213,41 +315,48 @@ export class InkDuel {
     this.time += dt;
     this.modeTime += dt;
     this.noteTime -= dt;
+    this.grace -= dt;
     this.headWorld.copy(head);
     this.group.worldToLocal(this.head.copy(head));
-    if (!this.witch && !this.flat) {
-      this.witch = Witch3D.create();
-      if (this.witch) this.placeWitch(this.witch);
+    if (!this.foe && !this.flat) {
+      this.foe = Rival3D.create(this.spec);
+      if (this.foe) this.place(this.foe);
       else if (this.time > FLAT_AFTER) this.flat = true;
     }
+    const foe = this.foe;
     const live = stage.playing || this.mode === 'won' || this.mode === 'lost';
     this.paper.visible = live;
     this.rival.root.visible = this.flat;
     this.frame.visible = this.bar.visible = this.flat;
-    if (this.witch) this.witch.root.visible = live && this.witch.melt < 1;
-    this.plate.mesh.visible = live && this.witch !== null && this.mode !== 'won' && this.emerged;
+    if (foe) foe.root.visible = live && foe.melt < 1;
+    this.plate.mesh.visible = live && foe !== null && this.mode !== 'won' && this.emerged;
+    for (const doodle of this.doodles) doodle.root.visible = live;
     if (!live) {
       // Behind the menu or the story card: the fight starts when play does.
       if (this.mode === 'ready') this.modeTime = 0;
       this.rival.update(dt);
+      for (const nib of this.nibs) nib.visible = false;
       return;
     }
     this.record(hands);
+    this.showNibs(hands);
     switch (this.mode) {
       case 'ready':
-        if (!this.witch && !this.flat) {
+        if (!foe && !this.flat) {
           this.caption = 'Someone stirs behind the screen…';
           this.modeTime = 0;
           break;
         }
-        if (this.witch) this.walkOut(this.witch);
+        if (foe) this.walkOut(foe);
         this.caption =
-          this.witch && this.modeTime < WALK_TIME
-            ? 'Morwen the Ink Witch steps out of the screen!'
-            : 'Ink Duel! Pinch and draw in the air, then grab your drawing and throw it';
-        if (this.modeTime > (this.witch ? READY_TIME : 3)) {
+          foe && this.modeTime < WALK_TIME + 0.4
+            ? this.spec.entrance
+            : 'Pinch and draw in the air: a line is ink to throw, a closed shape comes alive!';
+        if (this.modeTime > (foe ? READY_TIME : 3)) {
           this.setMode('fight');
-          if (this.witch) sfx.witchAttackLaugh(0.3);
+          this.comic.pop('FIGHT!', this.front(), '#ff5a3a', 1.5, 1.2);
+          sfx.armed();
+          if (this.spec.id === 'morwen') sfx.witchAttackLaugh(0.3);
         }
         this.draw(hands);
         break;
@@ -258,49 +367,58 @@ export class InkDuel {
         this.say();
         break;
       case 'won':
-        this.caption = this.witch ? 'You win the duel! Morwen melts back into ink.' : 'You win the duel! Your ink flew true.';
+        this.caption = foe ? `You win the duel! ${this.spec.name} melts back into ink.` : 'You win the duel! Your ink flew true.';
         this.rival.fall = Math.min(1, this.modeTime / 1.2);
-        if (this.witch) {
-          // She falls, then dissolves into a cloud of ink.
-          this.witch.melt = Math.min(1, Math.max(0, (this.modeTime - 1.8) / 1.4));
-          if (this.witch.melt > 0 && this.witch.melt < 1 && Math.random() < dt * 40) {
-            this.witch.chestAt(this.v);
+        if (foe) {
+          // They fall, then dissolve into a cloud of ink.
+          foe.melt = Math.min(1, Math.max(0, (this.modeTime - 1.8) / 1.4));
+          if (foe.melt > 0 && foe.melt < 1 && Math.random() < dt * 40) {
+            foe.chestAt(this.v);
             this.v.x += (Math.random() - 0.5) * 0.1;
             this.v.y += (Math.random() - 0.6) * 0.2;
-            this.splashes.emit(this.v, this.w.set(0, 0.15 + Math.random() * 0.2, 0), { life: 0.9, gravity: -0.3, drag: 0.5, size: [0.014, 0.03], from: 0x2a1040, alpha: 0.8 });
+            this.splashes.emit(this.v, this.w.set(0, 0.15 + Math.random() * 0.2, 0), { life: 0.9, gravity: -0.3, drag: 0.5, size: [0.014, 0.03], from: this.spec.glow, alpha: 0.8 });
           }
         }
-        if (this.modeTime > (this.witch ? 4 : 3.5)) this.done = true;
+        if (this.modeTime > (foe ? 4.2 : 3.5)) this.done = true;
         break;
       case 'lost':
-        this.caption = this.witch ? 'Splat! Morwen wins this one. Rematch from the menu!' : 'Splat! The Rival wins this one. Rematch from the menu!';
+        this.caption = `Splat! ${foe ? this.spec.name : 'The Rival'} wins this one. Rematch from the menu!`;
         if (this.modeTime > 3.5) this.done = true;
         break;
     }
     this.fly(dt);
+    this.runDoodles(dt, hands);
     this.rival.update(dt);
-    if (this.witch) {
-      this.witch.update(dt, this.mode === 'won' ? null : this.mode === 'ready' && this.modeTime < WALK_TIME ? null : this.head);
-      this.plate.draw(this.rivalHealth / RIVAL_HEALTH);
-      this.plate.mesh.position.copy(this.witch.root.position).setY(this.witch.root.position.y + WITCH_HEIGHT + 0.07);
+    if (foe) {
+      const walking = this.mode === 'ready' && this.modeTime < WALK_TIME;
+      foe.update(dt, this.mode === 'won' || walking ? null : this.head);
+      this.plate.draw(this.rivalHealth / this.spec.health);
+      this.plate.mesh.position.copy(foe.root.position).setY(foe.root.position.y + this.spec.height + 0.07);
       this.plate.mesh.lookAt(this.headWorld);
-      // Her hand let go: the ink is on its way.
-      if (this.witch.released) {
-        const hand = this.witch.released;
-        this.witch.released = null;
-        if (this.mode === 'fight') {
-          this.rivalAttack(this.witch.handAt(hand, new Vector3()), this.witch.moving === 'attack' ? 'bolt' : 'arc');
-          // She laughs after every throw, whether or not it hits.
-          sfx.witchAttackLaugh();
-        }
+      // A hand let go: the ink is on its way.
+      if (foe.released) {
+        const hand = foe.released;
+        const by = foe.releasedBy ?? 'throw';
+        foe.released = null;
+        foe.releasedBy = null;
+        if (this.mode === 'fight') this.onRelease(foe, hand, by);
       }
-      // The ward of runes has formed around her: a ghostly, echoing laugh.
-      if (this.witch.warded && !this.wasWarded && this.mode === 'fight') sfx.witchWardLaugh();
-      this.wasWarded = this.witch.warded;
+      // Morwen's ward of runes has formed: a ghostly, echoing laugh.
+      if (foe.warded && !this.wasWarded && this.mode === 'fight') sfx.witchWardLaugh();
+      this.wasWarded = foe.warded;
     }
     this.drawHud(dt);
     this.splashes.update(dt);
     this.sparks.update(dt);
+    this.comic.update(dt, this.headWorld);
+    if (this.shockTime < 1) {
+      this.shockTime = Math.min(1, this.shockTime + dt / 0.3);
+      const k = 1 - Math.pow(1 - this.shockTime, 3);
+      this.shock.scale.setScalar(0.03 + 0.17 * k);
+      (this.shock.material as MeshBasicMaterial).opacity = 0.9 * (1 - this.shockTime);
+      this.shock.lookAt(this.headWorld);
+      this.shock.visible = this.shockTime < 1;
+    }
   }
 
   private setMode(mode: Mode): void {
@@ -308,34 +426,68 @@ export class InkDuel {
     this.modeTime = 0;
   }
 
-  // ================================================================= Witch
-
-  /** She starts just behind the screen, facing out, and walks through it onto the hill. */
-  private placeWitch(witch: Witch3D): void {
-    const out = this.v.set(0, 0, 1).applyQuaternion(this.paper.quaternion).setY(0).normalize();
-    this.witchSpot.copy(this.paper.position).addScaledVector(out, WITCH_OUT);
-    this.witchFrom.copy(this.paper.position).addScaledVector(out, -0.1);
-    const y = this.groundAt(this.witchSpot);
-    this.witchSpot.y = y;
-    this.witchFrom.y = y;
-    witch.root.position.copy(this.witchFrom);
-    witch.root.rotation.y = Math.atan2(out.x, out.z);
-    witch.play('walk');
-    this.group.add(witch.root);
+  /** A point above the rival (or the middle of the screen), for the small words. */
+  private above(extra: number): Vector3 {
+    if (this.foe) return this.v.copy(this.foe.root.position).setY(this.foe.root.position.y + this.spec.height + extra);
+    return this.v.copy(this.paper.position).setY(this.paper.position.y + 0.1);
   }
 
-  private walkOut(witch: Witch3D): void {
+  /** A point in front of the rival's chest, towards you: where the big words (FIGHT!, K.O.!) land. */
+  private front(): Vector3 {
+    const from = this.foe ? this.foe.root.position : this.paper.position;
+    const up = this.foe ? this.spec.height * 0.7 : 0.05;
+    this.v.copy(this.head).sub(from).setY(0).normalize().multiplyScalar(0.14);
+    return this.v.add(from).setY(from.y + up);
+  }
+
+  private showNibs(hands: readonly HandState[]): void {
+    hands.forEach((hand, h) => {
+      const nib = this.nibs[h];
+      if (!nib) return;
+      const holding = this.inks.some((i) => i.state === 'held' && i.hand === h) || this.doodles.some((d) => d.hand === h);
+      nib.visible = hand.tracked && !holding && (this.mode === 'ready' || this.mode === 'fight');
+      if (!nib.visible) return;
+      this.group.worldToLocal(nib.position.copy(hand.pinch));
+      const pulse = 1 + 0.15 * Math.sin(this.time * 9 + h);
+      nib.scale.setScalar(hand.pinching ? 1.7 * pulse : 0.9);
+      (nib.material as MeshBasicMaterial).opacity = hand.pinching ? 0.95 : 0.4;
+    });
+  }
+
+  // ================================================================= Rival
+
+  /** They start just behind the screen, facing out, and walk through it onto the hill. */
+  private place(foe: Rival3D): void {
+    const out = this.v.set(0, 0, 1).applyQuaternion(this.paper.quaternion).setY(0).normalize();
+    this.rivalSpot.copy(this.paper.position).addScaledVector(out, RIVAL_OUT);
+    this.rivalFrom.copy(this.paper.position).addScaledVector(out, -0.1);
+    const y = this.groundAt(this.rivalSpot);
+    this.rivalSpot.y = y;
+    this.rivalFrom.y = y;
+    foe.root.position.copy(this.rivalFrom);
+    foe.root.rotation.y = Math.atan2(out.x, out.z);
+    foe.play('walk');
+    this.group.add(foe.root);
+  }
+
+  private walkOut(foe: Rival3D): void {
     const k = Math.min(1, this.modeTime / WALK_TIME);
-    witch.root.position.lerpVectors(this.witchFrom, this.witchSpot, k);
-    // Ink spatters off the screen as she steps through it.
-    const through = 0.1 / (0.1 + WITCH_OUT);
+    if (k < 1 || !this.taunted) foe.root.position.lerpVectors(this.rivalFrom, this.rivalSpot, k);
+    // Ink spatters off the screen as they step through it.
+    const through = 0.1 / (0.1 + RIVAL_OUT);
     if (!this.emerged && k > through) {
       this.emerged = true;
-      witch.chestAt(this.v);
-      this.splashAt(this.v, 0x1a0c24);
+      foe.chestAt(this.v);
+      this.splashAt(this.v, this.spec.ink);
       playSplat(0.1);
     }
-    if (k >= 1) witch.play('idle');
+    if (k >= 1 && !this.taunted) {
+      // Arrived: a flourish, then they settle.
+      this.taunted = true;
+      if (foe.has('taunt') && this.spec.ability !== 'ward') foe.play('taunt');
+      else foe.play('idle');
+      this.comic.pop(this.spec.name.toUpperCase(), this.front(), this.spec.accent, 1.3, 1.5);
+    }
   }
 
   /**
@@ -348,8 +500,8 @@ export class InkDuel {
     const props = this.group.parent!;
     const from = stageRoot.localToWorld(this.w.set(p.x, this.floor + 0.25, p.z));
     const ray = new Raycaster(from.clone(), new Vector3(0, -1, 0), 0, 1);
-    // The ground and the scenery on it, not the props or Ada standing on the table.
-    const targets = stageRoot.children.filter((c) => c !== props && c.name !== 'Mentor');
+    // The ground and the scenery on it, not the props or anyone standing on the table.
+    const targets = stageRoot.children.filter((c) => c !== props && c.name !== 'Mentor' && c.name !== 'RivalShowcase');
     let best = this.floor;
     let found = false;
     for (const hit of ray.intersectObjects(targets, true)) {
@@ -362,15 +514,32 @@ export class InkDuel {
     return found ? best : this.floor;
   }
 
+  /** The same, remembered per 2.5 cm cell: the doodles ask every frame. */
+  private groundFast(p: Vector3): number {
+    const key = Math.round(p.x * 40) * 4096 + Math.round(p.z * 40);
+    let y = this.groundCache.get(key);
+    if (y === undefined) {
+      y = this.groundAt(p);
+      this.groundCache.set(key, y);
+    }
+    return y;
+  }
+
   private say(): void {
+    const foe = this.foe;
+    const who = foe ? this.spec.name : 'the Rival';
     const hanging = this.inks.some((i) => !i.rival && i.state === 'hanging');
     const held = this.inks.some((i) => i.state === 'held');
-    const who = this.witch ? 'Morwen' : 'the Rival';
-    let text = hanging ? `Pinch your drawing to grab it, then throw it at ${who}` : 'Pinch and draw a shape in the air';
+    const buddy = this.doodles.find((d) => d.state !== 'gone');
+    let text = hanging ? `Pinch your drawing to grab it, then throw it at ${who}` : 'Draw a line to throw, or close a shape to bring it to life';
+    if (buddy && !hanging) text = `${buddy.name} is going for ${who}! Keep drawing, or pinch ${buddy.name} and throw`;
     if (held) text = 'Throw! Big drawings hit harder, small ones fly faster';
+    if (this.doodles.some((d) => d.state === 'held')) text = 'Throw your doodle! It hits by ½mv², like everything else';
     if (this.rival.drawing > 0) text = 'The Rival is drawing… leave a drawing hanging in the air as a shield!';
-    if (this.witch?.moving === 'throw' || this.witch?.moving === 'attack') text = 'Morwen winds up to throw… hang a drawing in the air as a shield!';
-    if (this.witch?.warded) text = 'Her ward of runes is up: wait for it to fade, then throw!';
+    if (foe && (foe.moving === 'throw' || foe.moving === 'attack')) text = `${who} winds up… hang a drawing in the air as a shield!`;
+    if (foe && foe.moving === 'skill' && this.spec.ability !== 'ward' && this.spec.ability !== 'parry') text = `${who}’s special is coming: shields up!`;
+    if (foe?.warded) text = 'Her ward of runes is up: wait for it to fade, then throw!';
+    if (foe?.parrying) text = 'He is parrying: anything you throw now comes straight back';
     if (this.noteTime > 0) text = this.note;
     this.caption = text;
   }
@@ -390,7 +559,7 @@ export class InkDuel {
         return;
       }
       const p = this.group.worldToLocal(this.v.copy(hand.pinch));
-      if (hand.pinchStarted && !current && !this.nearInk(p)) {
+      if (hand.pinchStarted && !current && !this.nearInk(p) && !this.nearDoodle(p)) {
         const ink = this.newInk(false, p);
         ink.points.push(new Vector3());
         this.drawing[h] = ink;
@@ -422,6 +591,14 @@ export class InkDuel {
     centre.divideScalar(ink.points.length);
     for (const p of ink.points) p.sub(centre);
     ink.pos.add(centre);
+    // A closed shape comes alive.
+    if (isClosedLoop(ink.points)) {
+      if (this.doodles.length < MAX_DOODLES) {
+        this.comeAlive(ink);
+        return;
+      }
+      this.flash('Three living drawings is a crowd: this one stays ink', 1.8);
+    }
     ink.mass = this.inkLength(ink) * INK_DENSITY;
     ink.state = 'hanging';
     ink.age = 0;
@@ -433,7 +610,10 @@ export class InkDuel {
     mesh.userData.keep = true;
     mesh.frustumCulled = false;
     this.group.add(mesh);
-    const ink: Ink = { mesh, points: [], pos: at.clone(), vel: new Vector3(), spin: 0, mass: 0, state: 'drawing', age: 0, hand: -1, grabOffset: new Vector3(), rival };
+    const ink: Ink = {
+      mesh, points: [], pos: at.clone(), vel: new Vector3(), accel: null, spin: 0, mass: 0, state: 'drawing', age: 0, hand: -1,
+      grabOffset: new Vector3(), rival, reach: 0.17, seen: false,
+    };
     this.inks.push(ink);
     return ink;
   }
@@ -462,11 +642,186 @@ export class InkDuel {
     return null;
   }
 
+  private nearDoodle(p: Vector3): Doodle | null {
+    for (const doodle of this.doodles) {
+      if (doodle.loose && doodle.pos.distanceTo(p) < doodle.radius + 0.03) return doodle;
+    }
+    return null;
+  }
+
   private remove(ink: Ink): void {
     ink.state = 'gone';
     this.group.remove(ink.mesh);
     ink.mesh.geometry.dispose();
     this.inks.splice(this.inks.indexOf(ink), 1);
+  }
+
+  // ====================================================== Living drawings
+
+  /** The closed stroke puffs up into a creature with the same outline. */
+  private comeAlive(ink: Ink): void {
+    const doodle = new Doodle(ink.points, ink.pos, this.head);
+    this.remove(ink);
+    this.doodles.push(doodle);
+    this.group.add(doodle.root);
+    for (let i = 0; i < 18; i++) {
+      this.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.25 + Math.random() * 0.3);
+      this.sparks.emit(doodle.pos, this.v, { life: 0.45, size: [0.012, 0.002], from: doodle.color });
+    }
+    playChuckle(this.voice(doodle));
+    this.comic.pop(`${doodle.name}!`, this.v.copy(doodle.pos).setY(doodle.pos.y + doodle.radius + 0.07), hex(doodle.color), 0.8, 1.3);
+    this.flash(`It’s alive! ${doodle.name} the ${doodle.what} is going for ${this.foe ? this.spec.name : 'the Rival'}`, 2.2);
+  }
+
+  /** Small doodles squeak, big ones rumble. */
+  private voice(doodle: Doodle): number {
+    return Math.min(1.5, Math.max(0.7, 1.75 - doodle.radius * 13));
+  }
+
+  private runDoodles(dt: number, hands: readonly HandState[]): void {
+    const foe = this.foe;
+    const world = this.doodleWorld;
+    const fighting = this.mode === 'fight' || this.mode === 'ready';
+    if (foe && fighting) {
+      world.target = foe.root.position;
+      world.head = foe.headAt(this.u);
+    } else if (this.flat && fighting) {
+      // The flat puppet: go for the screen where it stands.
+      world.target = this.group.worldToLocal(this.paper.localToWorld(this.rival.bodyAt(this.u)));
+      world.target.y = this.floor;
+      world.head = null;
+    } else {
+      world.target = null;
+      world.head = null;
+    }
+    for (const doodle of [...this.doodles]) {
+      if (doodle.state === 'held') {
+        const hand = hands[doodle.hand];
+        if (!hand || !hand.tracked || hand.pinchEnded || !hand.pinching) {
+          const v = throwVelocity(this.history[doodle.hand], this.time, this.w);
+          const arm = 0.6;
+          if (v) v.multiplyScalar(1.7 * (arm / (arm + doodle.mass)));
+          const thrown = v !== null && v.length() > 0.5;
+          doodle.release(v);
+          if (thrown) {
+            playThrow();
+            playWhee();
+          }
+        } else {
+          doodle.carry(this.group.worldToLocal(this.v.copy(hand.pinch)), dt);
+        }
+      }
+      const event = doodle.update(dt, world);
+      if (event === 'land') {
+        playBoing();
+        for (let i = 0; i < 6; i++) {
+          this.v.set(Math.random() - 0.5, 0.3 + Math.random() * 0.3, Math.random() - 0.5).multiplyScalar(0.4);
+          this.splashes.emit(this.w.copy(doodle.pos).setY(doodle.pos.y - doodle.radius), this.v, { life: 0.35, gravity: 2, drag: 1, size: [0.008, 0.016], from: 0xe8e0d0, alpha: 0.5 });
+        }
+      } else if (event === 'leap') {
+        playWhee(0.03);
+      } else if (event === 'bonk' && foe && this.mode === 'fight') {
+        this.bonk(foe, doodle);
+      }
+      if (doodle.state === 'gone') continue;
+      // Thrown: it hits like ink, by its kinetic energy.
+      if (doodle.state === 'thrown' && foe && this.mode === 'fight') this.doodleStrike(foe, doodle);
+      if (doodle.state === 'thrown') {
+        const onPaper = this.paper.worldToLocal(this.group.localToWorld(this.v.copy(doodle.pos)));
+        if (onPaper.z <= 0.03 && Math.abs(onPaper.x) < 0.6) {
+          // Off the screen with a boing.
+          doodle.bounce(this.v.set(0, 0, -1).applyQuaternion(this.paper.quaternion).add(doodle.pos), 0.5);
+          playBoing();
+        }
+      }
+      if (doodle.pos.y < this.floor - 0.7 || doodle.pos.distanceTo(this.head) > 3) this.popDoodle(doodle, false);
+    }
+    // After the duel they have nothing left to do: off they pop, one by one.
+    if ((this.mode === 'won' || this.mode === 'lost') && this.modeTime > 2.2 && this.doodles.length && Math.random() < dt * 2) {
+      this.popDoodle(this.doodles[0], true);
+    }
+  }
+
+  /** A head-butt landed. */
+  private bonk(foe: Rival3D, doodle: Doodle): void {
+    const at = foe.headAt(this.w).clone();
+    if (foe.warded) {
+      this.comic.pop('BOING!', at, '#8affb8', 0.8);
+      playBoing();
+      this.flash(`Her ward bounces ${doodle.name} right off`, 1.4);
+      return;
+    }
+    if (foe.parrying) {
+      this.comic.pop('SLICED!', at, this.spec.accent, 0.9);
+      sfx.slice();
+      this.flash(`${doodle.name} met the blade. Rude.`, 1.8);
+      this.popDoodle(doodle, true);
+      return;
+    }
+    let damage = Math.round(Math.min(10, 4 + doodle.mass * 40) * (doodle.kind === 'spike' ? 1.5 : 1));
+    if (this.spec.ability === 'armor' && damage < 8) damage = Math.max(1, Math.round(damage * 0.5));
+    this.rivalHealth -= damage;
+    this.tally.bonks++;
+    foe.flinch();
+    playBonk();
+    playChuckle(this.voice(doodle), 0.035);
+    this.comic.pop(`BONK! −${damage}`, at.setY(at.y + 0.06), hex(doodle.color), 0.9);
+    for (let i = 0; i < 10; i++) {
+      this.v.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize().multiplyScalar(0.3 + Math.random() * 0.3);
+      this.sparks.emit(at, this.v, { life: 0.35, size: [0.012, 0.002], from: doodle.color });
+    }
+    this.flash(BONK_LINES[this.tally.bonks % BONK_LINES.length].replace('%d', doodle.name).replace('%r', this.spec.name), 1.5);
+    if (this.rivalHealth <= 0) {
+      this.end(true);
+      return;
+    }
+    if (doodle.bonks >= DOODLE_BONKS) {
+      this.flash(`${doodle.name} has done enough for one day. Off they pop!`, 1.8);
+      this.popDoodle(doodle, true);
+    }
+  }
+
+  /** A thrown doodle reaches the rival. */
+  private doodleStrike(foe: Rival3D, doodle: Doodle): void {
+    if (!doodle.loose && doodle.state !== 'thrown') return;
+    this.react(foe, doodle.pos, doodle.vel, doodle);
+    const onHead = doodle.pos.distanceTo(foe.headAt(this.w)) < 0.06 + doodle.radius * 0.5;
+    if (!onHead && foe.distanceTo(doodle.pos, this.w) > this.spec.girth + doodle.radius * 0.5) return;
+    const at = doodle.pos.clone();
+    if (foe.warded || foe.parrying) {
+      this.comic.pop('DENIED!', at, this.spec.accent, 0.9);
+      playBoing();
+      doodle.bounce(foe.root.position, 0.9);
+      this.flash(foe.warded ? `The ward sends ${doodle.name} flying back` : `Parried! ${doodle.name} comes flying back`, 1.5);
+      return;
+    }
+    const speed = doodle.vel.length();
+    const energy = 0.5 * doodle.mass * speed * speed;
+    let damage = Math.round(Math.min(40, Math.max(6, energy * DAMAGE_PER_JOULE)) * (onHead ? HEAD_BONUS : 1));
+    damage = this.throughArmor(damage, at);
+    this.rivalHealth -= damage;
+    this.count(energy, doodle.mass, speed, onHead);
+    this.tally.bonks++;
+    doodle.bonks++;
+    foe.flinch();
+    playBonk(0.16);
+    playBoom(0.05 + damage * 0.002);
+    this.impact(foe, at, damage, onHead, doodle.color);
+    this.comic.pop('WHAM!', at.clone().setY(at.y + 0.1), hex(doodle.color), 1.1);
+    this.showScore(at, damage, energy, doodle.mass, speed, onHead);
+    doodle.bounce(foe.root.position, 0.5);
+    if (this.rivalHealth <= 0) this.end(true);
+    else if (doodle.bonks >= DOODLE_BONKS) this.popDoodle(doodle, true);
+  }
+
+  private popDoodle(doodle: Doodle, show: boolean): void {
+    if (show) {
+      this.splashAt(doodle.pos, doodle.color);
+      playPop();
+    }
+    const i = this.doodles.indexOf(doodle);
+    if (i >= 0) this.doodles.splice(i, 1);
+    doodle.dispose();
   }
 
   // ============================================================ Grab, throw
@@ -481,12 +836,18 @@ export class InkDuel {
         if (hand.pinchEnded || !hand.tracked) this.release(held, h);
         return;
       }
-      if (!hand.pinchStarted || this.drawing[h]) return;
+      if (!hand.pinchStarted || this.drawing[h] || this.doodles.some((d) => d.hand === h)) return;
       const ink = this.nearInk(p);
       if (ink && ink.state === 'hanging') {
         ink.state = 'held';
         ink.hand = h;
         ink.grabOffset.copy(ink.pos).sub(p);
+        return;
+      }
+      const doodle = this.nearDoodle(p);
+      if (doodle) {
+        doodle.hold(h);
+        playChuckle(this.voice(doodle) * 1.2, 0.03);
       }
     });
   }
@@ -522,6 +883,7 @@ export class InkDuel {
   // ================================================================ Flight
 
   private fly(dt: number): void {
+    const foe = this.foe;
     for (const ink of [...this.inks]) {
       ink.age += dt;
       if (ink.state === 'hanging') {
@@ -533,39 +895,58 @@ export class InkDuel {
       }
       if (ink.state !== 'flying') continue;
       ink.vel.y -= GRAVITY * dt;
+      if (ink.accel) ink.vel.addScaledVector(ink.accel, dt);
       ink.pos.addScaledVector(ink.vel, dt);
       ink.mesh.position.copy(ink.pos);
       ink.mesh.rotateZ(ink.spin * dt);
-      if (Math.random() < dt * 40) this.sparks.emit(ink.pos, this.v.set(0, 0, 0), { life: 0.3, size: [0.008, 0.002], from: ink.rival ? 0x8a50ff : 0xbfe4ff });
+      if (Math.random() < dt * 40) this.sparks.emit(ink.pos, this.v.set(0, 0, 0), { life: 0.3, size: [0.008, 0.002], from: ink.rival ? this.spec.glow : 0xbfe4ff });
 
       if (ink.rival) {
         // Blocked by a drawing hanging in the air?
         const shield = this.inks.find((s) => !s.rival && s.state === 'hanging' && s.points.some((q) => this.w.copy(q).add(s.pos).distanceTo(ink.pos) < 0.03));
         if (shield) {
-          this.splashAt(ink.pos, 0x14101a);
+          this.splashAt(ink.pos, this.spec.ink);
           playSplat(0.06);
+          this.comic.pop('BLOCKED!', ink.pos, '#7fd0ff', 0.7, 0.8);
           this.flash('Blocked!', 1);
           this.tally.blocked++;
           this.remove(ink);
           shield.age = Math.max(shield.age, HANG_TIME - 1.5);
           continue;
         }
-        if (ink.pos.distanceTo(this.head) < 0.17) {
-          this.splashAt(ink.pos, 0x14101a);
+        // A living drawing in the way takes the hit.
+        const victim = this.doodles.find((d) => d.loose && d.pos.distanceTo(ink.pos) < d.radius + 0.025);
+        if (victim) {
+          this.comic.pop('SPLAT!', victim.pos, hex(this.spec.glow), 0.8);
+          this.flash(FALLEN_LINES[Math.floor(Math.random() * FALLEN_LINES.length)].replace('%d', victim.name), 1.8);
+          this.popDoodle(victim, true);
+          this.remove(ink);
+          continue;
+        }
+        if (ink.pos.distanceTo(this.head) < ink.reach) {
+          this.splashAt(ink.pos, this.spec.ink);
           playSplat(0.1);
+          this.remove(ink);
+          // Still wiping the last one off: this one costs nothing.
+          if (this.grace > 0 || this.god) continue;
+          this.grace = GRACE;
           this.hearts--;
           this.mistakes++;
           this.flash(this.hearts > 1 ? 'Splat! Right in the face' : 'Splat! One heart left');
-          this.remove(ink);
           if (this.hearts <= 0) this.end(false);
           continue;
         }
         if (ink.age > 3.5) this.remove(ink);
         continue;
       }
-      if (this.witch && this.mode === 'fight' && this.strikeWitch(this.witch, ink)) {
-        this.remove(ink);
-        continue;
+      if (foe && this.mode === 'fight') {
+        this.react(foe, ink.pos, ink.vel, ink);
+        const result = this.strike(foe, ink);
+        if (result === 'hit') {
+          this.remove(ink);
+          continue;
+        }
+        if (result === 'returned') continue;
       }
       const onPaper = this.paper.worldToLocal(this.group.localToWorld(this.v.copy(ink.pos)));
       if (onPaper.z <= 0.015) {
@@ -577,36 +958,129 @@ export class InkDuel {
     }
   }
 
-  /** Did a thrown drawing reach the witch: her ward, her head or her body? */
-  private strikeWitch(witch: Witch3D, ink: Ink): boolean {
-    if (witch.warded && ink.pos.distanceTo(witch.wardAt(this.w)) < witch.wardRadius() + 0.02) {
+  /**
+   * They see something coming (once per throw, 70 cm out) and may answer it:
+   * a roll aside, a duck, a parry. What, and how often, is their character.
+   */
+  private react(foe: Rival3D, pos: Vector3, vel: Vector3, thing: { seen?: boolean }): void {
+    const marked = thing as { seen?: boolean };
+    if (marked.seen) return;
+    const to = foe.chestAt(this.w).sub(pos);
+    if (to.length() > 0.7 || to.dot(vel) <= 0) return;
+    marked.seen = true;
+    if (foe.busy) return;
+    const r = Math.random();
+    switch (this.spec.ability) {
+      case 'burst':
+        if (r < 0.35) this.roll(foe, pos);
+        break;
+      case 'tumble':
+        if (r < 0.55) this.roll(foe, pos);
+        break;
+      case 'duck':
+        if (r < 0.65 && foe.has('dodge')) foe.play('dodge');
+        break;
+      case 'parry':
+        if (r < 0.5) {
+          foe.play('skill');
+          sfx.slice();
+        } else if (r < 0.65) this.roll(foe, pos);
+        break;
+    }
+  }
+
+  /** A roll to a new spot along the hill, away from what is coming. */
+  private roll(foe: Rival3D, from: Vector3 | null): void {
+    if (!foe.has('dodge')) return;
+    let dir = Math.random() < 0.5 ? -1 : 1;
+    if (from) {
+      const lateral = this.v.copy(from).sub(foe.root.position).dot(this.side);
+      dir = lateral > 0 ? -1 : 1;
+    }
+    let next = this.offset + dir * (0.15 + Math.random() * 0.05);
+    if (Math.abs(next) > DODGE_RANGE) next = this.offset - dir * 0.17;
+    this.offset = Math.max(-DODGE_RANGE, Math.min(DODGE_RANGE, next));
+    const spot = this.v.copy(this.rivalSpot).addScaledVector(this.side, this.offset);
+    spot.y = this.groundFast(spot);
+    foe.play('dodge');
+    foe.slide(spot, Math.max(0.45, foe.duration('dodge') * 0.8));
+    playWhoosh(0.3);
+  }
+
+  /** Did a thrown drawing reach the rival: a ward, a blade, the head or the body? */
+  private strike(foe: Rival3D, ink: Ink): 'miss' | 'hit' | 'returned' {
+    if (foe.warded && ink.pos.distanceTo(foe.wardAt(this.w)) < foe.wardRadius() + 0.02) {
       for (let i = 0; i < 16; i++) {
         this.v.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(0.3 + Math.random() * 0.4);
         this.sparks.emit(ink.pos, this.v, { life: 0.4, size: [0.012, 0.002], from: 0x8affb8 });
       }
       playSplat(0.05);
       this.flash('Her ward of runes stops it! Wait for it to fade', 1.4);
-      return true;
+      return 'hit';
     }
-    const onHead = ink.pos.distanceTo(witch.headAt(this.w)) < 0.06;
-    if (!onHead && witch.distanceTo(ink.pos, this.w) > 0.07) return false;
+    if (foe.parrying && ink.pos.distanceTo(foe.chestAt(this.w)) < 0.2) {
+      this.sendBack(ink);
+      return 'returned';
+    }
+    const onHead = ink.pos.distanceTo(foe.headAt(this.w)) < 0.06;
+    if (!onHead && foe.distanceTo(ink.pos, this.w) > this.spec.girth) return 'miss';
     const speed = ink.vel.length();
     const energy = 0.5 * ink.mass * speed * speed;
     const base = Math.min(40, Math.max(5, energy * DAMAGE_PER_JOULE));
-    const damage = Math.round(base * (onHead ? HEAD_BONUS : 1));
+    const damage = this.throughArmor(Math.round(base * (onHead ? HEAD_BONUS : 1)), ink.pos);
     this.rivalHealth -= damage;
     this.count(energy, ink.mass, speed, onHead);
-    witch.flinch();
+    foe.flinch();
     this.splashAt(ink.pos, 0x4aa8ff);
     playBoom(0.06 + damage * 0.002);
-    // Wounded at last: her long, maniacal cackle, once.
-    if (!this.laughedHurt && this.rivalHealth > 0 && this.rivalHealth < RIVAL_HEALTH * 0.7) {
+    this.impact(foe, ink.pos, damage, onHead, 0x9fd8ff);
+    // Morwen, wounded at last: her long, maniacal cackle, once.
+    if (this.spec.id === 'morwen' && !this.laughedHurt && this.rivalHealth > 0 && this.rivalHealth < this.spec.health * 0.7) {
       this.laughedHurt = true;
       sfx.witchCloseLaugh();
     }
     this.showScore(ink.pos, damage, energy, ink.mass, speed, onHead);
     if (this.rivalHealth <= 0) this.end(true);
-    return true;
+    return 'hit';
+  }
+
+  /** Thick Hide: a soft hit mostly bounces off. Returns the damage that gets through. */
+  private throughArmor(damage: number, at: Vector3): number {
+    if (this.spec.ability !== 'armor' || damage >= ARMOR_THRESHOLD) return damage;
+    this.comic.pop('CLANG!', at, '#b8c8e0', 0.8);
+    sfx.block();
+    this.flash('It bounces off his hide! Draw bigger, throw harder: ½mv²', 2);
+    return Math.max(1, Math.round(damage * 0.3));
+  }
+
+  /** A big hit lands with weight: a few frozen frames, a ring of light, a word. */
+  private impact(foe: Rival3D, at: Vector3, damage: number, head: boolean, color: number): void {
+    if (damage < 22 && !head) return;
+    foe.freeze = 0.09;
+    this.shock.position.copy(at);
+    (this.shock.material as MeshBasicMaterial).color.setHex(color);
+    this.shockTime = 0;
+    if (head) this.comic.pop('HEADSHOT!', this.u.copy(at).setY(at.y + 0.12), '#ff8a3a', 1);
+    else if (damage >= 30) this.comic.pop('HUGE!', this.u.copy(at).setY(at.y + 0.12), '#ffd23a', 1);
+  }
+
+  /** Parried: your ink is theirs now, and it is coming back at your face. */
+  private sendBack(ink: Ink): void {
+    ink.rival = true;
+    ink.mesh.material = this.dark;
+    const T = 0.75;
+    ink.vel.copy(this.head).sub(ink.pos).divideScalar(T);
+    ink.vel.y += 0.5 * GRAVITY * T;
+    ink.accel = null;
+    ink.age = 0;
+    ink.spin = 14;
+    sfx.block();
+    this.comic.pop('PARRY!', ink.pos, this.spec.accent, 1);
+    this.flash('Parried! It is coming straight back: block it!', 1.6);
+    for (let i = 0; i < 12; i++) {
+      this.v.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(0.3 + Math.random() * 0.4);
+      this.sparks.emit(ink.pos, this.v, { life: 0.35, size: [0.012, 0.002], from: this.spec.glow });
+    }
   }
 
   private hitScreen(ink: Ink, at: Vector3): void {
@@ -615,8 +1089,8 @@ export class InkDuel {
     this.splat(at);
     playSplat(0.08);
     if (this.mode !== 'fight') return;
-    if (this.witch) {
-      this.flash('Missed! Throw a little higher: ink falls on the way', 1.4);
+    if (this.foe) {
+      this.flash(this.foe.ducking ? 'He ducked under it! Aim lower, at his chest' : this.foe.sliding ? 'Dodged! Throw again as they land' : 'Missed! Throw a little higher: ink falls on the way', 1.4);
       return;
     }
     if (this.rival.shielded(at)) {
@@ -646,36 +1120,51 @@ export class InkDuel {
   /** Your best throws, for the Inventor's Journal (only a win fills the page). */
   journal(): string[] {
     if (!this.won) return [];
-    const { hits, heads, blocked, best } = this.tally;
+    const { hits, heads, blocked, bonks, best } = this.tally;
     return [
-      `Best throw: ½ · ${(best.mass * 1000).toFixed(0)} g · (${best.speed.toFixed(1)} m/s)² = ${best.energy.toFixed(2)} J`,
+      `Beat ${this.spec.name} ${this.spec.title} · best throw ½ · ${(best.mass * 1000).toFixed(0)} g · (${best.speed.toFixed(1)} m/s)² = ${best.energy.toFixed(2)} J`,
       `${hits} hits, ${heads} on the head · ${this.hearts} of ${PLAYER_HEARTS} hearts left`,
-      `${blocked} of her throws stopped by your hanging drawings`,
+      `${blocked} throws blocked by your hanging drawings · ${bonks} head-butts from drawings that came alive`,
     ];
   }
 
   private end(won: boolean): void {
+    if (this.mode === 'won' || this.mode === 'lost') return;
     this.won = won;
     this.setMode(won ? 'won' : 'lost');
+    this.pending.length = 0;
     for (const ink of [...this.inks]) if (ink.rival) this.remove(ink);
-    // Beaten, she falls; winning, she casts a flourish of runes.
-    this.witch?.play(won ? 'death' : 'skill');
-    if (this.witch) {
-      if (won) sfx.witchShriek();
-      else sfx.witchCloseLaugh();
+    const foe = this.foe;
+    if (won) {
+      recordWin(this.spec.id);
+      stage.confetti = true;
+      this.comic.pop('K.O.!', this.front(), '#ffd23a', 1.9, 2);
+      sfx.defeated();
+      for (const doodle of this.doodles) playChuckle(this.voice(doodle), 0.03);
+    }
+    // Beaten, they fall; winning, they gloat.
+    if (foe) {
+      foe.freeze = won ? 0.25 : 0;
+      foe.play(won ? 'death' : foe.has('taunt') ? 'taunt' : 'skill');
+      if (this.spec.id === 'morwen') {
+        if (won) sfx.witchShriek();
+        else sfx.witchCloseLaugh();
+      }
     }
   }
 
-  // ================================================================= Rival
+  // ============================================================ Their turn
 
   private rivalTurn(dt: number): void {
-    if (this.witch) {
-      this.witchTurn(dt, this.witch);
+    const foe = this.foe;
+    if (foe) {
+      this.volley(dt, foe);
+      this.foeTurn(dt, foe);
       return;
     }
     this.nextRival -= dt;
     if (this.nextRival <= 0 && this.rival.drawing === 0) {
-      if (Math.random() < 0.25 && this.rivalHealth < RIVAL_HEALTH * 0.7) {
+      if (Math.random() < 0.25 && this.rivalHealth < this.spec.health * 0.7) {
         this.rival.raiseShield(3);
         this.nextRival = 3.5;
       } else {
@@ -687,52 +1176,159 @@ export class InkDuel {
       this.rival.drawing += dt;
       if (this.rival.drawing > 1.3) {
         this.rival.drawing = 0;
-        this.rivalAttack();
+        this.shoot(this.group.worldToLocal(this.paper.localToWorld(this.rival.quillAt(new Vector3()))), 'arc');
       }
     }
   }
 
   /**
-   * Morwen's turn: mostly she hurls ink in an arc. Hurt, she flicks fast
-   * straight bolts more often and raises her ward of runes.
+   * What they do next. Everyone throws and attacks in their own way; hurt
+   * (under 70%), they speed up and use their special more. Vex also just
+   * moves: she never stays where you last aimed.
    */
-  private witchTurn(dt: number, witch: Witch3D): void {
+  private foeTurn(dt: number, foe: Rival3D): void {
     this.nextRival -= dt;
-    if (this.nextRival > 0 || witch.busy) return;
-    const hurt = this.rivalHealth < RIVAL_HEALTH * 0.7;
+    if (this.nextRival > 0 || foe.busy) return;
+    const hurt = this.rivalHealth < this.spec.health * 0.7;
+    const [fresh, pressed] = this.spec.pace;
+    const pace = hurt ? pressed : fresh;
     const r = Math.random();
-    if (hurt && r < 0.25) {
-      witch.play('skill');
-      this.nextRival = 3.6;
-    } else if (r < (hurt ? 0.6 : 0.3)) {
-      witch.play('attack');
-      this.nextRival = hurt ? 2.2 : 2.8;
+    // Vex moves about, but never twice running: a roll is always followed by an attack.
+    if (this.spec.ability === 'tumble' && r < 0.35 && !this.justRolled) {
+      this.roll(foe, null);
+      this.justRolled = true;
+      this.nextRival = 0.4;
+      return;
+    }
+    this.justRolled = false;
+    // A parry is an answer, never an opening move; a ward only once she is hurt.
+    const special = this.spec.ability === 'parry' ? 0 : this.spec.ability === 'ward' ? (hurt ? 0.25 : 0) : hurt ? 0.3 : 0.16;
+    const roll = Math.random();
+    if (roll < special) {
+      foe.play('skill');
+      this.nextRival = pace + 0.9;
+    } else if (roll < special + (hurt ? 0.4 : 0.3)) {
+      foe.play('attack');
+      this.nextRival = pace * 0.78;
     } else {
-      witch.play('throw');
-      this.nextRival = (hurt ? 3 : 3.8) + Math.random();
+      foe.play('throw');
+      this.nextRival = pace + Math.random();
+    }
+  }
+
+  /** A hand let go: what leaves it depends on the move and on who they are. */
+  private onRelease(foe: Rival3D, hand: Object3D, by: RivalMove): void {
+    const from = foe.handAt(hand, new Vector3());
+    if (by === 'throw' || by === 'attack') {
+      this.shoot(from, this.spec.shots[by]);
+      this.voiceOf(by);
+      return;
+    }
+    if (by !== 'skill') return;
+    switch (this.spec.ability) {
+      case 'burst':
+        // Three pellets, a sixth of a second apart.
+        this.shoot(from, 'pellet');
+        this.pending.push({ delay: 0.17, hand, shot: 'pellet' }, { delay: 0.34, hand, shot: 'pellet' });
+        this.comic.pop('BRRRT!', from, this.spec.accent, 0.7, 0.8);
+        sfx.shoot();
+        break;
+      case 'duck':
+        // A fan of three: the same aim, three different arcs, so they land one after another.
+        this.shoot(from, 'bolt', { flight: 0.8 });
+        this.shoot(from, 'arc', { flight: 1.1 });
+        this.shoot(from, 'arc', { flight: 1.4 });
+        sfx.slice();
+        break;
+      case 'tumble':
+        // Two curveballs, bending in from either side.
+        this.shoot(from, 'curve', { curve: 1 });
+        this.shoot(from, 'curve', { curve: -1, flight: 1.4 });
+        playWhoosh(0.6);
+        break;
+      case 'armor': {
+        // The slam: the ground throws up a wave of heavy ink.
+        const feet = this.v.copy(foe.root.position);
+        for (let i = 0; i < 40; i++) {
+          const a = (i / 40) * Math.PI * 2;
+          this.w.set(Math.cos(a) * (0.5 + Math.random() * 0.3), 0.25 + Math.random() * 0.5, Math.sin(a) * (0.5 + Math.random() * 0.3));
+          this.splashes.emit(feet, this.w, { life: 0.6, gravity: 3, drag: 1.2, size: [0.014, 0.024], from: this.spec.glow, alpha: 0.8 });
+        }
+        this.comic.pop('SLAM!', this.above(0.15), this.spec.accent, 1.3);
+        sfx.wallBreak();
+        const chest = foe.chestAt(new Vector3());
+        this.shoot(chest, 'heavy');
+        this.pending.push({ delay: 0.3, hand, shot: 'heavy', flight: 1.3 }, { delay: 0.6, hand, shot: 'arc' });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  private voiceOf(by: RivalMove): void {
+    switch (this.spec.id) {
+      case 'morwen':
+        // She laughs after every throw, whether or not it hits.
+        sfx.witchAttackLaugh();
+        break;
+      case 'vance':
+        sfx.shoot();
+        break;
+      case 'rook':
+      case 'kai':
+        if (by === 'throw' && this.spec.id === 'rook') sfx.slice();
+        else playThrow();
+        break;
+      case 'vex':
+        playWhoosh(0.5);
+        break;
+      default:
+        sfx.throw();
+    }
+  }
+
+  /** The rest of a volley, each shot in its turn. */
+  private volley(dt: number, foe: Rival3D): void {
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      const shot = this.pending[i];
+      shot.delay -= dt;
+      if (shot.delay > 0) continue;
+      this.pending.splice(i, 1);
+      this.shoot(foe.handAt(shot.hand, new Vector3()), shot.shot, { flight: shot.flight, curve: shot.curve });
+      if (shot.shot === 'pellet') sfx.shoot();
+      else playThrow();
     }
   }
 
   /**
-   * Ink leaves the Rival (her hand, or the puppet's quill) and flies at the
-   * player's face: an arc that falls onto you, or a fast, flatter bolt.
+   * Ink leaves the rival and flies at the player's face (or, now and then,
+   * at a living drawing that is bothering them). Aimed to arrive in T
+   * seconds under gravity: v = d/T + ½gT upward. A curveball also carries a
+   * steady sideways push a, so it starts off-line by ½aT² and bends back in.
    */
-  private rivalAttack(from?: Vector3, kind: 'arc' | 'bolt' = 'arc'): void {
+  private shoot(start: Vector3, kind: Shot, options: { flight?: number; curve?: number } = {}): void {
+    const shot = SHOTS[kind];
     const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-    const start = from ?? this.group.worldToLocal(this.paper.localToWorld(this.rival.quillAt(new Vector3())));
     const ink = this.newInk(true, start);
-    const k = kind === 'bolt' ? 0.9 : 1.4;
-    ink.points = shape.map(([x, y]) => new Vector3(x * k, y * k, 0));
+    ink.points = shape.map(([x, y]) => new Vector3(x * shot.size, y * shot.size, 0));
     ink.mass = this.inkLength(ink) * INK_DENSITY;
+    ink.reach = shot.reach;
     this.rebuild(ink);
-    // Aim to reach the head in T seconds under gravity: v = d/T + ½gT upward.
-    const T = kind === 'bolt' ? 0.75 : 1.35;
-    ink.vel.copy(this.head).sub(start).divideScalar(T);
-    ink.vel.x += (Math.random() - 0.5) * 0.15;
+    const T = options.flight ?? shot.flight;
+    const pest = kind !== 'pellet' && Math.random() < 0.3 ? this.doodles.find((d) => d.state === 'ground') : undefined;
+    const target = pest ? pest.pos : this.head;
+    ink.vel.copy(target).sub(start).divideScalar(T);
+    if (!pest) ink.vel.addScaledVector(this.side, (Math.random() - 0.5) * shot.scatter);
     ink.vel.y += 0.5 * GRAVITY * T;
-    ink.spin = (Math.random() - 0.5) * (kind === 'bolt' ? 12 : 5);
+    if (kind === 'curve') {
+      const a = (options.curve ?? (Math.random() < 0.5 ? -1 : 1)) * 3.4;
+      ink.accel = this.side.clone().multiplyScalar(a);
+      ink.vel.addScaledVector(ink.accel, -0.5 * T);
+    }
+    ink.spin = (Math.random() - 0.5) * shot.spin;
     ink.state = 'flying';
-    playThrow();
+    if (kind !== 'pellet') playThrow();
   }
 
   // =============================================================== Effects
@@ -779,20 +1375,20 @@ export class InkDuel {
     g.fillStyle = '#2a2030';
     g.fillText(sum, 128, 104);
     texture.needsUpdate = true;
-    // Above where it hit, and clear of her name plate.
-    const above = this.witch ? this.witch.root.position.y + WITCH_HEIGHT + 0.17 : at.y + 0.08;
+    // Above where it hit, and clear of the name plate.
+    const above = this.foe ? this.foe.root.position.y + this.spec.height + 0.17 : at.y + 0.08;
     mesh.position.set(at.x, Math.max(at.y + 0.08, above), at.z);
     mesh.lookAt(this.headWorld);
     mesh.visible = true;
     this.score.time = 1.8;
-    this.flash(head ? 'Right on the head! Half again the damage' : damage >= 25 ? 'Huge hit!' : 'Hit!', 1.2);
+    if (this.noteTime <= 0 || !this.note.includes('hide')) this.flash(head ? 'Right on the head! Half again the damage' : damage >= 25 ? 'Huge hit!' : 'Hit!', 1.2);
   }
 
   private drawHud(dt: number): void {
     this.heartMeshes.forEach((heart, i) => {
       (heart.material as MeshBasicMaterial).opacity = i < this.hearts ? 0.95 : 0.15;
     });
-    const k = Math.max(0, this.rivalHealth / RIVAL_HEALTH);
+    const k = Math.max(0, this.rivalHealth / this.spec.health);
     this.bar.scale.x += (Math.max(0.001, k) - this.bar.scale.x) * Math.min(1, dt * 6);
     if (this.score.time > 0) {
       this.score.time -= dt;
@@ -813,19 +1409,41 @@ export class InkDuel {
     this.rebuild(ink);
   }
 
-  /** Dev: the Rival attacks now (the witch winds up and throws). */
-  private devRival(): void {
-    if (!this.witch) {
-      this.rivalAttack();
+  /** Dev: a closed shape drawn in front of you (a different one each time) comes alive. */
+  private devDoodle(): void {
+    if (this.doodles.length >= MAX_DOODLES) return;
+    const at = this.head.clone().add(new Vector3(-0.1 + this.doodles.length * 0.12, -0.15, -0.4));
+    const ink = this.newInk(false, at);
+    const which = this.devShape++ % 4;
+    const n = 40;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      // A circle, a tall bean, a wide slab, a five-pointed star.
+      const r = which === 3 ? 0.035 + 0.03 * Math.abs(Math.cos(a * 2.5)) ** 3 : 0.05;
+      const sx = which === 1 ? 0.5 : which === 2 ? 1.5 : 1;
+      const sy = which === 1 ? 1.4 : which === 2 ? 0.55 : 1;
+      ink.points.push(new Vector3(Math.cos(a) * r * sx, Math.sin(a) * r * sy, 0));
+    }
+    this.comeAlive(ink);
+  }
+
+  private devShape = 0;
+
+  /** Dev: the Rival acts now (winds up and throws, or uses their special). */
+  private devRival(move: 'throw' | 'skill'): void {
+    if (!this.foe) {
+      this.shoot(this.group.worldToLocal(this.paper.localToWorld(this.rival.quillAt(new Vector3()))), 'arc');
       return;
     }
-    if (!this.witch.busy) this.witch.play('throw');
+    // Forced, even mid-move: this is for testing each special on demand.
+    this.foe.play('idle');
+    this.foe.play(move);
   }
 
   private devThrow(): void {
     const ink = this.inks.find((i) => !i.rival && i.state === 'hanging');
     if (!ink) return;
-    const target = this.witch ? this.witch.chestAt(new Vector3()) : this.group.worldToLocal(this.paper.localToWorld(this.rival.bodyAt(new Vector3())));
+    const target = this.foe ? this.foe.chestAt(new Vector3()) : this.group.worldToLocal(this.paper.localToWorld(this.rival.bodyAt(new Vector3())));
     const T = 0.45;
     ink.vel.copy(target).sub(ink.pos).divideScalar(T);
     ink.vel.y += 0.5 * GRAVITY * T;
@@ -833,6 +1451,22 @@ export class InkDuel {
     ink.age = 0;
     playThrow();
   }
+}
+
+/** What the caption says when a living drawing lands a head-butt (%d the doodle, %r the rival). */
+const BONK_LINES = [
+  '%d head-butts %r. No notes.',
+  'Bonk! %d is having the time of their life',
+  '%r did not see %d coming',
+  '%d: small, round, furious',
+  'That is one way to use a head, %d',
+];
+
+/** And when the rival's ink gets one. */
+const FALLEN_LINES = ['%d took one for the team', '%d didn’t make it. Draw another!', 'Farewell, %d. We hardly knew you', '%d has left the chat'];
+
+function hex(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
 }
 
 /** Least-squares release velocity over 140–40 ms ago (skipping tracking lag). */
@@ -875,142 +1509,3 @@ function splatTexture(): CanvasTexture {
   texture.colorSpace = SRGBColorSpace;
   return texture;
 }
-
-// ==================================================================== Rival
-
-/**
- * The Rival: a tall shadow puppeteer in a long coat and a wide-brimmed hat
- * with a plume, a giant quill in hand. Draws on the screen, flinches when
- * hit (the hat jumps), raises an ink shield, topples when beaten.
- */
-class Rival {
-  readonly root = new Group();
-  private readonly body = new Group();
-  private readonly arm = new Group();
-  private readonly hat = new Group();
-  private readonly shield: Mesh;
-  private readonly shieldMaterial: MeshBasicMaterial;
-  private readonly stroke: Mesh;
-  private readonly ink: MeshBasicMaterial;
-  private time = 0;
-  private hurt = 0;
-  private shieldTime = 0;
-  /** Seconds into drawing a shape (0 = not drawing). */
-  drawing = 0;
-  /** 0 → 1 as it topples, beaten. */
-  fall = 0;
-
-  constructor() {
-    this.ink = new MeshBasicMaterial({ color: 0x0b0806, transparent: true, opacity: 0.94, depthWrite: false });
-    // Feet on the screen's visible ground line, whatever hill is in front.
-    this.root.position.set(0.24, -0.17, 0);
-    this.body.position.set(0, 0, 0);
-    // Legs, long coat flaring to the knees, shoulders, head.
-    const coat = new Shape();
-    coat.moveTo(-0.05, 0.08);
-    coat.lineTo(-0.035, 0.26);
-    coat.quadraticCurveTo(0, 0.285, 0.035, 0.26);
-    coat.lineTo(0.06, 0.08);
-    coat.quadraticCurveTo(0.0, 0.06, -0.05, 0.08);
-    const legs = [ribbon([[-0.02, 0.09], [-0.025, 0.04], [-0.03, 0.0]], [0.012, 0.01, 0.009]), ribbon([[0.02, 0.09], [0.022, 0.04], [0.028, 0.0]], [0.012, 0.01, 0.009])];
-    const boots = [ribbon([[-0.032, 0.004], [-0.05, 0.002]], [0.008, 0.006]), ribbon([[0.026, 0.004], [0.045, 0.002]], [0.008, 0.006])];
-    const neck = ribbon([[0, 0.27], [0, 0.29]], [0.008, 0.007]);
-    const head = new Shape();
-    head.absellipse(-0.002, 0.305, 0.017, 0.021, 0, Math.PI * 2, false, 0);
-    const nose = new Shape();
-    nose.moveTo(-0.015, 0.31);
-    nose.lineTo(-0.028, 0.3);
-    nose.lineTo(-0.016, 0.296);
-    nose.closePath();
-    const cape = ribbon([[0.03, 0.26], [0.06, 0.2], [0.075, 0.12], [0.085, 0.09]], [0.012, 0.016, 0.014, 0.008]);
-    this.body.add(silhouette([coat, ...legs, ...boots, neck, head, nose, cape], this.ink, 0.004, 3));
-    // Hat: wide brim and a crown with a plume.
-    const brim = ribbon([[-0.045, 0.322], [0, 0.327], [0.045, 0.322]], [0.004, 0.005, 0.004]);
-    const crown = new Shape();
-    crown.moveTo(-0.022, 0.324);
-    crown.lineTo(-0.018, 0.355);
-    crown.quadraticCurveTo(0.0, 0.362, 0.018, 0.355);
-    crown.lineTo(0.022, 0.324);
-    crown.closePath();
-    const plume = ribbon([[0.015, 0.35], [0.04, 0.37], [0.07, 0.36], [0.085, 0.34]], [0.006, 0.008, 0.006, 0.001]);
-    this.hat.add(silhouette([brim, crown, plume], this.ink, 0.0045, 4));
-    this.body.add(this.hat);
-    // The drawing arm with its giant quill, pivoting at the shoulder.
-    this.arm.position.set(-0.03, 0.25, 0);
-    const sleeve = ribbon([[0, 0], [-0.04, -0.03], [-0.07, 0.0]], [0.011, 0.009, 0.007]);
-    const quill = ribbon([[-0.07, 0.0], [-0.1, 0.05], [-0.12, 0.1]], [0.0015, 0.008, 0.003]);
-    const nib = ribbon([[-0.072, 0.002], [-0.065, -0.015]], [0.002, 0.0005]);
-    this.arm.add(silhouette([sleeve, quill, nib], this.ink, 0.005, 5));
-    this.body.add(this.arm);
-    this.root.add(this.body);
-
-    // The stroke it is drawing, and its round ink shield.
-    this.stroke = new Mesh(new PlaneGeometry(1, 0.008), this.ink);
-    this.stroke.position.z = 0.006;
-    this.stroke.visible = false;
-    this.root.add(this.stroke);
-    this.shieldMaterial = new MeshBasicMaterial({ color: 0x1a1428, transparent: true, opacity: 0, depthWrite: false });
-    this.shield = new Mesh(new CircleGeometry(0.11, 32), this.shieldMaterial);
-    this.shield.position.set(-0.05, 0.2, 0.007);
-    this.shield.renderOrder = 6;
-    this.root.add(this.shield);
-  }
-
-  /** Paper-space point at the quill's nib. */
-  quillAt(out: Vector3): Vector3 {
-    this.root.updateMatrixWorld(true);
-    out.set(-0.066, -0.012, 0);
-    this.arm.localToWorld(out);
-    return this.root.parent ? this.root.parent.worldToLocal(out) : out;
-  }
-
-  bodyAt(out: Vector3): Vector3 {
-    return out.set(this.root.position.x, this.root.position.y + 0.2, 0);
-  }
-
-  /** Does a paper-space point land on the Rival? */
-  hit(at: Vector3): boolean {
-    const x = at.x - this.root.position.x;
-    const y = at.y - this.root.position.y;
-    return x > -0.075 && x < 0.1 && y > 0 && y < 0.38;
-  }
-
-  shielded(at: Vector3): boolean {
-    if (this.shieldTime <= 0) return false;
-    const dx = at.x - (this.root.position.x + this.shield.position.x);
-    const dy = at.y - (this.root.position.y + this.shield.position.y);
-    return Math.hypot(dx, dy) < 0.13;
-  }
-
-  raiseShield(seconds: number): void {
-    this.shieldTime = seconds;
-  }
-
-  flinch(): void {
-    this.hurt = 0.7;
-  }
-
-  update(dt: number): void {
-    this.time += dt;
-    this.hurt = Math.max(0, this.hurt - dt);
-    this.shieldTime = Math.max(0, this.shieldTime - dt);
-    const h = this.hurt / 0.7;
-    this.body.rotation.z = 0.02 * Math.sin(this.time * 1.4) - 0.12 * h - 1.4 * this.fall;
-    this.body.position.x = 0.04 * this.fall;
-    // The hat jumps off its head when struck.
-    this.hat.position.y = 0.04 * Math.sin(Math.min(1, h * 1.2) * Math.PI);
-    this.hat.rotation.z = 0.5 * h;
-    // Drawing: the quill sweeps back and forth and an ink line grows.
-    const drawing = this.drawing > 0;
-    this.arm.rotation.z = drawing ? 0.4 * Math.sin(this.drawing * 12) + 0.3 : 0.1 * Math.sin(this.time * 2) - 0.2 * h;
-    this.stroke.visible = drawing;
-    if (drawing) {
-      const k = Math.min(1, this.drawing / 1.2);
-      this.stroke.scale.x = 0.12 * k;
-      this.stroke.position.set(-0.15 + 0.06 * k, 0.22 + 0.02 * Math.sin(this.drawing * 12), 0.006);
-    }
-    this.shieldMaterial.opacity += ((this.shieldTime > 0 ? 0.55 : 0) - this.shieldMaterial.opacity) * Math.min(1, dt * 6);
-    this.shield.visible = this.shieldMaterial.opacity > 0.01;
-  }
-}
-

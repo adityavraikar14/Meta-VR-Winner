@@ -249,7 +249,7 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 
 ### Day 6 — Mon Nov 16 (feature freeze at night)
 - [ ] P0 Full playthrough on Quest; frame rate check; fix everything found
-- [x] P1 Accessibility: Relaxed spark (60% speed) in Settings · left-handed ghost already · [ ] one-hand mode for Twin Gaps
+- [x] P1 Accessibility: Relaxed spark (60% speed) in Settings · left-handed ghost already · Twin Gaps made easier for two hands (15 cm gaps)
 - [ ] P0 Final deploy
 
 ### Day 7 — Tue Nov 17
@@ -266,6 +266,15 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [x] The Old Well (the last shadow-animal level) leaves the story; with The Slide and Two Pieces added the story is 20 levels, 19 Journal pages
 - [x] Resources as real objects (log bundle, scanned stone, iron ore, herb sprig, crystals, glowing coal) instead of icon coins
 - [x] Fix: the Ink Duel crashed on Ada's headlamp sprite (ground raycast)
+
+### Nov 12, evening: the duel grows up (Aditya: "more rivals, each with abilities; whatever we draw comes alive; more wow")
+- [x] Twin Gaps made easier for two hands (gaps 22 cm → 15 cm, wider middle island); no one-hand mode
+- [x] Audit: no creature-shape levels or baby animals left in the story; the bird chirp on pickups replaced by a clean collect sound
+- [x] A roster of six duel rivals, picked on a "choose your rival" screen where each stands beside the card in 3D: Morwen (rune ward), Sgt. Vance (three-shot burst, rolls aside), Captain Rook (fan of three, ducks high throws), Vex (tumbles to a new spot, curveballs), Mako (thick hide: only real ½mv² gets through; ground slam), Kai (parries your ink back at you)
+- [x] Drawings come alive: close a shape and it becomes a creature with your exact outline, googly eyes (each pupil a loose mass: it floats in free fall), stick limbs and a name; it hops in ballistic arcs and head-butts the rival; pinch it and throw it; the rival's ink can pop it. A round loop is a Blob, a tall one Stilts, a wide one a Crab, a jagged one a Spike
+- [x] Wow: comic words in the air (FIGHT!, BONK!, PARRY!, CLANG!, K.O.!), hit-stop and a ring of light on big hits, a glowing nib at your pinch, confetti on a win, each rival's ink in their own colour
+- [x] Fair fights: after a hit you are safe for 0.9 s, so a volley costs one heart; wins per rival are remembered; "Undisputed" trophy for beating all six
+- [ ] On Quest: play each rival once; tune pace and dodge chances by feel
 
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.

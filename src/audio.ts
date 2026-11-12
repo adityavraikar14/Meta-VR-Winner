@@ -535,6 +535,57 @@ export function playTink(volume = 0.05): void {
   [1, 2.76, 5.4].forEach((ratio, i) => tone(ctx, base * ratio, now, 1.1 / (1 + i), volume / (1 + i)));
 }
 
+/** Picking something up: a soft wooden pop, then a bright two-note rise. */
+export function playCollect(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, 0.04, 'bandpass', 1800, 2, volume * 0.8);
+  tone(ctx, 988, now + 0.02, 0.18, volume);
+  tone(ctx, 1480, now + 0.09, 0.3, volume * 0.8);
+}
+
+/** A doodle's head-butt: a hollow, woody bonk, like a coconut. */
+export function playBonk(volume = 0.12): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const pitch = 300 + Math.random() * 90;
+  sweep(ctx, 'sine', pitch, pitch * 0.62, now, 0.13, volume);
+  sweep(ctx, 'triangle', pitch * 2.4, pitch * 1.7, now, 0.05, volume * 0.4);
+  noise(ctx, now, 0.03, 'bandpass', 1200, 1.5, volume * 0.5);
+}
+
+/** A doodle thrown through the air: a rising slide-whistle "wheee". */
+export function playWhee(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 500, 1700, now, 0.5, volume);
+  sweep(ctx, 'triangle', 1010, 3400, now, 0.5, volume * 0.25);
+}
+
+/** A doodle popped: a wet pop and a falling "aww". */
+export function playPop(volume = 0.09): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, 0.05, 'bandpass', 900, 0.8, volume);
+  sweep(ctx, 'sine', 700, 180, now + 0.03, 0.28, volume * 0.6);
+}
+
+/** A doodle laughing at its own joke: a goofy "heh-heh-heh", pitched by its size. */
+export function playChuckle(pitch = 1, volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const n = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const f = 330 * pitch * (1 + 0.12 * Math.sin(i * 2.1)) * (1 - i * 0.03);
+    sweep(ctx, 'sawtooth', f * 1.25, f, now + i * 0.105, 0.08, volume * (1 - i * 0.12));
+  }
+}
+
 /** Air pushed through the bellows' nozzle. */
 export function playWhoosh(strength = 0.5): void {
   const ctx = audio();

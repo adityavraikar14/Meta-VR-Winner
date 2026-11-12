@@ -1,3 +1,4 @@
+import { RivalShowcase } from '../fight/showcase.js';
 import { Confetti } from './confetti.js';
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
@@ -50,6 +51,8 @@ export class Diorama {
   blockers: Array<{ center: Vector3; radius: number }> = [];
   /** Celebration on every clear. */
   private confetti!: Confetti;
+  /** The duel rival on the roster card, standing beside the screen. */
+  private showcase!: RivalShowcase;
   private readonly kit: Kit;
 
   constructor(
@@ -62,6 +65,7 @@ export class Diorama {
     this.screen.name = 'ScreenFrame';
     // Ada (creatures/mentor.ts) is kept in the code but not on the table.
     this.confetti = new Confetti(stageRoot, floor);
+    this.showcase = new RivalShowcase(stageRoot, floor);
     this.room.name = 'RoomJungle';
     stageRoot.add(this.decor, this.props);
     stage.paper!.add(this.screen, this.room);
@@ -224,6 +228,7 @@ export class Diorama {
       this.confetti.burst();
     }
     this.confetti.update(dt);
+    this.showcase.update(dt, head);
     if (this.growTime < 4) {
       this.growTime += dt;
       this.applyGrowth();

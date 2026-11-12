@@ -1,5 +1,6 @@
 import { JOURNAL } from './journal.js';
 import { play } from './progress.js';
+import { RIVALS, rivalsBeaten } from './fight/rivals.js';
 
 /**
  * The Trophy Shelf: milestones across the whole game, the story's levels and
@@ -37,6 +38,7 @@ export const TROPHIES: Trophy[] = [
   { id: 'light', icon: '✨', title: 'Light-Bringer', how: 'Beat the dragon with Light', earned: () => play.feats.includes('dragon-light') },
   { id: 'armourer', icon: '⚔️', title: 'Armourer', how: 'Beat the dragon with the Arsenal', earned: () => play.feats.includes('dragon-arsenal') },
   { id: 'ink', icon: '🖋️', title: 'Ink Master', how: 'Win the Ink Duel', earned: () => play.journal.duel !== undefined },
+  { id: 'undisputed', icon: '🥊', title: 'Undisputed', how: 'Beat all six duel rivals', earned: () => rivalsBeaten() >= RIVALS.length },
   { id: 'slayer', icon: '🐉', title: 'Boss Slayer', how: 'Beat the dragon and Morwen in the Arena', earned: () => !!play.arena.dragon && !!play.arena.witch },
   { id: 'regular', icon: '📅', title: 'Regular', how: 'Play the Daily Light three days running', earned: () => play.daily.streak >= 3 },
   { id: 'scholar', icon: '📖', title: 'Scholar', how: 'Fill twelve Journal pages', earned: () => JOURNAL.filter((p) => play.journal[p.id]).length >= 12 },

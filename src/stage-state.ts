@@ -47,6 +47,8 @@ export const stage = {
   sceneryHidden: false,
   /** A world to show while the player browses chapters (null: the current level's world). */
   previewWorld: null as number | null,
+  /** A duel rival to stand beside the screen while the player browses the roster (null: no one). */
+  previewRival: null as number | null,
   /** A scene asking for a music track this frame (the dragon fight); null: the world's theme. */
   music: null as 'battle' | 'victory' | null,
   /** The title menu is up: the level's props step aside so the menu reads clearly. */

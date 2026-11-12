@@ -9,13 +9,14 @@ import { play, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
 import { PUZZLES, WORLDS } from './world/puzzles.js';
+import { ABILITY_NAME, rivalIndex, RIVALS, rivalsBeaten, setRivalIndex, winsAgainst } from './fight/rivals.js';
 
 /**
  * The game's menus, shown on the shadow screen with a row of physical push
  * buttons in front of it: Home (play, chapters, settings), a chapter
  * picker with stars and locks, and settings.
  */
-export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal';
+export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
 export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena' };
@@ -78,6 +79,8 @@ export class MainMenu {
       const earned = JOURNAL.map((p, i) => (play.journal[p.id] && p.id !== 'duel' ? i : -1)).filter((i) => i >= 0);
       this.journalPage = earned.length ? earned[earned.length - 1] : 0;
     }
+    if (page === 'rivals' && this.page !== 'rivals') this.rival = rivalIndex();
+    if (page !== 'rivals') stage.previewRival = null;
     this.page = page;
     this.layout();
   }
@@ -85,6 +88,7 @@ export class MainMenu {
   close(): void {
     this.page = null;
     stage.previewWorld = null;
+    stage.previewRival = null;
     for (const button of this.buttons) button.show(false);
   }
 
@@ -122,7 +126,9 @@ export class MainMenu {
               ? this.battles()
               : this.page === 'journal'
                 ? this.journal()
-                : this.settings();
+                : this.page === 'rivals'
+                  ? this.rivals()
+                  : this.settings();
     const xs = LAYOUTS[this.slots.length];
     const eye = this.parent.localToWorld(this.viewer.clone());
     this.buttons.forEach((button, i) => {
@@ -277,15 +283,51 @@ export class MainMenu {
     this.draw(
       'Side games',
       'Side games',
-      'Daily Light: a new course every day.  ·  Workshop: build your own course from light and glass.  ·  Ink Duel: draw in the air, throw it at Morwen.  ·  Arena: seven weapons against three bosses.',
+      `Daily Light: a new course every day.  ·  Workshop: build your own course from light and glass.  ·  Ink Duel: pick one of ${RIVALS.length} rivals; your drawings come alive and fight.  ·  Arena: seven weapons against three bosses.`,
       `Bring draughts, wards and sun shards from your bag${streak}`,
     );
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Daily', run: () => ({ do: 'daily' }) },
       { label: 'Workshop', run: () => ({ do: 'workshop' }) },
-      { label: 'Duel', run: () => ({ do: 'duel' }) },
+      { label: 'Duel', run: () => this.go('rivals') },
       { label: 'Arena', run: () => ({ do: 'arena' }) },
+    ];
+  }
+
+  private rival = 0;
+
+  /** The Ink Duel's roster: step through the rivals (each stands beside the screen), then fight one. */
+  private rivals(): Slot[] {
+    const n = RIVALS.length;
+    const spec = RIVALS[this.rival];
+    stage.previewWorld = null;
+    stage.previewRival = this.rival;
+    const wins = winsAgainst(spec.id);
+    this.draw(
+      `Ink Duel  ·  Rival ${this.rival + 1} of ${n}${wins > 0 ? `  ·  Beaten ×${wins}` : ''}`,
+      `${spec.name}, ${spec.title}`,
+      `${spec.style}  ·  Tip: ${spec.tip}`,
+      `Special: ${ABILITY_NAME[spec.ability]}  ·  Strength ${spec.health}  ·  ${rivalsBeaten()} of ${n} rivals beaten`,
+    );
+    const step = (d: number) => () => {
+      this.rival = (this.rival + d + n) % n;
+      playUnfold();
+      this.layout();
+      return null;
+    };
+    return [
+      { label: 'Back', run: () => this.go('battles') },
+      { label: 'Prev', run: step(-1) },
+      {
+        label: 'Fight',
+        primary: true,
+        run: () => {
+          setRivalIndex(this.rival);
+          return { do: 'duel' };
+        },
+      },
+      { label: 'Next', run: step(1) },
     ];
   }
 
@@ -293,6 +335,11 @@ export class MainMenu {
 
   /** Turn the open Journal by `d` pages (dev keys ← →); the Trophy Shelf is the last spread. */
   turnJournal(d: number): void {
+    if (this.page === 'rivals') {
+      this.rival = (this.rival + d + RIVALS.length) % RIVALS.length;
+      this.layout();
+      return;
+    }
     if (this.page !== 'journal') return;
     const n = JOURNAL.length + 1;
     this.journalPage = (this.journalPage + d + n) % n;
@@ -363,6 +410,7 @@ export class MainMenu {
 /** Who made what (full list with links in CREDITS.md). */
 const CREDITS: Array<[string, string]> = [
   ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
+  ['The Duel Rivals', 'Sgt. Vance, Captain Rook, Vex, Mako and Kai: animated characters by Quaternius (CC0), via Poly Pizza'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
   ['Animal sounds', 'Horse neigh: Hü, Wikimedia Commons (public domain) · Horse whinny: Briefer, Maigrot, Mandel, Freymond, Bachmann & Hillmann 2015, Scientific Reports (CC BY 4.0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
