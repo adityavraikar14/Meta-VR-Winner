@@ -20,9 +20,7 @@ import { PinLock } from '../machines/lock.js';
 import { HorseWhim, whimFootprint } from '../machines/whim.js';
 import { play } from '../progress.js';
 import { stage } from '../stage-state.js';
-import type { SceneryRoots } from './scenery.js';
-import { decorateLab } from './studio.js';
-import { CHAPTER_ACCENT } from '../ui-theme.js';
+import { decorateJungle, decorateMine, decorateMountain, decorateRiver, type SceneryRoots } from './scenery.js';
 import { berries, goldStar } from './props.js';
 import { emberShard, fallenLog as fallenTrunk, glowCaps, gnarledRoots, hollowTrunk, leafyTree } from './real-props.js';
 
@@ -125,12 +123,12 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 // ---------------------------------------------------------------- Worlds
 
 export const WORLDS: World[] = [
-  // Every chapter is the Light Lab (studio.ts), in its own colour; the old storybook worlds stay in scenery.ts.
-  { name: 'Light & Shadow', grows: 'The Light Lab unfolds on your table…', decorate: (r) => decorateLab(r, { accent: CHAPTER_ACCENT[0], crystal: 0x7fd6ff }), ambience: 'mountain', music: 'explore' },
-  { name: 'Structures', grows: 'The Light Lab unfolds on your table…', decorate: (r) => decorateLab(r, { accent: CHAPTER_ACCENT[1], crystal: 0x8fb4ff }), ambience: 'river', music: 'river' },
-  { name: 'Fire & Iron', grows: 'The Light Lab unfolds on your table…', decorate: (r) => decorateLab(r, { accent: CHAPTER_ACCENT[2], crystal: 0xff9b5a }), ambience: 'mine', music: 'mine' },
-  { name: 'Hot Air', grows: 'The Light Lab unfolds on your table…', decorate: (r) => decorateLab(r, { accent: CHAPTER_ACCENT[3], crystal: 0x7ff0e0 }), ambience: 'river', music: 'river' },
-  { name: 'The Dragon', grows: 'The Light Lab unfolds on your table…', decorate: (r) => decorateLab(r, { accent: CHAPTER_ACCENT[4], crystal: 0xb39bff }), ambience: 'mountain', music: 'battle' },
+  // Each chapter's own world, life-size around you: the jungle, the river, the old mine, the mountain.
+  { name: 'Light & Shadow', grows: 'The jungle grows into your room…', decorate: decorateJungle, ambience: 'jungle', music: 'explore' },
+  { name: 'Structures', grows: 'The river finds its way to you…', decorate: decorateRiver, ambience: 'river', music: 'river' },
+  { name: 'Fire & Iron', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine', music: 'mine' },
+  { name: 'Hot Air', grows: 'The cliffs rise into the evening sky…', decorate: decorateMountain, ambience: 'river', music: 'river' },
+  { name: 'The Dragon', grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain', music: 'battle' },
 ];
 
 // --------------------------------------------------------------- Puzzles

@@ -12,10 +12,9 @@ import { BackSide, Mesh, type Object3D, ShaderMaterial, SphereGeometry, Vector3 
 
 const KEY = 'shadowplay.sky';
 
+/** Mixed reality first: your own room stays visible around the table, like a toy on your desk. */
 function defaultOn(): boolean {
-  // The desktop emulator reports itself as a Quest 3 but shows no real room: sky on there.
-  if ((window as unknown as { IWER_DEVICE?: unknown }).IWER_DEVICE) return true;
-  return !/Quest 3|Quest Pro/i.test(navigator.userAgent);
+  return false;
 }
 
 /** The player's own choice, once made (null: follow the device's default). */

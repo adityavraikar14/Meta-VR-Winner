@@ -1,23 +1,27 @@
-import { FONT, shade } from '../ui-theme.js';
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
+  Box3,
   CanvasTexture,
-  CircleGeometry,
   CylinderGeometry,
-  DoubleSide,
+  DodecahedronGeometry,
   Group,
+  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  type Object3D,
   RingGeometry,
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
+  TorusGeometry,
   Vector3,
 } from '@iwsdk/core';
 import { playChirp, playTinkle } from '../audio.js';
 import { add, RESOURCES, type Resource } from '../bag.js';
 import type { HandState } from '../creatures/hand-input.js';
+import { type NatureModel, piece, surface } from './nature.js';
 import { crystals } from './themes.js';
 
 /**
@@ -50,51 +54,119 @@ interface Node {
   label: Sprite | null;
 }
 
-/** Each resource's icon on its token. */
-const ICONS: Record<Resource, string> = { wood: '🪵', stone: '🪨', iron: '⛓️', herb: '🌿', crystal: '💎', ember: '🔥' };
+/** Scales an object so its largest side is `size` metres and stands it on y = 0. */
+function fit(object: Object3D, size: number): Object3D {
+  object.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(object);
+  const span = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
+  if (span > 0) object.scale.multiplyScalar(size / span);
+  object.updateMatrixWorld(true);
+  const fitted = new Box3().setFromObject(object);
+  object.position.y -= fitted.min.y;
+  return object;
+}
+
+/** A scanned piece from the scenery set, if it has loaded. */
+function scanned(model: NatureModel, node: string, size: number): Object3D | null {
+  const object = piece(model, node);
+  if (!object) return null;
+  object.traverse((o) => {
+    const mesh = o as Mesh;
+    if (mesh.isMesh) mesh.castShadow = true;
+  });
+  return fit(object, size);
+}
 
 /**
- * A collectible token: a glossy disc in the resource's colour with a white rim
- * and its icon, standing upright and turning slowly, with a soft ring of
- * light beneath. Clean and readable at a glance, like a game's coin.
+ * Each resource as the real thing, about 3 cm across, sitting on the ground:
+ * a tied bundle of bark-covered logs, a scanned mossy stone, a lump of iron
+ * ore (dark metal, rust in the cracks), a sprig of real herb, a cluster of
+ * crystal, and a glowing coal. A soft pulse of light on the ground beneath
+ * marks it as something to pick up.
  */
 function model(resource: Resource): Group {
   const g = new Group();
   const color = RESOURCES[resource].color;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  const fill = ctx.createLinearGradient(0, 0, 0, 128);
-  fill.addColorStop(0, shade(color, 0.3));
-  fill.addColorStop(1, shade(color, -0.15));
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(64, 64, 62, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = fill;
-  ctx.beginPath();
-  ctx.arc(64, 64, 52, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.font = `64px "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(ICONS[resource], 64, 70);
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  const face = new MeshBasicMaterial({ map: texture, transparent: true, side: DoubleSide });
-  const coin = new Mesh(new CircleGeometry(0.017, 40), face);
-  coin.position.y = 0.024;
-  g.add(coin);
-  // The coin's edge: a thin glossy band, so it reads as a solid token from the side.
-  const edge = new Mesh(
-    new CylinderGeometry(0.0172, 0.0172, 0.004, 40, 1, true),
-    new MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.3, emissive: color, emissiveIntensity: 0.25, side: DoubleSide }),
-  );
-  edge.rotation.x = Math.PI / 2;
-  edge.position.y = 0.024;
-  g.add(edge);
-  // A soft ring of light on the mat marks it as something to pick up.
-  const ring = new Mesh(new RingGeometry(0.014, 0.022, 32), new MeshBasicMaterial({ color, transparent: true, opacity: 0.55, blending: AdditiveBlending, depthWrite: false }));
+  switch (resource) {
+    case 'wood': {
+      const bark = surface('bark', 0.3, 0.6);
+      const ends = new MeshStandardMaterial({ color: 0xd2a676, roughness: 0.85 });
+      for (const [x, y] of [[-0.0085, 0.008], [0.0085, 0.008], [0, 0.022]] as const) {
+        const log = new Mesh(new CylinderGeometry(0.0082, 0.0088, 0.042, 12), [bark, ends, ends]);
+        log.rotation.z = Math.PI / 2;
+        log.position.set(0, y, x);
+        log.castShadow = true;
+        g.add(log);
+      }
+      // A rope tie around the bundle.
+      const tie = new Mesh(new TorusGeometry(0.0165, 0.0018, 6, 20), new MeshStandardMaterial({ color: 0xb8925a, roughness: 0.9 }));
+      tie.rotation.y = Math.PI / 2;
+      tie.position.y = 0.0135;
+      tie.scale.set(1, 0.9, 1.05);
+      g.add(tie);
+      break;
+    }
+    case 'stone': {
+      const rock = scanned('rocks', 'rock_moss_set_01_rock02', 0.032);
+      if (rock) g.add(rock);
+      else {
+        const s = new Mesh(new DodecahedronGeometry(0.014, 1), surface('stone', 0.4));
+        s.scale.set(1.2, 0.8, 1);
+        s.position.y = 0.011;
+        g.add(s);
+      }
+      break;
+    }
+    case 'iron': {
+      // Ore: a dark, faceted metallic lump with rusty patches.
+      const ore = new Mesh(new DodecahedronGeometry(0.0135, 0), new MeshStandardMaterial({ color: 0x4a4f58, metalness: 0.85, roughness: 0.38, flatShading: true }));
+      ore.scale.set(1.15, 0.85, 1);
+      ore.position.y = 0.011;
+      ore.rotation.set(0.4, 0.8, 0.2);
+      ore.castShadow = true;
+      g.add(ore);
+      const rust = new MeshStandardMaterial({ color: 0xa4521e, roughness: 0.9, flatShading: true });
+      for (const [x, y, z, r] of [[0.009, 0.017, 0.004, 0.005], [-0.007, 0.013, -0.008, 0.004], [0.002, 0.021, -0.006, 0.0035]] as const) {
+        const fleck = new Mesh(new DodecahedronGeometry(r, 0), rust);
+        fleck.position.set(x, y, z);
+        g.add(fleck);
+      }
+      break;
+    }
+    case 'herb': {
+      const sprig = scanned('sorrel', 'shrub_sorrel_01_c', 0.04) ?? scanned('fern', 'fern_02_a', 0.04);
+      if (sprig) g.add(sprig);
+      else {
+        const leaf = new MeshStandardMaterial({ color: 0x5f9e34, roughness: 0.7 });
+        for (let i = 0; i < 5; i++) {
+          const l = new Mesh(new IcosahedronGeometry(0.008, 0), leaf);
+          const a = (i / 5) * Math.PI * 2;
+          l.scale.set(0.45, 1.4, 0.2);
+          l.position.set(Math.cos(a) * 0.006, 0.013, Math.sin(a) * 0.006);
+          l.rotation.set(Math.sin(a) * 0.5, a, Math.cos(a) * 0.5);
+          g.add(l);
+        }
+      }
+      break;
+    }
+    case 'crystal':
+      g.add(crystals(0.026, 5, 41, color));
+      break;
+    case 'ember': {
+      // A coal: black crust, glowing orange cracks, a warm halo.
+      const coal = new Mesh(new DodecahedronGeometry(0.011, 1), new MeshStandardMaterial({ color: 0x241510, emissive: 0xff5a10, emissiveIntensity: 1.6, roughness: 0.9, flatShading: true }));
+      coal.position.y = 0.01;
+      g.add(coal);
+      const halo = new Sprite(new SpriteMaterial({ map: glow(), color: 0xff8a2a, blending: AdditiveBlending, transparent: true, depthWrite: false }));
+      halo.scale.setScalar(0.06);
+      halo.position.y = 0.012;
+      halo.raycast = () => {};
+      g.add(halo);
+      break;
+    }
+  }
+  // A soft pulse of light on the ground marks it as something to pick up.
+  const ring = new Mesh(new RingGeometry(0.018, 0.026, 32), new MeshBasicMaterial({ color: 0xfff1c4, transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.002;
   ring.name = 'PickupRing';
@@ -103,6 +175,22 @@ function model(resource: Resource): Group {
     o.userData.keep = true;
   });
   return g;
+}
+
+let glowMap: CanvasTexture | null = null;
+function glow(): CanvasTexture {
+  if (glowMap) return glowMap;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  glowMap = new CanvasTexture(canvas);
+  glowMap.colorSpace = SRGBColorSpace;
+  return glowMap;
 }
 
 function labelSprite(text: string, color: number): Sprite {
@@ -157,8 +245,9 @@ export class Pickups {
     for (const node of this.nodes) {
       if (node.taken < 0) {
         // Idle: a gentle bob and turn.
-        node.group.position.y = node.base.y + 0.004 + Math.sin(this.time * 2 + node.base.x * 9) * 0.003;
-        node.group.rotation.y += dt * 0.6;
+        node.group.position.y = node.base.y + 0.001 + Math.max(0, Math.sin(this.time * 2 + node.base.x * 9)) * 0.002;
+        const ring = node.group.getObjectByName('PickupRing') as Mesh | undefined;
+        if (ring) (ring.material as MeshBasicMaterial).opacity = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(this.time * 3 + node.base.x * 9));
         if (this.touched(node, hands)) this.take(node);
         continue;
       }

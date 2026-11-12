@@ -1,6 +1,5 @@
 import { Confetti } from './confetti.js';
-import { Mentor } from '../creatures/mentor.js';
-import { Box3, Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
+import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
 import { playAwaken, playUnfold, setAmbience, tickAmbience } from '../audio.js';
@@ -49,8 +48,6 @@ export class Diorama {
   private attempting = false;
   /** World-space footprints of the current puzzle's props. */
   blockers: Array<{ center: Vector3; radius: number }> = [];
-  /** Ada, the Lantern's engineer, standing on the table. */
-  private mentor!: Mentor;
   /** Celebration on every clear. */
   private confetti!: Confetti;
   private readonly kit: Kit;
@@ -63,7 +60,7 @@ export class Diorama {
     this.decor.name = 'WorldScenery';
     this.props.name = 'PuzzleProps';
     this.screen.name = 'ScreenFrame';
-    this.mentor = new Mentor(stageRoot);
+    // Ada (creatures/mentor.ts) is kept in the code but not on the table.
     this.confetti = new Confetti(stageRoot, floor);
     this.room.name = 'RoomJungle';
     stageRoot.add(this.decor, this.props);
@@ -157,7 +154,6 @@ export class Diorama {
       playUnfold();
     }
     mergeStatic(this.props);
-    this.placeMentor();
     // Resources to gather, around the edges of the story's levels.
     this.pickups = null;
     if (puzzle && puzzle.id !== 'duel') {
@@ -169,40 +165,6 @@ export class Diorama {
       this.pickups = new Pickups(world, this.floor, blocked);
       this.props.add(this.pickups.group);
     }
-  }
-
-  /**
-   * Ada stands beside the screen, in the spot with the most room: each
-   * candidate's distance to the nearest prop's actual bounding box (and to
-   * the machines' keep-clear circles), the largest wins.
-   */
-  private placeMentor(): void {
-    // The back half of the board only: never between you and the screen.
-    const spots: Array<[number, number]> = [
-      [-0.47, -0.3], [0.47, -0.3], [-0.52, -0.05], [0.52, -0.05], [-0.56, -0.46], [0.56, -0.46],
-    ];
-    this.props.updateMatrixWorld(true);
-    // Each prop's box; groups spanning the whole stage (a scene's root) say nothing about where there is room.
-    const boxes = this.props.children
-      .filter((c) => c.visible)
-      .map((c) => new Box3().setFromObject(c))
-      .filter((box) => box.isEmpty() || box.max.x - box.min.x < 0.6 || box.max.z - box.min.z < 0.6);
-    const at = new Vector3();
-    let best = spots[0];
-    let bestRoom = -Infinity;
-    for (const spot of spots) {
-      this.stageRoot.localToWorld(at.set(spot[0], this.floor + 0.08, spot[1]));
-      let room = Infinity;
-      for (const box of boxes) if (!box.isEmpty()) room = Math.min(room, box.distanceToPoint(at));
-      for (const b of this.blockers) room = Math.min(room, b.center.distanceTo(at) - b.radius);
-      // A small preference for the earlier (nearer the screen) spots.
-      room -= spots.indexOf(spot) * 0.004;
-      if (room > bestRoom) {
-        bestRoom = room;
-        best = spot;
-      }
-    }
-    this.mentor.place(best[0], this.floor, best[1]);
   }
 
   private decorate(world: number): void {
@@ -253,17 +215,10 @@ export class Diorama {
   }
 
   update(dt: number, hands: readonly HandState[], head: Vector3): void {
-    // Ada, the mentor: on the table with the world, out of the Arena; she answers the game's cues.
+    // Cues and lines meant for a mentor on the table: none is shown, so they are dropped.
     // She steps aside for the fights (the dragon, the duel): the stage is theirs.
-    this.mentor.update(dt, !stage.arena && !stage.fight && !stage.sceneryHidden && !this.previewing && this.growTime >= 1.2);
-    if (stage.cue) {
-      this.mentor.cue(stage.cue);
-      stage.cue = null;
-    }
-    if (stage.say) {
-      this.mentor.say(stage.say);
-      stage.say = null;
-    }
+    stage.cue = null;
+    stage.say = null;
     if (stage.confetti) {
       stage.confetti = false;
       this.confetti.burst();
