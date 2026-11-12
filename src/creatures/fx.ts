@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   CanvasTexture,
@@ -50,7 +51,7 @@ function glyphTexture(glyph: string, color: string): CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const ctx = c.getContext('2d')!;
-  ctx.font = '700 48px Georgia, serif';
+  ctx.font = `700 48px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineWidth = 6;

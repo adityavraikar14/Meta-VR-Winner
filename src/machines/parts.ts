@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -531,7 +532,7 @@ export class Dial {
     const angle = (r: number) => -Math.PI / 2 + ((Math.min(2, r) - 1) * Math.PI * 3) / 4;
     arc(angle(0), angle(1), '#b8322a', 16);
     arc(angle(1), angle(2), '#3f7d3a', 16);
-    g.strokeStyle = '#2b2118';
+    g.strokeStyle = '#14213d';
     for (let i = 0; i <= 20; i++) {
       const a = angle(i / 10);
       const long = i % 5 === 0;
@@ -541,11 +542,11 @@ export class Dial {
       g.lineTo(cx + Math.cos(a) * 86, cy + Math.sin(a) * 86);
       g.stroke();
     }
-    g.fillStyle = '#2b2118';
-    g.font = 'bold 30px Georgia, serif';
+    g.fillStyle = '#14213d';
+    g.font = `700 30px ${FONT}`;
     g.textAlign = 'center';
     g.fillText(label, cx, cy + 62);
-    g.font = '20px Georgia, serif';
+    g.font = `600 20px ${FONT}`;
     g.fillText('NEEDED', cx, 26);
     const face = new CanvasTexture(canvas);
     face.colorSpace = SRGBColorSpace;

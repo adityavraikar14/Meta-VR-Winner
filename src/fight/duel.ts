@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   BoxGeometry,
   CanvasTexture,
@@ -347,7 +348,8 @@ export class InkDuel {
     const props = this.group.parent!;
     const from = stageRoot.localToWorld(this.w.set(p.x, this.floor + 0.25, p.z));
     const ray = new Raycaster(from.clone(), new Vector3(0, -1, 0), 0, 1);
-    const targets = stageRoot.children.filter((c) => c !== props);
+    // The ground and the scenery on it, not the props or Ada standing on the table.
+    const targets = stageRoot.children.filter((c) => c !== props && c.name !== 'Mentor');
     let best = this.floor;
     let found = false;
     for (const hit of ray.intersectObjects(targets, true)) {
@@ -764,13 +766,13 @@ export class InkDuel {
     g.clearRect(0, 0, 256, 128);
     g.textAlign = 'center';
     g.lineJoin = 'round';
-    g.font = 'bold 64px Georgia, serif';
+    g.font = `700 64px ${FONT}`;
     g.lineWidth = 8;
     g.strokeStyle = 'rgba(255,255,255,0.9)';
     g.strokeText(`${damage}!`, 128, 64);
     g.fillStyle = head ? '#d0501a' : '#1a6fd0';
     g.fillText(`${damage}!`, 128, 64);
-    g.font = 'bold 21px Georgia, serif';
+    g.font = `700 21px ${FONT}`;
     g.lineWidth = 5;
     const sum = `½mv² = ½·${(mass * 1000).toFixed(0)}g·${speed.toFixed(1)}² = ${energy.toFixed(2)} J`;
     g.strokeText(sum, 128, 104);

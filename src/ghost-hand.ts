@@ -1,3 +1,4 @@
+import { FONT } from './ui-theme.js';
 import {
   CanvasTexture,
   Color,
@@ -139,7 +140,7 @@ export class GhostHand {
     g.roundRect(4, 4, 504, 88, 44);
     g.fill();
     g.fillStyle = '#fff1c9';
-    g.font = '600 44px Georgia, serif';
+    g.font = `600 44px ${FONT}`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillText('Copy this hand ↓', 256, 50);

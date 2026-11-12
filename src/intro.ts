@@ -108,7 +108,7 @@ const SCENES: Scene[] = [
       lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t * 1.4) * 0.08, ease(k * 3));
       grass(ctx);
       hand(ctx, W / 2 + 40, H + 60 - ease(k * 2) * 220, 1.4, Math.sin(t * 5) * 0.18 * ease(k * 2 - 1));
-      ctx.fillStyle = `rgba(22, 12, 6, ${0.55 * (1 - ease(k * 3))})`;
+      ctx.fillStyle = `rgba(11, 20, 48, ${0.55 * (1 - ease(k * 3))})`;
       ctx.fillRect(0, 0, W, H);
     },
   },

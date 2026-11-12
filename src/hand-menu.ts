@@ -1,3 +1,4 @@
+import { FONT } from './ui-theme.js';
 import {
   CanvasTexture,
   createSystem,
@@ -304,7 +305,7 @@ function vial(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, fi
   ctx.arc(0, 6, 13, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillRect(-5, -16, 10, 14);
-  ctx.strokeStyle = '#ffe2a8';
+  ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(0, 6, 14, -Math.PI * 0.32, Math.PI * 1.32);
@@ -322,14 +323,14 @@ function vial(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, fi
 function drawItems(canvas: HTMLCanvasElement, axe: boolean, potions: number): void {
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'rgba(40, 22, 10, 0.85)';
+  ctx.fillStyle = 'rgba(20, 33, 61, 0.92)';
   ctx.beginPath();
   ctx.roundRect(4, 4, 248, 56, 18);
   ctx.fill();
   let x = 30;
   if (axe) {
     // Handle and a bearded head.
-    ctx.strokeStyle = '#c8a070';
+    ctx.strokeStyle = '#ffc928';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -344,16 +345,16 @@ function drawItems(canvas: HTMLCanvasElement, axe: boolean, potions: number): vo
     ctx.lineTo(x + 6, 22);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#ffe2a8';
-    ctx.font = '700 22px Georgia, serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 22px ${FONT}`;
     ctx.textBaseline = 'middle';
     ctx.fillText('Axe', x + 32, 33);
     x += 100;
   }
   if (potions > 0) {
     vial(ctx, x, 36, 0.9, '#9fd060');
-    ctx.fillStyle = '#ffe2a8';
-    ctx.font = '700 22px Georgia, serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 22px ${FONT}`;
     ctx.textBaseline = 'middle';
     ctx.fillText(`×${potions}`, x + 18, 33);
   }
@@ -365,16 +366,16 @@ function drawButton(canvas: HTMLCanvasElement, command: MenuCommand, label: stri
   const cx = 64;
   const cy = 64;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#3b2414';
+  ctx.fillStyle = '#22304f';
   ctx.beginPath();
   ctx.arc(cx, cy, 58, 0, Math.PI * 2);
   ctx.fill();
   ctx.lineWidth = 6;
-  ctx.strokeStyle = '#ffc34d';
+  ctx.strokeStyle = '#ffc928';
   ctx.stroke();
 
-  ctx.strokeStyle = '#ffe2a8';
-  ctx.fillStyle = '#ffe2a8';
+  ctx.strokeStyle = '#ffffff';
+  ctx.fillStyle = '#ffffff';
   ctx.lineWidth = 7;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -428,12 +429,12 @@ function drawButton(canvas: HTMLCanvasElement, command: MenuCommand, label: stri
       break;
   }
 
-  ctx.fillStyle = 'rgba(40, 22, 10, 0.85)';
+  ctx.fillStyle = 'rgba(20, 33, 61, 0.92)';
   ctx.beginPath();
   ctx.roundRect(4, 128, 120, 38, 14);
   ctx.fill();
-  ctx.fillStyle = '#ffe2a8';
-  ctx.font = '700 26px Georgia, serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `700 26px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, cx, 148, 112);

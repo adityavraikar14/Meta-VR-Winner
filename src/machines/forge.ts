@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -903,7 +904,7 @@ export class Forge {
     canvas.width = 512;
     canvas.height = 128;
     const g = canvas.getContext('2d')!;
-    g.fillStyle = '#2a1d14';
+    g.fillStyle = '#14213d';
     g.fillRect(0, 0, 512, 128);
     const color = new Color();
     for (let t = 450; t <= 1400; t += 5) {
@@ -914,17 +915,17 @@ export class Forge {
       g.fillStyle = `#${color.getHexString()}`;
       g.fillRect(x, 40, 5, 44);
     }
-    g.fillStyle = '#e8d8b8';
-    g.font = 'bold 17px Georgia, serif';
+    g.fillStyle = '#ffffff';
+    g.font = `700 17px ${FONT}`;
     g.textAlign = 'center';
     const label = (t: number, text: string) => g.fillText(text, ((t - 450) / 950) * 472 + 20, 110);
     label(600, 'too cold');
     label(1080, 'FORGE');
     label(1360, 'burns');
-    g.font = '15px Georgia, serif';
+    g.font = `600 15px ${FONT}`;
     for (const t of [600, 800, 1000, 1200, 1400]) g.fillText(`${t}°`, ((t - 450) / 950) * 472 + 20, 30);
     // Brackets marking the working band.
-    g.strokeStyle = '#e8c070';
+    g.strokeStyle = '#ffc928';
     g.lineWidth = 3;
     const x0 = ((FORGE_MIN - 450) / 950) * 472 + 20;
     const x1 = ((1260 - 450) / 950) * 472 + 20;

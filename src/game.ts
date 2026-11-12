@@ -1,4 +1,4 @@
-import { fitFont, font, roundRect as themeRoundRect, UI } from './ui-theme.js';
+import { fitFont, font, FONT, roundRect as themeRoundRect, UI } from './ui-theme.js';
 import {
   CanvasTexture,
   Color,
@@ -1037,7 +1037,7 @@ export class ShadowGameSystem extends createSystem({
         // The friend's name under its shape, so new players know who is who.
         const ctx = card.canvas.getContext('2d')!;
         ctx.fillStyle = '#ffffff';
-        ctx.font = '700 26px Georgia, serif';
+        ctx.font = `700 26px ${FONT}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.candidates[i].name, 64, 144, 124);

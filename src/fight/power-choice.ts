@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   CanvasTexture,
@@ -153,19 +154,19 @@ function labelSprite(title: string, sub: string): Sprite {
   canvas.width = 512;
   canvas.height = 176;
   const g = canvas.getContext('2d')!;
-  g.fillStyle = 'rgba(40, 22, 10, 0.9)';
-  g.strokeStyle = '#d9a96a';
+  g.fillStyle = 'rgba(20, 33, 61, 0.92)';
+  g.strokeStyle = '#ffc928';
   g.lineWidth = 6;
   g.beginPath();
   g.roundRect(6, 6, 500, 164, 28);
   g.fill();
   g.stroke();
   g.textAlign = 'center';
-  g.fillStyle = '#ffe2a0';
-  g.font = 'bold 58px Georgia, "Segoe UI Emoji", serif';
+  g.fillStyle = '#ffffff';
+  g.font = `700 58px ${FONT}, "Segoe UI Emoji"`;
   g.fillText(title, 256, 78);
-  g.fillStyle = '#f3e6c8';
-  g.font = '30px Georgia, serif';
+  g.fillStyle = '#cfdcf3';
+  g.font = `600 30px ${FONT}`;
   g.fillText(sub, 256, 134);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;

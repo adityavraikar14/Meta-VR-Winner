@@ -173,11 +173,16 @@ export class Diorama {
    * the machines' keep-clear circles), the largest wins.
    */
   private placeMentor(): void {
+    // The back half of the board only: never between you and the screen.
     const spots: Array<[number, number]> = [
-      [-0.47, -0.3], [0.47, -0.3], [-0.52, 0.02], [0.52, 0.02], [-0.56, -0.46], [0.56, -0.46], [-0.46, 0.17], [0.46, 0.17],
+      [-0.47, -0.3], [0.47, -0.3], [-0.52, -0.05], [0.52, -0.05], [-0.56, -0.46], [0.56, -0.46],
     ];
     this.props.updateMatrixWorld(true);
-    const boxes = this.props.children.filter((c) => c.visible).map((c) => new Box3().setFromObject(c));
+    // Each prop's box; groups spanning the whole stage (a scene's root) say nothing about where there is room.
+    const boxes = this.props.children
+      .filter((c) => c.visible)
+      .map((c) => new Box3().setFromObject(c))
+      .filter((box) => box.isEmpty() || box.max.x - box.min.x < 0.6 || box.max.z - box.min.z < 0.6);
     const at = new Vector3();
     let best = spots[0];
     let bestRoom = -Infinity;
@@ -245,7 +250,8 @@ export class Diorama {
 
   update(dt: number, hands: readonly HandState[], head: Vector3): void {
     // Ada, the mentor: on the table with the world, out of the Arena; she answers the game's cues.
-    this.mentor.update(dt, !stage.arena && !stage.sceneryHidden && !this.previewing && this.growTime >= 1.2);
+    // She steps aside for the fights (the dragon, the duel): the stage is theirs.
+    this.mentor.update(dt, !stage.arena && !stage.fight && !stage.sceneryHidden && !this.previewing && this.growTime >= 1.2);
     if (stage.cue) {
       this.mentor.cue(stage.cue);
       stage.cue = null;

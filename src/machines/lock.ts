@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   BoxGeometry,
   CanvasTexture,
@@ -508,7 +509,7 @@ function labelPlane(text: string, color: string, height: number): Mesh {
   canvas.width = 256;
   canvas.height = 64;
   const g = canvas.getContext('2d')!;
-  g.font = 'italic 600 40px Georgia, serif';
+  g.font = `600 40px ${FONT}`;
   g.fillStyle = color;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -524,11 +525,11 @@ function gaugeFace(): CanvasTexture {
   canvas.width = 256;
   canvas.height = 256;
   const g = canvas.getContext('2d')!;
-  g.fillStyle = '#efe6d2';
+  g.fillStyle = '#ffffff';
   g.beginPath();
   g.arc(128, 128, 124, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = '#8a6a3a';
+  g.strokeStyle = '#22304f';
   g.lineWidth = 6;
   g.stroke();
   const cx = 128;
@@ -545,8 +546,8 @@ function gaugeFace(): CanvasTexture {
   band(0, TENSION_MIN, '#9a9490');
   band(TENSION_MIN, TENSION_JAM, '#3f8d44');
   band(TENSION_JAM, 1.3, '#c0392b');
-  g.fillStyle = '#2b2118';
-  g.font = 'bold 30px Georgia, serif';
+  g.fillStyle = '#14213d';
+  g.font = `700 30px ${FONT}`;
   g.textAlign = 'center';
   g.fillText('TENSION', cx, 226);
   const texture = new CanvasTexture(canvas);

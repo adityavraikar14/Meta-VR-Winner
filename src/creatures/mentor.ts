@@ -88,6 +88,8 @@ function hardHat(width: number): Group {
   hat.add(lens);
   const halo = new Sprite(new SpriteMaterial({ map: glowTexture(), blending: AdditiveBlending, transparent: true, depthWrite: false }));
   halo.scale.setScalar(r * 1.6);
+  // Only a glow: rays (ground finding, desktop clicks) pass through it.
+  halo.raycast = () => {};
   halo.position.set(0, r * 0.38, r * 1.18);
   hat.add(halo);
   return hat;

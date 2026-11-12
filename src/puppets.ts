@@ -3,7 +3,7 @@
  * and the shadow world on the paper. Feet sit at (x, y); sizes scale with s.
  */
 
-export const INK = '#160c06';
+export const INK = '#0b1430';
 /** Canvas size the intro draws at; grass() spans this width. */
 export const W = 1024;
 export const H = 512;

@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -995,15 +996,15 @@ function signTexture(sign: { label: string; fingers: readonly number[] }): Canva
   canvas.width = 128;
   canvas.height = 160;
   const g = canvas.getContext('2d')!;
-  g.fillStyle = 'rgba(40,26,16,0.85)';
+  g.fillStyle = 'rgba(20,33,61,0.9)';
   g.beginPath();
   g.roundRect(4, 4, 120, 152, 14);
   g.fill();
-  g.strokeStyle = '#e8c070';
+  g.strokeStyle = '#ffc928';
   g.lineWidth = 4;
   g.stroke();
   // Palm and four fingers.
-  g.fillStyle = '#f3e4c8';
+  g.fillStyle = '#ffffff';
   g.beginPath();
   g.roundRect(30, 72, 68, 44, 12);
   g.fill();
@@ -1014,8 +1015,8 @@ function signTexture(sign: { label: string; fingers: readonly number[] }): Canva
     g.roundRect(x, 76 - h, 13, h + 8, 6);
     g.fill();
   });
-  g.fillStyle = '#e8c070';
-  g.font = 'bold 22px Georgia, serif';
+  g.fillStyle = '#ffc928';
+  g.font = `700 22px ${FONT}`;
   g.textAlign = 'center';
   g.fillText(sign.label, 64, 145);
   const texture = new CanvasTexture(canvas);

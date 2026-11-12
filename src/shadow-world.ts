@@ -1,3 +1,4 @@
+import { FONT } from './ui-theme.js';
 import {
   CanvasTexture,
   Group,
@@ -577,7 +578,7 @@ export class ShadowWorld {
     const ctx = this.bubbleCanvas.getContext('2d')!;
     ctx.clearRect(0, 0, 64, 64);
     if (!text) return;
-    ctx.fillStyle = 'rgba(255, 246, 226, 0.95)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
     ellipse(ctx, 32, 28, 26, 22);
     ctx.beginPath();
     ctx.moveTo(18, 44);
@@ -585,7 +586,7 @@ export class ShadowWorld {
     ctx.lineTo(30, 48);
     ctx.fill();
     ctx.fillStyle = text === '♥' ? '#e0457a' : INK;
-    ctx.font = '700 34px Georgia, serif';
+    ctx.font = `700 34px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 32, 30);

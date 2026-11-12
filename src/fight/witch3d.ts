@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   type AnimationAction,
@@ -378,7 +379,7 @@ export class NamePlate {
     const g = this.canvas.getContext('2d')!;
     g.clearRect(0, 0, 512, 128);
     g.textAlign = 'center';
-    g.font = 'bold 44px Georgia, serif';
+    g.font = `700 44px ${FONT}`;
     g.lineWidth = 8;
     g.strokeStyle = 'rgba(20,10,30,0.85)';
     g.strokeText(this.name, 256, 50);
