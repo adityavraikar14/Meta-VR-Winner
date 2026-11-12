@@ -1009,6 +1009,7 @@ export class ShadowGameSystem extends createSystem({
 
   private beginMatching(): void {
     stage.cue = 'point';
+    if (this.puzzle && !isSideGame(this.puzzleIndex)) stage.say = adaTip(this.puzzle.world, this.puzzleIndex);
     this.bannerShown = false;
     this.holdTime = 0;
     this.struggleTime = 0;
@@ -1285,6 +1286,8 @@ export class ShadowGameSystem extends createSystem({
     this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');
     this.setPhase('cleared');
     stage.cue = 'cheer';
+    stage.say = stars === 3 ? pick(['Perfect run!', 'Three stars. That’s engineering.', 'Textbook!']) : pick(['Through! Now try for three stars.', 'Nicely done.', 'It works! Can you make it cleaner?']);
+    stage.confetti = true;
   }
 
   // --------------------------------------------------------------- Judging
@@ -1628,6 +1631,24 @@ export class ShadowGameSystem extends createSystem({
     ctx.fillText(text, w / 2, h / 2 - 1);
     this.captionTexture.needsUpdate = true;
   }
+}
+
+/** Ada's tip as a level starts: one per chapter, varied by level. */
+const ADA_TIPS: string[][] = [
+  ['Nearer the lantern, bigger shadow. Nearer the screen, smaller.', 'A still hand is solid ground. A moving one is a bat.', 'Read the spark’s path, then get there first.'],
+  ['Triangles hold their shape. Squares fold.', 'Long members in compression buckle first.', 'Shards cast shadows too: bring one near the lantern to grow it.'],
+  ['Watch the colour of the iron: cherry red to forge, straw to temper.', 'Hotter is faster, for good reactions and bad ones.', 'Steady heat beats high heat.'],
+  ['Hot air is lighter than cold. Keep the heat in the envelope.'],
+  ['Gentle tension. One pin binds at a time.', 'Watch its breath, then strike the head or the heart.'],
+];
+
+function adaTip(world: number, index: number): string {
+  const tips = ADA_TIPS[world] ?? ADA_TIPS[0];
+  return tips[index % tips.length];
+}
+
+function pick<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
 }
 
 /** A shadow cut off by the paper edge cannot be judged fairly. */

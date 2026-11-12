@@ -1,3 +1,4 @@
+import { Confetti } from './confetti.js';
 import { Mentor } from '../creatures/mentor.js';
 import { Box3, Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
@@ -50,6 +51,8 @@ export class Diorama {
   blockers: Array<{ center: Vector3; radius: number }> = [];
   /** Ada, the Lantern's engineer, standing on the table. */
   private mentor!: Mentor;
+  /** Celebration on every clear. */
+  private confetti!: Confetti;
   private readonly kit: Kit;
 
   constructor(
@@ -61,6 +64,7 @@ export class Diorama {
     this.props.name = 'PuzzleProps';
     this.screen.name = 'ScreenFrame';
     this.mentor = new Mentor(stageRoot);
+    this.confetti = new Confetti(stageRoot, floor);
     this.room.name = 'RoomJungle';
     stageRoot.add(this.decor, this.props);
     stage.paper!.add(this.screen, this.room);
@@ -256,6 +260,15 @@ export class Diorama {
       this.mentor.cue(stage.cue);
       stage.cue = null;
     }
+    if (stage.say) {
+      this.mentor.say(stage.say);
+      stage.say = null;
+    }
+    if (stage.confetti) {
+      stage.confetti = false;
+      this.confetti.burst();
+    }
+    this.confetti.update(dt);
     if (this.growTime < 4) {
       this.growTime += dt;
       this.applyGrowth();

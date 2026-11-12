@@ -361,6 +361,8 @@ export class ShadowRun {
       } else if (event.type === 'lost') {
         this.lostTime = 0;
         stage.cue = 'oops';
+        // After a few misses Ada gives the level's hint; before that, a word of encouragement.
+        stage.say = sim.retries + 1 >= HINT_AFTER ? this.level.hint : ['Close!', 'Again: you’ve got this.', 'Almost. Watch where it falls.'][sim.retries % 3];
         playHiss(0.03, 0.35);
       } else if (event.type === 'won') {
         this.wonTime = 0;

@@ -242,4 +242,48 @@ export const RUN_LEVELS: RunLevel[] = [
     shards: [{ kind: 'wedge', at: [0.12, -0.2, 0.6] }],
     solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.03, -0.055], [0.24, -0.055], [0.24, 0.053]] }],
   },
+  {
+    id: 'build-slide',
+    world: 1,
+    build: true,
+    title: 'The Slide',
+    story: 'The spark will drop from high above the gap. Catch it on glass and let it run down to the gate.',
+    ask: 'Hold the plank in the light and roll your wrist to tilt it: a slide from under the spark down to the ledge',
+    hint: 'Tilt the plank about 20°, high end on the left under the spark, low end just above the ledge; about ×3',
+    terrain: [[[0.25, FLOOR], [0.5, FLOOR], [0.5, -0.02], [0.25, -0.02]]],
+    start: [-0.08, 0.3],
+    gate: [0.4, 0.015],
+    motes: [[-0.01, 0.14], [0.14, 0.085], [0.33, 0.01]],
+    par: 15,
+    shards: [{ kind: 'plank', at: [0.1, -0.2, 0.6] }],
+    // A plank at ×3, turned −20°, its shadow centred at (0.08, 0.06).
+    solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.099, 0.102], [-0.096, 0.096], [0.237, -0.025], [0.245, -0.023], [0.262, 0.023], [-0.082, 0.148]] }],
+  },
+  {
+    id: 'build-pair',
+    world: 1,
+    build: true,
+    title: 'Two Pieces',
+    story: 'Two gaps and a pillar between them. One shard will not reach; two will.',
+    ask: 'Place both planks: one shadow over each gap, resting on the pillar, then push Drop',
+    hint: 'Each plank needs about ×2.6: hold them a little nearer your face than the screen',
+    terrain: [
+      [[-0.5, FLOOR], [-0.3, FLOOR], [-0.3, 0.1], [-0.5, 0.18]],
+      [[-0.02, FLOOR], [0.04, FLOOR], [0.04, 0.08], [-0.02, 0.08]],
+      [[0.32, FLOOR], [0.5, FLOOR], [0.5, 0.06], [0.32, 0.06]],
+    ],
+    start: [-0.45, 0.24],
+    gate: [0.41, 0.095],
+    motes: [[-0.16, 0.1], [0.01, 0.115], [0.18, 0.09]],
+    par: 15,
+    shards: [
+      { kind: 'plank', at: [-0.02, -0.2, 0.6] },
+      { kind: 'plank', at: [0.17, -0.2, 0.6] },
+    ],
+    // Two planks at ×2.6, nearly level, one over each gap.
+    solution: [
+      { a: [0, 0], b: [0, 0], r: 0, poly: [[-0.321, 0.065], [-0.312, 0.06], [-0.005, 0.05], [-0.003, 0.091], [-0.003, 0.096], [-0.32, 0.107]] },
+      { a: [0, 0], b: [0, 0], r: 0, poly: [[0.023, 0.041], [0.33, 0.03], [0.34, 0.034], [0.341, 0.076], [0.025, 0.087], [0.024, 0.082]] },
+    ],
+  },
 ];

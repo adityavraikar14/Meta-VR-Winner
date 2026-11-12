@@ -1,3 +1,4 @@
+import { FONT } from '../ui-theme.js';
 import {
   AdditiveBlending,
   type AnimationAction,
@@ -35,6 +36,8 @@ export type MentorCue = 'wave' | 'point' | 'oops' | 'cheer';
 
 const MODEL_URL = 'gltf/ada.glb';
 const HEIGHT = 0.2;
+/** The speech bubble's width on the table (m). */
+const BUBBLE_W = 0.36;
 const CLIPS = {
   idle: 'CharacterArmature|Idle_Neutral',
   wave: 'CharacterArmature|Wave',
@@ -103,11 +106,28 @@ export class Mentor {
   private current: AnimationAction | null = null;
   private queue: Move[] = [];
   private time = 0;
+  /** Her speech bubble: the sprite, its canvas, what it says, and how long it stays. */
+  private bubble: Sprite;
+  private bubbleCanvas = document.createElement('canvas');
+  private bubbleTexture: CanvasTexture;
+  private bubbleLeft = 0;
+  private said = '';
 
   constructor(parent: Object3D) {
     this.root.name = 'Mentor';
     this.root.visible = false;
     parent.add(this.root);
+    this.bubbleCanvas.width = 640;
+    this.bubbleCanvas.height = 200;
+    this.bubbleTexture = new CanvasTexture(this.bubbleCanvas);
+    this.bubbleTexture.colorSpace = SRGBColorSpace;
+    this.bubble = new Sprite(new SpriteMaterial({ map: this.bubbleTexture, transparent: true, depthTest: false, depthWrite: false, opacity: 0 }));
+    // About 2 cm letters: readable from your seat, a metre away.
+    this.bubble.scale.set(BUBBLE_W, BUBBLE_W * (200 / 640), 1);
+    this.bubble.position.y = HEIGHT + 0.075;
+    this.bubble.renderOrder = 14;
+    this.bubble.raycast = () => {};
+    this.root.add(this.bubble);
     void this.load();
   }
 
@@ -194,6 +214,56 @@ export class Mentor {
     this.play(cue === 'cheer' ? 'wave' : cue);
   }
 
+  /** A line in her speech bubble for a few seconds (longer lines stay longer). */
+  say(text: string): void {
+    this.bubbleLeft = 2.2 + text.length * 0.055;
+    if (text === this.said) return;
+    this.said = text;
+    const c = this.bubbleCanvas;
+    const g = c.getContext('2d')!;
+    g.clearRect(0, 0, c.width, c.height);
+    // Up to three lines of bold type, centred.
+    g.font = `700 34px ${FONT}`;
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (g.measureText(next).width > 560 && line) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    }
+    if (line) lines.push(line);
+    const shown = lines.slice(0, 3);
+    const h = 40 + shown.length * 40;
+    const top = 150 - h;
+    g.fillStyle = '#ffffff';
+    g.strokeStyle = '#14213d';
+    g.lineWidth = 5;
+    g.beginPath();
+    g.roundRect(8, top, c.width - 16, h, 28);
+    g.fill();
+    g.stroke();
+    // The tail, pointing down to her.
+    g.beginPath();
+    g.moveTo(c.width / 2 - 22, top + h - 3);
+    g.lineTo(c.width / 2, top + h + 34);
+    g.lineTo(c.width / 2 + 22, top + h - 3);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.moveTo(c.width / 2 - 22, top + h);
+    g.lineTo(c.width / 2, top + h + 34);
+    g.lineTo(c.width / 2 + 22, top + h);
+    g.stroke();
+    g.fillStyle = '#14213d';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    shown.forEach((l, i) => g.fillText(l, c.width / 2, top + 40 + i * 40));
+    this.bubbleTexture.needsUpdate = true;
+  }
+
   /** Stand at (x, z) on the board (stage space), facing the player and a little towards the middle. */
   place(x: number, floor: number, z: number): void {
     this.root.position.set(x, floor, z);
@@ -204,5 +274,13 @@ export class Mentor {
     this.time += dt;
     this.root.visible = visible && this.ready;
     if (this.root.visible) this.mixer?.update(dt);
+    // The bubble pops in and fades out.
+    this.bubbleLeft = Math.max(0, this.bubbleLeft - dt);
+    const material = this.bubble.material as SpriteMaterial;
+    const target = this.bubbleLeft > 0 ? 1 : 0;
+    material.opacity += (target - material.opacity) * Math.min(1, dt * 8);
+    this.bubble.visible = material.opacity > 0.02;
+    const pop = 1 + (1 - material.opacity) * 0.15;
+    this.bubble.scale.set(BUBBLE_W * pop, BUBBLE_W * (200 / 640) * pop, 1);
   }
 }

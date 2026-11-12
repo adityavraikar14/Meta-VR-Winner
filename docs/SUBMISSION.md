@@ -23,7 +23,7 @@ Shadowplay: Escape the Lantern
 
 **Inspiration.** Every child has made a shadow puppet; nobody has ever stood on one. We asked what a game would feel like if the shadow of your hand were a real, solid object, and if the physics of light itself were the controls.
 
-**What it does.** A small world unfolds on your real table, with a paper screen behind it and a lantern just behind your eyes. The Great Lantern has shattered into sparks, and a spark can only stand on shadow. Your hands cast the only shadows left.
+**What it does.** A light lab unfolds on your real table: a cutting mat with a true centimetre grid, a white lightbox screen, and a lantern just behind your eyes. Ada, the Lantern's engineer, stands on the table beside you. The Great Lantern has shattered into sparks, and a spark can only stand on shadow. Your hands cast the only shadows left.
 
 Hold your hand flat and its shadow is a bridge. Tilt it and it is a ramp. Flick it upward and the moving shadow bats the spark onto a ledge. Your shadow is your hand magnified by D ÷ d: bring it towards the lantern and the shadow grows long enough to span a gap wider than your arm; move it towards the screen and it shrinks thin enough to slip under a low roof. Every level trades power for precision.
 

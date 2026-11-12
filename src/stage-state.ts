@@ -69,6 +69,10 @@ export const stage = {
   startArena: false,
   /** A reaction for Ada, the mentor on the table (consumed once): wave, point, oops, cheer. */
   cue: null as 'wave' | 'point' | 'oops' | 'cheer' | null,
+  /** A line for Ada to say in her speech bubble (consumed once). */
+  say: null as string | null,
+  /** Burst confetti over the table (consumed once): a level cleared. */
+  confetti: false,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */
   grow: null as { from: Vector3 | null } | null,
 };

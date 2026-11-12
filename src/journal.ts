@@ -95,6 +95,20 @@ export const JOURNAL: JournalPage[] = [
     diagram: 'timing',
   },
   {
+    id: 'build-slide',
+    topic: 'The Inclined Plane',
+    formula: 'a = g (sin θ − μ cos θ)',
+    body: 'On a slope of angle θ, gravity pulls the spark along the surface with g sin θ, and friction holds it back with μ g cos θ. Steeper is faster; too steep and it leaves the glass at the bottom like a ski jump. About 20° is a fast, safe slide.',
+    diagram: 'ramp',
+  },
+  {
+    id: 'build-pair',
+    topic: 'Spans and Supports',
+    formula: 'sag δ = 5wL⁴ ÷ 384EI',
+    body: 'Under its own weight a beam sags with the fourth power of its span L: halve the span and it sags sixteen times less. That is why long bridges rest on piers, and why two planks on a pillar beat one stretched across.',
+    diagram: 'truss',
+  },
+  {
     id: 'broken-bridge',
     topic: 'Why Bridges Are Triangles',
     formula: 'three sides fix one shape',

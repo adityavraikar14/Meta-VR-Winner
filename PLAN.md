@@ -242,7 +242,7 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [x] P1 Daily Light (5.6): seeded, every course proven by simulation (`npm run test:daily`: 120 days, 0 fallbacks), best time per day, day streak, Regular trophy
 
 ### Day 5 — Sun Nov 15
-- [x] P0 Sky backdrop (golden-hour dome; on for Quest 2, desktop and the emulator; Settings → Sky / Room view) · [ ] brighter UI palette
+- [x] P0 Sky backdrop (golden-hour dome; on for Quest 2, desktop and the emulator; Settings → Sky / Room view) · [x] brighter UI palette
 - [x] P1 Real animal voices with credits: the horse neighs and whinnies with real recordings (public domain; CC BY 4.0), credited in CREDITS.md and in game
 - [x] P1 Eating: the berry-eating level left the story; the fox's "eating" (a sitting clip) is now a plain idle
 - [ ] P1 Journal pages for the spark levels: projection, collisions, restitution
@@ -256,6 +256,15 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [ ] P0 Video: shot list, recording on Quest, edit
 - [ ] P0 Devpost text: tagline, description, hand interactions, team
 - [ ] P0 Submit (by Nov 18 evening IST)
+
+### Nov 12, second half: the modern look (Aditya: "not childish, not vintage, like Tiny Golf")
+- [x] The Light Lab stage for every chapter: a green self-healing cutting mat with a true 1 cm grid on a board whose rim takes the chapter's colour, a white lightbox screen on aluminium legs; the jungle, river and mine dioramas (grass, flowers, giant leaves, bamboo) are gone
+- [x] Interface: bold sans type, navy caption pill, white cards with a yellow border, colour-coded 3D buttons, icon tokens for resources, a bright start page with an animated spark preview
+- [x] The Journal as an engineer's notebook (graph paper, navy ink) and four new, accurate sketches for the spark pages; the Bag, the wrist menu, the gauges and labels restyled
+- [x] Ada, the Lantern's engineer: a rigged CC0 character in work clothes with a hard hat and headlamp, standing on the table; she waves, points, flinches, cheers, and speaks (a tip per chapter, encouragement and hints when you miss, praise when you clear)
+- [x] Confetti on every clear; a live physics readout (speed, height, shadow ×) in spark levels
+- [x] The Old Well (the last shadow-animal level) leaves the story: 18 levels, 17 Journal pages
+- [x] Fix: the Ink Duel crashed on Ada's headlamp sprite (ground raycast)
 
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
