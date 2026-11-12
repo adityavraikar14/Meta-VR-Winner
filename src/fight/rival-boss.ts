@@ -30,12 +30,12 @@ import type { RivalMove, RivalSpec } from './rivals.js';
 const FEET_DROP = 1.25;
 /** Life-size heights and Arena health, by rival. */
 const SIZE: Record<string, { height: number; girth: number; hp: number }> = {
-  vance: { height: 1.75, girth: 0.24, hp: 60 },
-  rook: { height: 1.55, girth: 0.3, hp: 55 },
-  vex: { height: 1.68, girth: 0.22, hp: 50 },
-  mako: { height: 1.95, girth: 0.36, hp: 90 },
-  kai: { height: 1.78, girth: 0.24, hp: 65 },
-  morwen: { height: 1.6, girth: 0.22, hp: 80 },
+  vance: { height: 1.75, girth: 0.24, hp: 130 },
+  rook: { height: 1.55, girth: 0.3, hp: 120 },
+  vex: { height: 1.68, girth: 0.22, hp: 110 },
+  mako: { height: 1.95, girth: 0.36, hp: 190 },
+  kai: { height: 1.78, girth: 0.24, hp: 140 },
+  morwen: { height: 1.6, girth: 0.22, hp: 160 },
 };
 /** The arc they roam: this far either side of straight ahead, between these distances. */
 const ARC = 1.0;
@@ -64,6 +64,8 @@ type Mood = 'loading' | 'rest' | 'walk' | 'move' | 'charge' | 'defeated';
 interface Pending {
   delay: number;
   hand: Object3D;
+  /** Fired from here instead of the hand (the ultimate's fan). */
+  from?: Vector3;
   /** A straight shot at this speed, or a lob taking this long. */
   speed?: number;
   lob?: number;
@@ -94,6 +96,8 @@ export class RivalBoss implements Boss {
   private react = 0;
   private loadTime = 0;
   private chargeTime = 0;
+  /** Seconds to their ultimate (only once enraged). */
+  private ultimate = 6;
   /** Where the player is, and which way is "ahead" for them, from the last placement. */
   private readonly origin = new Vector3();
   private readonly forward = new Vector3(0, 0, -1);
@@ -282,6 +286,7 @@ export class RivalBoss implements Boss {
     }
     this.timer -= dt;
     this.react -= dt;
+    if (this.enraged) this.ultimate -= dt;
     switch (this.mood) {
       case 'rest':
         if (this.calm) this.timer = REST;
@@ -315,7 +320,8 @@ export class RivalBoss implements Boss {
       p.delay -= dt;
       if (p.delay > 0) continue;
       this.pending.splice(i, 1);
-      model.handAt(p.hand, this.from);
+      if (p.from) this.from.copy(p.from);
+      else model.handAt(p.hand, this.from);
       if (p.lob) this.shots.lob(this.from, this.aim, p.lob, LOB_GRAVITY);
       else this.shots.fire(this.from, this.aim, p.speed ?? BOLT_SPEED);
       sfx.shoot();
@@ -364,8 +370,12 @@ export class RivalBoss implements Boss {
       model.root.position.copy(this.spot);
       return;
     }
-    const length = model.root.position.distanceTo(this.spot);
-    model.slide(this.spot, seconds ?? Math.max(0.5, length / (this.enraged ? WALK_SPEED * 1.35 : WALK_SPEED)));
+    if (seconds === undefined) {
+      // A real walk (a run when enraged), legs matched to the ground speed.
+      model.walkTo(this.spot, this.enraged ? WALK_SPEED * 2.2 : WALK_SPEED * (0.8 + Math.random() * 0.4));
+      return;
+    }
+    model.slide(this.spot, seconds);
   }
 
   /** A new spot on the arc, well away from the current one; closer when enraged. */
@@ -374,7 +384,6 @@ export class RivalBoss implements Boss {
     const angle = Math.max(-ARC, Math.min(ARC, this.angle + side * (0.45 + Math.random() * 0.75)));
     const far = this.enraged ? NEAR + 0.6 : FAR;
     this.goTo(angle, NEAR + Math.random() * (far - NEAR));
-    model.play('walk');
     this.mood = 'walk';
   }
 
@@ -398,6 +407,22 @@ export class RivalBoss implements Boss {
   /** What they do next: walk somewhere, then attack from there, with their special every few turns. */
   private next(model: Rival3D): void {
     const turn = this.step++;
+    // Enraged, every so often: their ultimate, a fan of seven shots that sweeps across you.
+    if (this.enraged && this.ultimate <= 0) {
+      this.ultimate = 12 + Math.random() * 5;
+      this.mood = 'move';
+      model.play(model.has('skill') ? 'skill' : 'attack');
+      const chest = model.chestAt(new Vector3());
+      const across = new Vector3().crossVectors(this.forward, this.up).normalize();
+      for (let i = 0; i < 7; i++) {
+        const from = chest.clone().addScaledVector(across, (i - 3) * 0.18);
+        from.y += 0.2 + Math.abs(i - 3) * 0.05;
+        this.pending.push({ delay: 0.5 + i * 0.16, hand: model.root, from, speed: BOLT_SPEED * 1.1 });
+      }
+      this.bursts.spawn(chest, this.spec.glow, 0.8);
+      sfx.telegraph();
+      return;
+    }
     // Every other turn they move; Vex moves more than she stands.
     const restless = this.spec.ability === 'tumble' ? 0.7 : 0.5;
     if (turn % 2 === 0 && Math.random() < restless + 0.3) {
@@ -410,8 +435,9 @@ export class RivalBoss implements Boss {
       // Mako comes for you.
       this.mood = 'charge';
       this.chargeTime = 0;
-      this.goTo(this.angle * 0.3, CLOSE, false, 1.5);
-      model.play('walk');
+      this.angle *= 0.3;
+      this.distance = CLOSE;
+      model.walkTo(this.at(this.angle, CLOSE, this.spot), 2.6);
       sfx.telegraph();
       return;
     }
@@ -435,8 +461,7 @@ export class RivalBoss implements Boss {
       }
       if (this.chargeTime >= 6 && this.distance <= CLOSE + 0.01) {
         // Slam done: back out.
-        this.goTo(this.angle, 2.6 + Math.random() * 0.5, false, 1.6);
-        model.play('walk');
+        this.goTo(this.angle, 2.6 + Math.random() * 0.5);
         return;
       }
       this.rest();

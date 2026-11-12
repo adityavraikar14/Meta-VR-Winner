@@ -109,7 +109,7 @@ const KEYS: Record<string, string> = {
   'sky-lantern': '[ light the burner · ] cup a hand under the flame (press again to take it away: too hot scorches the paper)',
   'gate-lock': '[ hold gentle tension (press again to let go) · ] set the binding pin · ; overset it · ’ release the lever (resets)',
   'shadow-dragon': 'First choose: [ Light · ] the Arsenal. Light: [ gather light · ] throw it. Either: ; dragon breathes · ’ dragon dives',
-  duel: '[ draw ink · ] throw it · \' a drawing comes alive · ; rival throws · / rival special · . win · , lose'
+  duel: '[ draw ink · ] throw it · \' a drawing comes alive · ; rival throws · / rival special · + next phase · ` your super · - a herb · . win · , lose'
 };
 
 export function levelKeys(id: string, kind: string): string {

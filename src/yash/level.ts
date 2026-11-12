@@ -37,6 +37,7 @@ import { DragonBoss } from './dragon-boss.js';
 import { WitchBoss } from './witch-boss.js';
 import { RivalBoss } from '../fight/rival-boss.js';
 import { RIVALS } from '../fight/rivals.js';
+import { disposeHerb, herbSprig } from '../fight/herb.js';
 import { Boss, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
 import { type ArenaWin, recordArenaWin } from '../arena-records.js';
@@ -86,6 +87,13 @@ const NEXT_BOSS_LABEL: Record<string, string> = {
 /** The duel's rivals who fight here too, in the order the boss button offers them (Morwen has her own boss). */
 const RIVAL_ORDER = ['vance', 'rook', 'vex', 'mako', 'kai'];
 const UP = new Vector3(0, 1, 0);
+/** Your hearts in a fight; at none you are knocked down and the fight starts over. */
+const ARENA_HEARTS = 8;
+const KNOCKDOWN = 3.5;
+/** Healing herbs: seconds between them while you are hurt, how long one lasts, hearts it gives. */
+const HERB_EVERY = 18;
+const HERB_LIFE = 12;
+const HERB_HEAL = 2;
 
 export class ArsenalLevelSystem extends createSystem({}) {
   private root!: Group;
@@ -125,6 +133,11 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private hurt!: Mesh;
   private hurtMaterial!: MeshBasicMaterial;
   private hurtLeft = 0;
+  /** Your hearts this fight, and seconds left on the floor after a knock-down. */
+  private hearts = ARENA_HEARTS;
+  private down = 0;
+  private herb: { group: Group; life: number } | null = null;
+  private herbTimer = HERB_EVERY;
   /** Development-only readout visible inside the headset, where the browser panel isn't. */
   private headsetReadout: TextPanel | null = null;
   private readoutOn = false;
@@ -158,7 +171,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.player.add(this.root);
     this.bursts = new Bursts(this.root);
     this.opponent = new Opponent(this.root, this.bursts, () => {
-      this.hurtLeft = HURT_TIME;
+      this.playerHit();
     });
     this.boss = this.opponent;
     this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
@@ -214,6 +227,16 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.tutorial.update(dt, time, this.head, this.headQuat, this.forward, this.hands, () => this.boss.fireNow());
     this.arsenal.update(dt, this.forward, this.head);
     this.boss.update(dt, time, this.head, (point, radius) => this.arsenal.absorb(point, radius));
+    this.tendHerb(dt);
+    if (this.down > 0) {
+      this.down -= dt;
+      if (this.down <= 0) {
+        // Back on your feet: a fresh start against the same boss.
+        this.hearts = ARENA_HEARTS;
+        this.boss.reset();
+        this.arsenal.clear();
+      }
+    }
     // Time the fight; a win is recorded (best time, wins, the Arsenal's Journal page).
     if (this.boss.alive) {
       if (!this.wasAlive) this.fightTime = 0;
@@ -440,8 +463,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.statusLabel.set(
       o.loadingText !== null
         ? o.loadingText
-        : o.alive
-          ? `${o.title}  ♥ ${o.hp}/${o.maxHp}`
+        : this.down > 0
+          ? `Knocked down! ${o.title} wins this round. Again in ${Math.ceil(this.down)}…`
+          : o.alive
+          ? `${o.title} ${o.hp}/${o.maxHp}   ·   You ${'♥'.repeat(this.hearts)}${'♡'.repeat(ARENA_HEARTS - this.hearts)}`
           : this.lastWin
             ? `${o.title} defeated in ${Math.round(this.lastWin.seconds)} s! ${this.lastWin.newBest ? '★ New best' : `Best ${Math.round(this.lastWin.best)} s`}${this.lastWin.trophies ? `  ${this.lastWin.trophies}` : ''}`
             : `${o.title} defeated! (${o.defeats})`,
@@ -553,8 +578,63 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.selectBoss(this.opponent);
   }
 
+  /** A shot reached you: a red flash, and a heart (never during the tutorial). */
+  private playerHit(): void {
+    const fresh = this.hurtLeft <= 0;
+    this.hurtLeft = HURT_TIME;
+    // A volley costs one heart, not one per shot: no second heart while the red flash lasts.
+    if (!fresh || this.tutorial.active || this.down > 0 || !this.boss.alive) return;
+    this.hearts = Math.max(0, this.hearts - 1);
+    if (this.hearts === 0) {
+      this.down = KNOCKDOWN;
+      this.hurtLeft = HURT_TIME * 3;
+      sfx.defeated();
+    }
+  }
+
+  /**
+   * While you are hurt, a healing herb grows in the air within reach every
+   * so often. Touch it with either hand before it wilts: two hearts back.
+   */
+  private tendHerb(dt: number): void {
+    if (!this.herb) {
+      if (this.hearts >= ARENA_HEARTS || this.tutorial.active || !this.boss.alive) return;
+      this.herbTimer -= dt;
+      if (this.herbTimer > 0) return;
+      this.herbTimer = HERB_EVERY * (0.8 + Math.random() * 0.4);
+      const group = herbSprig(3);
+      group.position
+        .copy(this.head)
+        .addScaledVector(this.forward, 0.42)
+        .addScaledVector(this.right, (Math.random() < 0.5 ? -1 : 1) * 0.26);
+      group.position.y -= 0.3;
+      this.root.add(group);
+      this.herb = { group, life: HERB_LIFE };
+      return;
+    }
+    const herb = this.herb;
+    herb.life -= dt;
+    herb.group.rotation.y += dt;
+    herb.group.scale.setScalar(Math.max(0.01, Math.min(1, (HERB_LIFE - herb.life) / 0.5, herb.life / 1.5)));
+    for (const side of SIDES) {
+      const hand = this.hands[side];
+      if (!hand.tracked || hand.palm.distanceTo(herb.group.position) > 0.12) continue;
+      this.hearts = Math.min(ARENA_HEARTS, this.hearts + HERB_HEAL);
+      this.bursts.spawn(herb.group.position, 0x7be36a, 0.5);
+      sfx.success();
+      herb.life = 0;
+      break;
+    }
+    if (herb.life <= 0) {
+      disposeHerb(herb.group);
+      this.herb = null;
+    }
+  }
+
   /** Switches who the fight is against, from a clean slate. */
   private selectBoss(boss: Boss): void {
+    this.hearts = ARENA_HEARTS;
+    this.down = 0;
     this.boss.setActive(false);
     this.boss = boss;
     this.arsenal.foe = boss;
@@ -600,7 +680,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     let boss = this.rivals.get(id);
     if (!boss) {
       boss = new RivalBoss(spec, this.root, this.bursts, () => {
-        this.hurtLeft = HURT_TIME;
+        this.playerHit();
       });
       this.rivals.set(id, boss);
     }
@@ -609,7 +689,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
 
   private fightDragon(): void {
     this.dragon ??= new DragonBoss(this.root, this.bursts, () => {
-      this.hurtLeft = HURT_TIME;
+      this.playerHit();
     });
     this.selectBoss(this.dragon);
     sfx.roar();
@@ -617,7 +697,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
 
   private fightWitch(): void {
     this.witch ??= new WitchBoss(this.root, this.bursts, () => {
-      this.hurtLeft = HURT_TIME;
+      this.playerHit();
     });
     this.selectBoss(this.witch);
   }

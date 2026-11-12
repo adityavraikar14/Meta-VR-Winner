@@ -37,8 +37,8 @@ import type { RivalMove, RivalSpec } from './rivals.js';
 /** The colour skin flares to when struck. */
 const STRUCK = new Color(2.2, 1.1, 2.4);
 /** Moves that loop; the rest play once and return to idle (death stays down). */
-const LOOPING = new Set<RivalMove>(['idle', 'walk']);
-const MOVES: RivalMove[] = ['idle', 'walk', 'throw', 'attack', 'skill', 'dodge', 'hit', 'death', 'taunt'];
+const LOOPING = new Set<RivalMove>(['idle', 'walk', 'run']);
+const MOVES: RivalMove[] = ['idle', 'walk', 'run', 'throw', 'attack', 'skill', 'dodge', 'hit', 'death', 'taunt'];
 /** Moves whose release (a hand letting go) the duel listens for. */
 const THROWS: RivalMove[] = ['throw', 'attack', 'skill'];
 
@@ -107,6 +107,8 @@ export class Rival3D {
   private readonly slideTo = new Vector3();
   private slideTime = 1;
   private slideSeconds = 0.8;
+  /** A walk moves at a steady pace (feet on the ground); a dodge eases in and out. */
+  private slideSteady = false;
   /** Set on the frame a throwing hand lets go; read and cleared by the duel. */
   released: Object3D | null = null;
   /** Which move let go (the duel decides what it sends). */
@@ -273,6 +275,30 @@ export class Rival3D {
     this.slideTo.copy(to);
     this.slideTime = 0;
     this.slideSeconds = Math.max(0.2, seconds);
+    this.slideSteady = false;
+  }
+
+  /**
+   * Walk (or run, when faster than a walk) to a spot at `speed` m/s. The
+   * clip plays at the rate that matches the ground speed, so the feet do
+   * not glide: a stride covers about 0.75 of the body's height per second
+   * of walk clip, 1.6 of it per second of run clip. Returns the seconds.
+   */
+  walkTo(to: Vector3, speed: number): number {
+    const distance = this.root.position.distanceTo(to);
+    const seconds = Math.max(0.3, distance / Math.max(0.05, speed));
+    const h = this.spec.height;
+    const run = this.has('run') && speed > h * 1.1;
+    const move: RivalMove = run ? 'run' : 'walk';
+    this.play(move);
+    const action = this.actions[move];
+    if (action) action.timeScale = Math.min(1.8, Math.max(0.6, speed / (h * (run ? 1.6 : 0.75))));
+    this.slideFrom.copy(this.root.position);
+    this.slideTo.copy(to);
+    this.slideTime = 0;
+    this.slideSeconds = seconds;
+    this.slideSteady = true;
+    return seconds;
   }
 
   get sliding(): boolean {
@@ -379,13 +405,19 @@ export class Rival3D {
     let want: number | null = null;
     if (this.slideTime < 1) {
       this.slideTime = Math.min(1, this.slideTime + dt / this.slideSeconds);
-      const k = this.slideTime * this.slideTime * (3 - 2 * this.slideTime);
+      const s = this.slideTime;
+      // A walk keeps a steady pace, easing only in its first and last tenth; a dodge eases throughout.
+      const k = this.slideSteady ? steady(s) : s * s * (3 - 2 * s);
       this.root.position.lerpVectors(this.slideFrom, this.slideTo, k);
-      // Roll the way they are going.
-      if (this.move === 'dodge' || this.move === 'walk') {
+      // Face the way they are going.
+      if (this.move === 'dodge' || this.move === 'walk' || this.move === 'run') {
         want = Math.atan2(this.slideTo.x - this.slideFrom.x, this.slideTo.z - this.slideFrom.z);
       }
-      if (this.slideTime >= 1 && this.move === 'walk') this.play('idle');
+      if (this.slideTime >= 1 && (this.move === 'walk' || this.move === 'run')) {
+        const action = this.actions[this.move];
+        if (action) action.timeScale = 1;
+        this.play('idle');
+      }
     }
     if (want === null && face) want = Math.atan2(face.x - this.root.position.x, face.z - this.root.position.z);
     if (want !== null) {
@@ -416,6 +448,14 @@ export class Rival3D {
 }
 
 const WARD_RADIUS = 0.15;
+
+/** Position along a walk (0 → 1): constant speed, with a short ease at each end. */
+function steady(s: number): number {
+  const e = 0.1;
+  if (s < e) return (s * s) / (2 * e * (1 - e));
+  if (s > 1 - e) return 1 - ((1 - s) * (1 - s)) / (2 * e * (1 - e));
+  return (s - e / 2) / (1 - e);
+}
 
 /** Scale a standing figure to a height, centred on the origin with feet on y=0. */
 function fitHeight(model: Object3D, height: number): void {

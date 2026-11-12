@@ -79,7 +79,6 @@ export class MainMenu {
       const earned = JOURNAL.map((p, i) => (play.journal[p.id] && p.id !== 'duel' ? i : -1)).filter((i) => i >= 0);
       this.journalPage = earned.length ? earned[earned.length - 1] : 0;
     }
-    if (page === 'rivals' && this.page !== 'rivals') this.rival = Math.max(0, ARENA.findIndex((b) => b.id === RIVALS[rivalIndex()].id));
     if (page !== 'rivals') stage.previewRival = null;
     this.page = page;
     this.layout();
@@ -283,39 +282,62 @@ export class MainMenu {
     this.draw(
       'Side games',
       'Side games',
-      `Daily Light: a new course every day.  ·  Workshop: build your own course from light and glass.  ·  Arena: pick one of ${ARENA.length} bosses and fight them life-size with seven weapons, or duel a rival with ink that comes alive.`,
+      `Daily Light: a new course every day.  ·  Workshop: build your own course.  ·  Duel: draw in the air and fight one of ${RIVALS.length} rivals on the table.  ·  Arena: ${ARENA.length} bosses, life-size, seven hand-sign weapons.`,
       `Bring draughts, wards and sun shards from your bag${streak}`,
     );
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Daily', run: () => ({ do: 'daily' }) },
       { label: 'Workshop', run: () => ({ do: 'workshop' }) },
-      { label: 'Arena', run: () => this.go('rivals') },
+      { label: 'Duel', run: () => this.roster('duel') },
+      { label: 'Arena', run: () => this.roster('arena') },
     ];
+  }
+
+  /** Which roster is open: the ink duel's six rivals, or the Arena's eight bosses. */
+  private rosterMode: 'duel' | 'arena' = 'arena';
+
+  /** Opens a roster (dev key D opens the duel's). */
+  openRoster(mode: 'duel' | 'arena'): void {
+    this.roster(mode);
+  }
+
+  private roster(mode: 'duel' | 'arena'): null {
+    this.rosterMode = mode;
+    const list = mode === 'duel' ? RIVALS : ARENA;
+    this.rival = Math.max(0, list.findIndex((b) => b.id === RIVALS[rivalIndex()].id));
+    this.page = 'rivals';
+    this.layout();
+    return null;
   }
 
   private rival = 0;
 
   /**
-   * The Arena's roster: every boss in one list. Each stands beside the screen
-   * as you step through. Arena fights them life-size with the Arsenal's seven
-   * weapons; Ink (the rivals only) is the tabletop duel, where your drawings
-   * come alive.
+   * The rosters. Duel: the six rivals, fought on the table with ink you draw
+   * in the air. Arena: all eight bosses, life-size, with the Arsenal's seven
+   * weapons. Each boss stands beside the screen as you step through; Random
+   * picks one for you.
    */
   private rivals(): Slot[] {
-    const n = ARENA.length;
-    const boss = ARENA[this.rival];
+    const duel = this.rosterMode === 'duel';
+    const list = duel ? RIVALS.map((r) => ({ id: r.id, name: r.name, title: r.title, style: r.style })) : ARENA;
+    const n = list.length;
+    this.rival = ((this.rival % n) + n) % n;
+    const boss = list[this.rival];
     const rivalAt = RIVALS.findIndex((r) => r.id === boss.id);
     stage.previewWorld = null;
     stage.previewRival = rivalAt >= 0 ? rivalAt : null;
     const record = play.arena[boss.id] ?? (boss.id === 'morwen' ? play.arena.witch : undefined);
-    const wins = (record?.wins ?? 0) + (rivalAt >= 0 ? winsAgainst(boss.id) : 0);
-    const special = rivalAt >= 0 ? `Special: ${ABILITY_NAME[RIVALS[rivalAt].ability]}  ·  ` : '';
+    const wins = duel ? winsAgainst(boss.id) : record?.wins ?? 0;
+    const spec = rivalAt >= 0 ? RIVALS[rivalAt] : null;
     this.draw(
-      `The Arena  ·  Boss ${this.rival + 1} of ${n}${wins > 0 ? `  ·  Beaten ×${wins}` : ''}`,
+      `${duel ? 'Ink Duel' : 'The Arena'}  ·  ${this.rival + 1} of ${n}${wins > 0 ? `  ·  Beaten ×${wins}` : ''}`,
       `${boss.name}, ${boss.title}`,
-      boss.style,
-      `${special}${rivalAt >= 0 ? 'Arena: life-size, seven weapons  ·  Ink: draw and throw' : 'Life-size, with the seven hand-sign weapons'}`,
+      duel && spec ? `${spec.style}  ·  Tip: ${spec.tip}` : boss.style,
+      spec
+        ? `Special: ${ABILITY_NAME[spec.ability]}  ·  ${duel ? 'Three phases, an Ink Storm ultimate' : 'Life-size, roams the room, an ultimate when enraged'}`
+        : 'Life-size, with the seven hand-sign weapons',
     );
     const step = (d: number) => () => {
       this.rival = (this.rival + d + n) % n;
@@ -323,29 +345,25 @@ export class MainMenu {
       this.layout();
       return null;
     };
-    const slots: Slot[] = [
+    const fight = (pick: { id: string }) => {
+      const at = RIVALS.findIndex((r) => r.id === pick.id);
+      if (at >= 0) setRivalIndex(at);
+      return duel ? ({ do: 'duel' } as MenuAction) : ({ do: 'arena', boss: pick.id } as MenuAction);
+    };
+    return [
       { label: 'Back', run: () => this.go('battles') },
       { label: 'Prev', run: step(-1) },
+      { label: 'Fight', primary: true, run: () => fight(boss) },
       {
-        label: 'Arena',
-        primary: true,
+        label: 'Random',
         run: () => {
-          if (rivalAt >= 0) setRivalIndex(rivalAt);
-          return { do: 'arena', boss: boss.id };
+          // Anyone but the one on the card (and, in the Arena, not the training drone).
+          const pool = list.filter((b) => b.id !== boss.id && b.id !== 'sentinel');
+          return fight(pool[Math.floor(Math.random() * pool.length)]);
         },
       },
+      { label: 'Next', run: step(1) },
     ];
-    if (rivalAt >= 0) {
-      slots.push({
-        label: 'Ink',
-        run: () => {
-          setRivalIndex(rivalAt);
-          return { do: 'duel' };
-        },
-      });
-    }
-    slots.push({ label: 'Next', run: step(1) });
-    return slots;
   }
 
   private journalPage = 0;
@@ -353,7 +371,7 @@ export class MainMenu {
   /** Turn the open Journal by `d` pages (dev keys ← →); the Trophy Shelf is the last spread. */
   turnJournal(d: number): void {
     if (this.page === 'rivals') {
-      this.rival = (this.rival + d + ARENA.length) % ARENA.length;
+      this.rival += d;
       this.layout();
       return;
     }

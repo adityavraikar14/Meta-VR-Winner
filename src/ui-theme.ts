@@ -42,7 +42,7 @@ const LABEL_COLORS: Record<string, number> = {
   next: BUTTON.blue, prev: BUTTON.blue,
   chapters: BUTTON.blue, journal: BUTTON.teal, bag: BUTTON.orange, battles: BUTTON.red, settings: BUTTON.purple,
   daily: BUTTON.orange, workshop: BUTTON.blue, duel: BUTTON.purple, arena: BUTTON.red, trophies: BUTTON.orange,
-  mute: BUTTON.blue, 'sound on': BUTTON.blue, table: BUTTON.blue, sky: BUTTON.blue, 'room view': BUTTON.blue, around: BUTTON.blue, ink: BUTTON.purple,
+  mute: BUTTON.blue, 'sound on': BUTTON.blue, table: BUTTON.blue, sky: BUTTON.blue, 'room view': BUTTON.blue, around: BUTTON.blue, ink: BUTTON.purple, random: BUTTON.orange,
   relaxed: BUTTON.teal, 'full speed': BUTTON.teal, credits: BUTTON.blue, recenter: BUTTON.blue,
 };
 

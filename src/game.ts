@@ -463,7 +463,7 @@ export class ShadowGameSystem extends createSystem({
     };
     // Dev: D opens the duel's roster (arrows step through it, Enter fights).
     devActions.d = () => {
-      if (this.phase === 'title') this.menu.open('rivals');
+      if (this.phase === 'title') this.menu.openRoster('duel');
     };
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
     // Dev: F9 times each step of loading the dragon.

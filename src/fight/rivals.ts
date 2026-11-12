@@ -11,7 +11,7 @@
  *   parry   Kai slashes your ink straight back at you.
  */
 
-export type RivalMove = 'idle' | 'walk' | 'throw' | 'attack' | 'skill' | 'dodge' | 'hit' | 'death' | 'taunt';
+export type RivalMove = 'idle' | 'walk' | 'run' | 'throw' | 'attack' | 'skill' | 'dodge' | 'hit' | 'death' | 'taunt';
 export type Ability = 'ward' | 'burst' | 'duck' | 'tumble' | 'armor' | 'parry';
 /** What a throw sends: a falling arc, a fast flat bolt, a small pellet, a curveball, or a heavy glob. */
 export type Shot = 'arc' | 'bolt' | 'pellet' | 'curve' | 'heavy';
@@ -70,6 +70,7 @@ export const RIVALS: RivalSpec[] = [
     clips: {
       idle: ['idle'],
       walk: ['walk'],
+      run: [],
       throw: ['throw'],
       attack: ['attack'],
       skill: ['skill'],
@@ -102,6 +103,7 @@ export const RIVALS: RivalSpec[] = [
     clips: {
       idle: ['Idle_Gun', 'Idle'],
       walk: ['Walk'],
+      run: ['Run'],
       throw: ['Gun_Shoot'],
       attack: ['Idle_Gun_Shoot', 'Gun_Shoot'],
       skill: ['Gun_Shoot'],
@@ -134,6 +136,7 @@ export const RIVALS: RivalSpec[] = [
     clips: {
       idle: ['Idle'],
       walk: ['Walk'],
+      run: ['Run'],
       throw: ['Slash'],
       attack: ['Stab'],
       skill: ['Slash'],
@@ -166,6 +169,7 @@ export const RIVALS: RivalSpec[] = [
     clips: {
       idle: ['Idle_Neutral', 'Idle'],
       walk: ['Walk'],
+      run: ['Run'],
       throw: ['Punch_Right'],
       attack: ['Kick_Right'],
       skill: ['Kick_Left'],
@@ -198,6 +202,7 @@ export const RIVALS: RivalSpec[] = [
     clips: {
       idle: ['Idle'],
       walk: ['Walk'],
+      run: ['Run'],
       throw: ['Punch'],
       attack: ['Sword'],
       skill: ['Jump'],
@@ -231,6 +236,7 @@ export const RIVALS: RivalSpec[] = [
     clips: {
       idle: ['Idle_Sword', 'Idle'],
       walk: ['Walk'],
+      run: ['Run'],
       throw: ['Punch_Right'],
       attack: ['Kick_Right'],
       skill: ['Sword_Slash'],

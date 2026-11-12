@@ -23,7 +23,7 @@ import {
   TubeGeometry,
   Vector3,
 } from '@iwsdk/core';
-import { playBoing, playBonk, playBoom, playInk, playPop, playSplat, playThrow, playWhee, playWhoosh } from '../audio.js';
+import { playBoing, playBonk, playBoom, playCollect, playInk, playPop, playSplat, playThrow, playWhee, playWhoosh } from '../audio.js';
 import { sfx } from '../yash/sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
@@ -32,6 +32,7 @@ import { stage } from '../stage-state.js';
 import { Comic } from './comic.js';
 import { Doodle, type DoodleWorld, isClosedLoop } from './doodle.js';
 import { FlatRival } from './flat-rival.js';
+import { disposeHerb, herbSprig } from './herb.js';
 import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 
@@ -67,8 +68,6 @@ const DAMAGE_PER_JOULE = 40;
 const HEAD_BONUS = 1.5;
 /** How far in front of the screen the rival stands, metres. */
 const RIVAL_OUT = 0.3;
-/** How far to either side a dodge can take them. */
-const DODGE_RANGE = 0.26;
 /** Seconds to walk out of the screen, then a breath before the fight. */
 const WALK_TIME = 2.6;
 const READY_TIME = WALK_TIME + 1.8;
@@ -79,6 +78,25 @@ const MAX_DOODLES = 3;
 const DOODLE_BONKS = 3;
 /** After a hit you are safe for this long, so a volley of three costs one heart, not three. */
 const GRACE = 0.9;
+/** Rivals here are three times as tough as their card says: a real fight, not one lucky throw. */
+const HEALTH_SCALE = 3;
+/** No single hit can take more than this (a head hit can reach half again). */
+const MAX_HIT = 22;
+/** Seconds a rival is untouchable while powering up into a new phase. */
+const PHASE_SHIELD = 2.2;
+/** Seconds between their ultimate, in phase 2 and phase 3. */
+const ULTIMATE_EVERY: [number, number] = [15, 10];
+/** Your super: how much of the rival's health you must deal to fill it, and what each bolt does. */
+const SUPER_FILL = 0.22;
+const SUPER_BOLTS = 8;
+const SUPER_DAMAGE = 9;
+/** Healing herbs: seconds between them (while you are hurt), how long one lasts, how close a pinch must be. */
+const HERB_EVERY: [number, number] = [14, 20];
+const HERB_LIFE = 10;
+const HERB_REACH = 0.06;
+/** How far either side of the screen's middle the rival stands and moves (never in front of its middle). */
+const SIDE_NEAR = 0.2;
+const SIDE_FAR = 0.38;
 /** Thick Hide: hits softer than this mostly bounce off. */
 const ARMOR_THRESHOLD = 14;
 
@@ -104,6 +122,8 @@ interface Ink {
   reach: number;
   /** The rival has seen this one coming (and dodged, or not). */
   seen: boolean;
+  /** A bolt of your super: fixed damage, through any defence. */
+  power?: number;
 }
 
 interface Sample {
@@ -151,7 +171,23 @@ export class InkDuel {
   private modeTime = 0;
   private time = 0;
   private hearts = PLAYER_HEARTS;
-  private rivalHealth = this.spec.health;
+  private readonly maxHealth = this.spec.health * HEALTH_SCALE;
+  private rivalHealth = this.maxHealth;
+  /** 1, 2, 3: each third of their health is a phase; each new one powers them up. */
+  private phase = 1;
+  private immune = 0;
+  private ultimate = 0;
+  /** Their ultimate's falling ink, still to come: when, and from where. */
+  private readonly rain: Array<{ delay: number; from: Vector3 }> = [];
+  /** Your super meter (0–1), and the two-hand pull that fires it. */
+  private superMeter = 0;
+  private superReady = false;
+  private pullStart = -1;
+  private readonly superBar: Mesh;
+  private readonly superFrame: Mesh;
+  /** A healing herb floating within reach, and when the next one grows. */
+  private herb: { group: Group; at: Vector3; life: number } | null = null;
+  private herbTimer = HERB_EVERY[0];
   private readonly paper = new Group();
   private readonly rival: FlatRival;
   private readonly inks: Ink[] = [];
@@ -250,6 +286,16 @@ export class InkDuel {
     this.bar.position.set(0.175, 0.315, 0.0125);
     this.bar.renderOrder = 9;
     this.paper.add(this.bar);
+    // Your super meter, under your hearts: fills as you deal damage and block.
+    this.superFrame = new Mesh(new BoxGeometry(0.19, 0.016, 0.001), new MeshBasicMaterial({ color: 0x14213d, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.superFrame.position.set(-0.375, 0.28, 0.011);
+    this.superFrame.renderOrder = 8;
+    this.paper.add(this.superFrame);
+    this.superBar = new Mesh(new BoxGeometry(0.18, 0.009, 0.001).translate(0.09, 0, 0), new MeshBasicMaterial({ color: 0xffc928, transparent: true, depthWrite: false }));
+    this.superBar.position.set(-0.465, 0.28, 0.0125);
+    this.superBar.scale.x = 0.001;
+    this.superBar.renderOrder = 9;
+    this.paper.add(this.superBar);
     // The number that pops up on a hit, with the energy behind it.
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -295,6 +341,18 @@ export class InkDuel {
       this.hearts = 0;
       this.end(false);
     };
+    // Dev: ` fills your super and fires it; - grows a herb now; + jumps to the next phase (not #: Shift+3 is a hand pose).
+    devActions['`'] = () => {
+      this.superMeter = 1;
+      this.fireSuper(this.v.copy(this.head).add(this.w.set(0, -0.15, -0.3)));
+    };
+    devActions['-'] = () => {
+      this.herbTimer = 0;
+      if (this.hearts >= PLAYER_HEARTS) this.hearts = PLAYER_HEARTS - 1;
+    };
+    devActions['+'] = () => {
+      this.hurt(Math.max(1, this.rivalHealth - (this.phase === 1 ? (this.maxHealth * 2) / 3 : this.maxHealth / 3) + 1), null);
+    };
     // Dev: = toggles god mode (their ink costs you nothing).
     devActions['='] = () => {
       this.god = !this.god;
@@ -306,7 +364,7 @@ export class InkDuel {
       ? `${this.spec.id}=${this.foe.moving}${this.foe.warded ? '+ward' : ''}${this.foe.parrying ? '+parry' : ''}${this.foe.ducking ? '+duck' : ''}`
       : this.flat ? 'flat' : `${this.spec.id}:${rivalLoadState(this.spec)}`;
     const doodles = this.doodles.map((d) => `${d.name}(${d.kind},${d.state},${d.bonks})`).join(',');
-    return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)}/${this.spec.health} inks=${this.inks.map((i) => i.state[0]).join('')} doodles=[${doodles}]`;
+    return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)}/${this.maxHealth} phase=${this.phase} super=${Math.round(this.superMeter * 100)}%${this.herb ? ' herb' : ''} inks=${this.inks.map((i) => i.state[0]).join('')} doodles=[${doodles}]`;
   }
 
   // ================================================================ Update
@@ -361,9 +419,13 @@ export class InkDuel {
         this.draw(hands);
         break;
       case 'fight':
+        this.immune = Math.max(0, this.immune - dt);
+        this.watchSuper(hands);
         this.draw(hands);
         this.grab(hands);
+        this.tendHerb(dt, hands);
         this.rivalTurn(dt);
+        this.rainDown(dt);
         this.say();
         break;
       case 'won':
@@ -392,7 +454,7 @@ export class InkDuel {
     if (foe) {
       const walking = this.mode === 'ready' && this.modeTime < WALK_TIME;
       foe.update(dt, this.mode === 'won' || walking ? null : this.head);
-      this.plate.draw(this.rivalHealth / this.spec.health);
+      this.plate.draw(this.rivalHealth / this.maxHealth);
       this.plate.mesh.position.copy(foe.root.position).setY(foe.root.position.y + this.spec.height + 0.07);
       this.plate.mesh.lookAt(this.headWorld);
       // A hand let go: the ink is on its way.
@@ -472,7 +534,10 @@ export class InkDuel {
 
   private walkOut(foe: Rival3D): void {
     const k = Math.min(1, this.modeTime / WALK_TIME);
-    if (k < 1 || !this.taunted) foe.root.position.lerpVectors(this.rivalFrom, this.rivalSpot, k);
+    // Out of the screen and to one side of it, so its middle stays clear.
+    if (this.offset === 0) this.offset = SIDE_NEAR + 0.08;
+    this.u.copy(this.rivalSpot).addScaledVector(this.side, this.offset * k);
+    if (k < 1 || !this.taunted) foe.root.position.lerpVectors(this.rivalFrom, this.u, k);
     // Ink spatters off the screen as they step through it.
     const through = 0.1 / (0.1 + RIVAL_OUT);
     if (!this.emerged && k > through) {
@@ -539,6 +604,8 @@ export class InkDuel {
     if (foe && (foe.moving === 'throw' || foe.moving === 'attack')) text = `${who} winds up… hang a drawing in the air as a shield!`;
     if (foe && foe.moving === 'skill' && this.spec.ability !== 'ward' && this.spec.ability !== 'parry') text = `${who}’s special is coming: shields up!`;
     if (foe?.warded) text = 'Her ward of runes is up: wait for it to fade, then throw!';
+    if (this.superReady) text = 'SUPER READY: pinch with both hands, then pull them apart';
+    if (this.immune > 0) text = `${this.spec.name} is powering up: get your drawings ready`;
     if (foe?.parrying) text = 'He is parrying: anything you throw now comes straight back';
     if (this.noteTime > 0) text = this.note;
     this.caption = text;
@@ -753,9 +820,9 @@ export class InkDuel {
       this.popDoodle(doodle, true);
       return;
     }
-    let damage = Math.round(Math.min(10, 4 + doodle.mass * 40) * (doodle.kind === 'spike' ? 1.5 : 1));
+    let damage = Math.round(Math.min(7, 3 + doodle.mass * 30) * (doodle.kind === 'spike' ? 1.5 : 1));
     if (this.spec.ability === 'armor' && damage < 8) damage = Math.max(1, Math.round(damage * 0.5));
-    this.rivalHealth -= damage;
+    damage = this.hurt(damage, at);
     this.tally.bonks++;
     foe.flinch();
     playBonk();
@@ -791,9 +858,8 @@ export class InkDuel {
     }
     const speed = doodle.vel.length();
     const energy = 0.5 * doodle.mass * speed * speed;
-    let damage = Math.round(Math.min(40, Math.max(6, energy * DAMAGE_PER_JOULE)) * (onHead ? HEAD_BONUS : 1));
-    damage = this.throughArmor(damage, at);
-    this.rivalHealth -= damage;
+    let damage = Math.round(Math.min(MAX_HIT, Math.max(6, energy * DAMAGE_PER_JOULE)) * (onHead ? HEAD_BONUS : 1));
+    damage = this.hurt(this.throughArmor(damage, at), at);
     this.count(energy, doodle.mass, speed, onHead);
     this.tally.bonks++;
     doodle.bonks++;
@@ -903,6 +969,7 @@ export class InkDuel {
           this.comic.pop('BLOCKED!', ink.pos, '#7fd0ff', 0.7, 0.8);
           this.flash('Blocked!', 1);
           this.tally.blocked++;
+          this.superMeter = Math.min(1, this.superMeter + 0.08);
           this.remove(ink);
           shield.age = Math.max(shield.age, HANG_TIME - 1.5);
           continue;
@@ -990,9 +1057,11 @@ export class InkDuel {
       const lateral = this.v.copy(from).sub(foe.root.position).dot(this.side);
       dir = lateral > 0 ? -1 : 1;
     }
-    let next = this.offset + dir * (0.15 + Math.random() * 0.05);
-    if (Math.abs(next) > DODGE_RANGE) next = this.offset - dir * 0.17;
-    this.offset = Math.max(-DODGE_RANGE, Math.min(DODGE_RANGE, next));
+    let next = this.offset + dir * (0.13 + Math.random() * 0.06);
+    // Never stop in front of the screen's middle: roll on across it, or back.
+    if (Math.abs(next) < SIDE_NEAR) next = Math.sign(next || dir) * (SIDE_NEAR + 0.02);
+    if (Math.abs(next) > SIDE_FAR) next = this.offset - dir * 0.14;
+    this.offset = Math.max(-SIDE_FAR, Math.min(SIDE_FAR, next));
     const spot = this.v.copy(this.rivalSpot).addScaledVector(this.side, this.offset);
     spot.y = this.groundFast(spot);
     foe.play('dodge');
@@ -1002,6 +1071,10 @@ export class InkDuel {
 
   /** Did a thrown drawing reach the rival: a ward, a blade, the head or the body? */
   private strike(foe: Rival3D, ink: Ink): 'miss' | 'hit' | 'returned' {
+    if (ink.power) {
+      if (foe.distanceTo(ink.pos, this.w) > this.spec.girth + 0.03) return 'miss';
+      return this.superHit(foe, ink);
+    }
     if (foe.warded && ink.pos.distanceTo(foe.wardAt(this.w)) < foe.wardRadius() + 0.02) {
       for (let i = 0; i < 16; i++) {
         this.v.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(0.3 + Math.random() * 0.4);
@@ -1019,16 +1092,16 @@ export class InkDuel {
     if (!onHead && foe.distanceTo(ink.pos, this.w) > this.spec.girth) return 'miss';
     const speed = ink.vel.length();
     const energy = 0.5 * ink.mass * speed * speed;
-    const base = Math.min(40, Math.max(5, energy * DAMAGE_PER_JOULE));
-    const damage = this.throughArmor(Math.round(base * (onHead ? HEAD_BONUS : 1)), ink.pos);
-    this.rivalHealth -= damage;
+    const base = Math.min(MAX_HIT, Math.max(5, energy * DAMAGE_PER_JOULE));
+    if (ink.power) return this.superHit(foe, ink);
+    const damage = this.hurt(this.throughArmor(Math.round(base * (onHead ? HEAD_BONUS : 1)), ink.pos), ink.pos);
     this.count(energy, ink.mass, speed, onHead);
     foe.flinch();
     this.splashAt(ink.pos, 0x4aa8ff);
     playBoom(0.06 + damage * 0.002);
     this.impact(foe, ink.pos, damage, onHead, 0x9fd8ff);
     // Morwen, wounded at last: her long, maniacal cackle, once.
-    if (this.spec.id === 'morwen' && !this.laughedHurt && this.rivalHealth > 0 && this.rivalHealth < this.spec.health * 0.7) {
+    if (this.spec.id === 'morwen' && !this.laughedHurt && this.rivalHealth > 0 && this.rivalHealth < this.maxHealth * 0.7) {
       this.laughedHurt = true;
       sfx.witchCloseLaugh();
     }
@@ -1094,8 +1167,7 @@ export class InkDuel {
       this.flash('Missed! Throw higher: ink falls on the way', 1.4);
       return;
     }
-    const damage = Math.round(Math.min(40, Math.max(5, energy * DAMAGE_PER_JOULE)));
-    this.rivalHealth -= damage;
+    const damage = this.hurt(Math.round(Math.min(MAX_HIT, Math.max(5, energy * DAMAGE_PER_JOULE))), null);
     this.count(energy, ink.mass, speed, false);
     this.rival.flinch();
     playBoom(0.06 + damage * 0.002);
@@ -1108,6 +1180,211 @@ export class InkDuel {
     t.hits++;
     if (head) t.heads++;
     if (energy > t.best.energy) t.best = { energy, mass, speed };
+  }
+
+  // ========================================================= Phases, super
+
+  /**
+   * Every hit on the rival comes through here. A hit never carries past the
+   * end of a phase: the last third of their health is always a fight of its
+   * own. Crossing into a new phase powers them up. Damage you deal fills
+   * your super meter. Returns the damage that landed.
+   */
+  private hurt(damage: number, at: Vector3 | null, fill = true): number {
+    if (damage <= 0 || this.mode !== 'fight') return 0;
+    if (this.immune > 0) {
+      if (at) this.comic.pop('IMMUNE', at, '#b8c8e0', 0.7, 0.7);
+      return 0;
+    }
+    const floor = this.phase === 1 ? (this.maxHealth * 2) / 3 : this.phase === 2 ? this.maxHealth / 3 : 0;
+    const dealt = Math.min(damage, Math.max(1, Math.ceil(this.rivalHealth - floor)));
+    this.rivalHealth -= dealt;
+    if (fill) this.superMeter = Math.min(1, this.superMeter + dealt / (this.maxHealth * SUPER_FILL));
+    if (this.rivalHealth > 0 && this.rivalHealth <= floor + 0.001) this.enterPhase(this.phase + 1);
+    return dealt;
+  }
+
+  /** Into phase 2 or 3: a moment untouchable, a burst of ink, and everything they do gets worse. */
+  private enterPhase(phase: number): void {
+    this.phase = phase;
+    this.immune = PHASE_SHIELD;
+    this.ultimate = 4;
+    this.nextRival = PHASE_SHIELD + 0.4;
+    this.pending.length = 0;
+    const foe = this.foe;
+    if (foe) {
+      foe.play('idle');
+      foe.play(foe.has('taunt') && this.spec.ability !== 'ward' ? 'taunt' : 'skill');
+      foe.freeze = 0.2;
+      foe.chestAt(this.v);
+      this.shock.position.copy(this.v);
+      (this.shock.material as MeshBasicMaterial).color.setHex(this.spec.glow);
+      this.shockTime = 0;
+      for (let i = 0; i < 40; i++) {
+        this.w.set(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize().multiplyScalar(0.4 + Math.random() * 0.5);
+        this.splashes.emit(this.v, this.w, { life: 0.8, gravity: 1.5, drag: 0.9, size: [0.014, 0.026], from: this.spec.glow, alpha: 0.85 });
+      }
+    }
+    sfx.telegraph();
+    if (this.spec.id === 'morwen') sfx.witchCloseLaugh();
+    this.comic.pop(phase === 2 ? 'PHASE 2' : 'FINAL PHASE', this.front(), this.spec.accent, 1.6, 1.8);
+    this.flash(phase === 2 ? `${this.spec.name} powers up: faster, and an ultimate is coming` : `${this.spec.name} is desperate: everything at once. Finish it!`, 2.6);
+  }
+
+  /**
+   * Their ultimate, Ink Storm (phase 2 and 3): after a warning, ink rains
+   * down on you from above the hill, a few at a time, from different
+   * heights and angles. Hanging drawings still block it.
+   */
+  private castUltimate(foe: Rival3D): void {
+    const count = this.phase >= 3 ? 9 : 6;
+    for (let i = 0; i < count; i++) {
+      const from = foe.chestAt(new Vector3());
+      from.addScaledVector(this.side, (Math.random() - 0.5) * 0.7);
+      from.y += 0.25 + Math.random() * 0.25;
+      this.rain.push({ delay: 1.1 + i * (this.phase >= 3 ? 0.28 : 0.4), from });
+    }
+    foe.play('skill');
+    sfx.telegraph();
+    this.comic.pop('INK STORM', this.above(0.2), this.spec.accent, 1.2, 1.4);
+    this.flash('Ink Storm incoming! Hang drawings above you as a roof', 2.2);
+  }
+
+  private rainDown(dt: number): void {
+    for (let i = this.rain.length - 1; i >= 0; i--) {
+      const drop = this.rain[i];
+      drop.delay -= dt;
+      if (drop.delay > 0) continue;
+      this.rain.splice(i, 1);
+      this.shoot(drop.from, 'arc', { flight: 0.95 + Math.random() * 0.35 });
+    }
+  }
+
+  /**
+   * Your super, Lantern Burst. When the meter is full, pinch with both hands
+   * and pull them apart: eight bolts of light leave the space between your
+   * hands, fixed damage each, through any ward, parry or hide.
+   */
+  private watchSuper(hands: readonly HandState[]): void {
+    if (this.superMeter >= 1 && !this.superReady) {
+      this.superReady = true;
+      this.comic.pop('SUPER READY', this.v.copy(this.head).add(this.w.set(0, -0.12, -0.35)), '#ffc928', 0.8, 1.4);
+      sfx.armed();
+    }
+    const [a, b] = hands;
+    const both = !!a && !!b && a.tracked && b.tracked && a.pinching && b.pinching;
+    if (!this.superReady || !both) {
+      this.pullStart = -1;
+      return;
+    }
+    const gap = a.pinch.distanceTo(b.pinch);
+    if (this.pullStart < 0) this.pullStart = gap;
+    else if (gap - this.pullStart > 0.18) {
+      this.group.worldToLocal(this.v.copy(a.pinch).add(b.pinch).multiplyScalar(0.5));
+      this.fireSuper(this.v);
+      this.pullStart = -1;
+      // Those pinches made no drawings.
+      for (let h = 0; h < 2; h++) {
+        const ink = this.drawing[h];
+        this.drawing[h] = null;
+        if (ink) this.remove(ink);
+      }
+    }
+  }
+
+  private fireSuper(from: Vector3): void {
+    const foe = this.foe;
+    if (!foe || this.mode !== 'fight') return;
+    this.superMeter = 0;
+    this.superReady = false;
+    const start = from.clone();
+    for (let i = 0; i < SUPER_BOLTS; i++) {
+      const ink = this.newInk(false, start);
+      const a = (i / SUPER_BOLTS) * Math.PI * 2;
+      ink.points = [new Vector3(-0.02, 0, 0), new Vector3(0, 0.012, 0), new Vector3(0.02, 0, 0), new Vector3(0, -0.012, 0), new Vector3(-0.02, 0, 0)];
+      ink.mass = 0.02;
+      ink.power = SUPER_DAMAGE;
+      this.rebuild(ink);
+      const T = 0.45 + i * 0.06;
+      foe.chestAt(this.w);
+      ink.vel.copy(this.w).sub(start).divideScalar(T);
+      ink.vel.addScaledVector(this.side, Math.cos(a) * 0.5);
+      ink.vel.y += 0.5 * GRAVITY * T + Math.sin(a) * 0.3;
+      ink.accel = this.side.clone().multiplyScalar(-Math.cos(a) * 0.5 / T * 2);
+      ink.spin = 14;
+      ink.state = 'flying';
+    }
+    this.shock.position.copy(start);
+    (this.shock.material as MeshBasicMaterial).color.setHex(0xffc928);
+    this.shockTime = 0;
+    playBoom(0.12);
+    sfx.success();
+    this.comic.pop('LANTERN BURST', this.v.copy(start).setY(start.y + 0.1), '#ffc928', 1.2, 1.4);
+  }
+
+  /** A bolt of your super lands. */
+  private superHit(foe: Rival3D, ink: Ink): 'hit' {
+    const damage = this.hurt(ink.power ?? 0, ink.pos, false);
+    if (damage > 0) {
+      foe.flinch();
+      this.splashAt(ink.pos, 0xffc928);
+      this.tally.hits++;
+      if (this.rivalHealth <= 0) this.end(true);
+    }
+    return 'hit';
+  }
+
+  // ================================================================= Herbs
+
+  /**
+   * While you are hurt, a healing herb grows in the air within reach every
+   * so often. Pinch it before it wilts: one heart back.
+   */
+  private tendHerb(dt: number, hands: readonly HandState[]): void {
+    if (!this.herb) {
+      if (this.hearts >= PLAYER_HEARTS) return;
+      this.herbTimer -= dt;
+      if (this.herbTimer > 0) return;
+      this.herbTimer = HERB_EVERY[0] + Math.random() * (HERB_EVERY[1] - HERB_EVERY[0]);
+      const towards = this.v.copy(this.paper.position).sub(this.head).setY(0).normalize();
+      const at = this.head.clone().addScaledVector(towards, 0.3).addScaledVector(this.side, (Math.random() < 0.5 ? -1 : 1) * 0.17);
+      at.y -= 0.22;
+      const group = herbSprig();
+      group.position.copy(at);
+      this.group.add(group);
+      this.herb = { group, at, life: HERB_LIFE };
+      playCollect(0.025);
+      this.flash('A healing herb! Pinch it for a heart back', 2.2);
+      return;
+    }
+    const herb = this.herb;
+    herb.life -= dt;
+    const grow = Math.min(1, (HERB_LIFE - herb.life) / 0.4);
+    const wilt = Math.min(1, herb.life / 1.2);
+    herb.group.scale.setScalar(Math.max(0.01, grow * wilt));
+    herb.group.position.y = herb.at.y + Math.sin(this.time * 2.2) * 0.008;
+    herb.group.rotation.y += dt * 0.8;
+    for (const hand of hands) {
+      if (!hand.tracked || !hand.pinchStarted) continue;
+      if (this.group.worldToLocal(this.w.copy(hand.pinch)).distanceTo(herb.group.position) > HERB_REACH) continue;
+      this.hearts = Math.min(PLAYER_HEARTS, this.hearts + 1);
+      for (let i = 0; i < 18; i++) {
+        this.v.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize().multiplyScalar(0.2 + Math.random() * 0.25);
+        this.sparks.emit(herb.group.position, this.v, { life: 0.6, size: [0.012, 0.002], from: 0x7be36a });
+      }
+      sfx.success();
+      this.comic.pop('+1 ♥', herb.group.position, '#7be36a', 0.7, 1);
+      this.flash('Healed: one heart back', 1.4);
+      this.dropHerb();
+      return;
+    }
+    if (herb.life <= 0) this.dropHerb();
+  }
+
+  private dropHerb(): void {
+    if (!this.herb) return;
+    disposeHerb(this.herb.group);
+    this.herb = null;
   }
 
   /** Your best throws, for the Inventor's Journal (only a win fills the page). */
@@ -1126,6 +1403,8 @@ export class InkDuel {
     this.won = won;
     this.setMode(won ? 'won' : 'lost');
     this.pending.length = 0;
+    this.rain.length = 0;
+    this.dropHerb();
     for (const ink of [...this.inks]) if (ink.rival) this.remove(ink);
     const foe = this.foe;
     if (won) {
@@ -1156,7 +1435,7 @@ export class InkDuel {
     }
     this.nextRival -= dt;
     if (this.nextRival <= 0 && this.rival.drawing === 0) {
-      if (Math.random() < 0.25 && this.rivalHealth < this.spec.health * 0.7) {
+      if (Math.random() < 0.25 && this.rivalHealth < this.maxHealth * 0.7) {
         this.rival.raiseShield(3);
         this.nextRival = 3.5;
       } else {
@@ -1180,11 +1459,24 @@ export class InkDuel {
    */
   private foeTurn(dt: number, foe: Rival3D): void {
     this.nextRival -= dt;
-    if (this.nextRival > 0 || foe.busy) return;
-    const hurt = this.rivalHealth < this.spec.health * 0.7;
+    this.ultimate -= dt;
+    if (this.nextRival > 0 || foe.busy || this.immune > 0) return;
+    const hurt = this.phase >= 2;
     const [fresh, pressed] = this.spec.pace;
-    const pace = hurt ? pressed : fresh;
+    // Each phase is faster; no two waits are the same length.
+    const pace = (hurt ? pressed : fresh) * (this.phase >= 3 ? 0.75 : 1) * (0.75 + Math.random() * 0.5);
     const r = Math.random();
+    if (this.phase >= 2 && this.ultimate <= 0) {
+      this.ultimate = ULTIMATE_EVERY[this.phase >= 3 ? 1 : 0] * (0.85 + Math.random() * 0.3);
+      this.castUltimate(foe);
+      this.nextRival = 3.4;
+      return;
+    }
+    // Everyone moves: a walk to a new spot beside the screen, never in front of its middle.
+    if (r < 0.28 && this.spec.ability !== 'tumble') {
+      this.stroll(foe);
+      return;
+    }
     // Vex moves about, but never twice running: a roll is always followed by an attack.
     if (this.spec.ability === 'tumble' && r < 0.35 && !this.justRolled) {
       this.roll(foe, null);
@@ -1194,7 +1486,7 @@ export class InkDuel {
     }
     this.justRolled = false;
     // A parry is an answer, never an opening move; a ward only once she is hurt.
-    const special = this.spec.ability === 'parry' ? 0 : this.spec.ability === 'ward' ? (hurt ? 0.25 : 0) : hurt ? 0.3 : 0.16;
+    const special = this.spec.ability === 'parry' ? 0 : this.spec.ability === 'ward' ? (hurt ? 0.25 : 0.1) : this.phase >= 3 ? 0.4 : hurt ? 0.3 : 0.16;
     const roll = Math.random();
     if (roll < special) {
       foe.play('skill');
@@ -1206,6 +1498,16 @@ export class InkDuel {
       foe.play('throw');
       this.nextRival = pace + Math.random();
     }
+  }
+
+  /** A walk (a run, when hurt) to a new spot on one side or the other. */
+  private stroll(foe: Rival3D): void {
+    const side = Math.random() < 0.6 ? -Math.sign(this.offset || 1) : Math.sign(this.offset || 1);
+    this.offset = side * (SIDE_NEAR + Math.random() * (SIDE_FAR - SIDE_NEAR));
+    const spot = this.v.copy(this.rivalSpot).addScaledVector(this.side, this.offset);
+    spot.y = this.groundFast(spot);
+    const seconds = foe.walkTo(spot, this.phase >= 2 ? 0.55 : 0.32);
+    this.nextRival = seconds + 0.15;
   }
 
   /** A hand let go: what leaves it depends on the move and on who they are. */
@@ -1380,7 +1682,11 @@ export class InkDuel {
     this.heartMeshes.forEach((heart, i) => {
       (heart.material as MeshBasicMaterial).opacity = i < this.hearts ? 0.95 : 0.15;
     });
-    const k = Math.max(0, this.rivalHealth / this.spec.health);
+    this.superBar.scale.x += (Math.max(0.001, this.superMeter) - this.superBar.scale.x) * Math.min(1, dt * 8);
+    const ready = this.superMeter >= 1;
+    (this.superBar.material as MeshBasicMaterial).color.setHex(ready && Math.sin(this.time * 10) > 0 ? 0xffffff : 0xffc928);
+    this.superBar.visible = this.superFrame.visible = this.mode === 'fight' || this.mode === 'ready';
+    const k = Math.max(0, this.rivalHealth / this.maxHealth);
     this.bar.scale.x += (Math.max(0.001, k) - this.bar.scale.x) * Math.min(1, dt * 6);
     if (this.score.time > 0) {
       this.score.time -= dt;

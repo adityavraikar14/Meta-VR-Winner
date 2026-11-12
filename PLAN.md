@@ -299,6 +299,22 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [ ] Machine levels (forge, brewing, sky lantern, lock): same "Your move" box is there; their own look still to brighten
 - [ ] Trailer and Devpost text: show the Arena roster and a roaming rival
 
+### Nov 13, third pass: fights that are real fights (Aditya: "one draw and I won; boss walks like a robot; the duel hid the screen; more powerful bosses, random moves, superpowers, healing herbs; story tasks medium, not childish")
+**Target award: Best New Gaming Experience** (Gaming track, played as a casual puzzle game). Everything is judged against it.
+- [x] Ink Duel: rivals have 3× their old health, in **three phases**; no single hit can carry past a phase, so one lucky throw can never win. Each new phase: untouchable for 2 s, a burst of ink, "PHASE 2" / "FINAL PHASE", faster attacks
+- [x] Ink Duel: no hit takes more than 22 (33 on the head); a living drawing's ram at most 7
+- [x] Ink Duel: **Ink Storm** ultimate in phases 2 and 3 (6, then 9 shots raining from above, after a warning; hanging drawings are a roof)
+- [x] Ink Duel: random moves: waits are never the same length; every rival walks to new spots (runs when hurt), on either side of the screen, never in front of its middle (the screen stays clear)
+- [x] Ink Duel: **your super, Lantern Burst**: damage you deal and throws you block fill a gold meter; when full, pinch with both hands and pull them apart: eight bolts of light, 9 each, through any ward, parry or hide
+- [x] Ink Duel: **healing herbs**: while you are hurt, a herb grows in the air within reach every 14–20 s; pinch it for a heart back
+- [x] Walking: legs matched to ground speed (the clip plays at the rate the body moves), a steady pace with a short ease at each end, a run clip when fast: no more gliding
+- [x] Menus: Battles → **Duel** (the six rivals) and **Arena** (all eight bosses), each with Prev / **Fight** / **Random** / Next; the boss on the card stands beside the screen
+- [x] Arena: rivals have about twice the health (Vance 130, Mako 190, Kai 140…); enraged they run, and fire an **ultimate fan** of seven shots every 12–17 s
+- [x] Arena: **you have 8 hearts**; at none you are knocked down and the round restarts; a volley costs one heart; **healing herbs** float within reach while you are hurt (touch one: two hearts)
+- [ ] On Quest: tune duel and Arena difficulty by feel (target: a first win against a rival takes 2–4 minutes)
+- [ ] Story levels: make the tasks more interactive, medium difficulty (not too easy), with a twist each; not childish
+- [ ] Super move for the Arena too (the Arsenal already has seven weapons)
+
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
 - Fixed: winning the Ink Duel saved the story as finished, so Continue restarted at level 1. Side games (duel, Daily Light) now keep the story's place.
