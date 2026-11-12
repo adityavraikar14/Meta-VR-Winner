@@ -237,15 +237,15 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 
 ### Day 4 — Sat Nov 14
 - [x] P0 New story order: Light & Shadow (spark), Structures (whim, bridges, build levels), Fire & Iron, Hot Air, The Dragon; creature errands retired · [x] first run: table → world grows → prologue → level 1, no menu
-- [x] P0 New intro, start page, home card and chapter names for ages 15–35 · [ ] remaining machine-level lines
+- [x] P0 New intro, start page, home card and chapter names for ages 15–35 · [x] remaining machine-level lines
 - [x] P1 Workshop: build in 3D, play in shadow (the star's shadow is the start, the ring's the gate, glass is the ground); Drop saves the design, Reset restores; the demo course is proven by `npm run test:workshop` · [x] three save slots (Slot button)
 - [x] P1 Daily Light (5.6): seeded, every course proven by simulation (`npm run test:daily`: 120 days, 0 fallbacks), best time per day, day streak, Regular trophy
 
 ### Day 5 — Sun Nov 15
-- [x] P0 Sky backdrop (golden-hour dome; on for Quest 2, desktop and the emulator; Settings → Sky / Room view) · [x] brighter UI palette
+- [x] P0 Sky backdrop (golden-hour dome, Settings → Sky / Room view; off by default since Nov 12 so your room stays visible) · [x] brighter UI palette
 - [x] P1 Real animal voices with credits: the horse neighs and whinnies with real recordings (public domain; CC BY 4.0), credited in CREDITS.md and in game
 - [x] P1 Eating: the berry-eating level left the story; the fox's "eating" (a sitting clip) is now a plain idle
-- [ ] P1 Journal pages for the spark levels: projection, collisions, restitution
+- [x] P1 Journal pages for the spark and build levels (magnification, similar triangles, m g h = ½ m v², restitution, reaction time, inclined plane, beam sag), each with its own sketch
 
 ### Day 6 — Mon Nov 16 (feature freeze at night)
 - [ ] P0 Full playthrough on Quest; frame rate check; fix everything found
@@ -254,16 +254,17 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 
 ### Day 7 — Tue Nov 17
 - [ ] P0 Video: shot list, recording on Quest, edit
-- [ ] P0 Devpost text: tagline, description, hand interactions, team
+- [x] P0 Devpost text drafted in docs/SUBMISSION.md (tagline 129 chars, description ~500 words, hand interactions, video shot list) · [ ] Aditya & Yash: names, emails, confirm division
 - [ ] P0 Submit (by Nov 18 evening IST)
 
 ### Nov 12, second half: the modern look (Aditya: "not childish, not vintage, like Tiny Golf")
-- [x] The Light Lab stage for every chapter: a green self-healing cutting mat with a true 1 cm grid on a board whose rim takes the chapter's colour, a white lightbox screen on aluminium legs; the jungle, river and mine dioramas (grass, flowers, giant leaves, bamboo) are gone
+- [x] ~~The Light Lab stage for every chapter~~: tried, then undone at Aditya's request (too plain); each chapter's own world (jungle, river, mine, mountain) is back, with your real room visible around it
 - [x] Interface: bold sans type, navy caption pill, white cards with a yellow border, colour-coded 3D buttons, icon tokens for resources, a bright start page with an animated spark preview
 - [x] The Journal as an engineer's notebook (graph paper, navy ink) and four new, accurate sketches for the spark pages; the Bag, the wrist menu, the gauges and labels restyled
-- [x] Ada, the Lantern's engineer: a rigged CC0 character in work clothes with a hard hat and headlamp, standing on the table; she waves, points, flinches, cheers, and speaks (a tip per chapter, encouragement and hints when you miss, praise when you clear)
+- [x] ~~Ada, the Lantern's engineer on the table~~: removed at Aditya's request (confusing at the back); the code stays in creatures/mentor.ts
 - [x] Confetti on every clear; a live physics readout (speed, height, shadow ×) in spark levels
-- [x] The Old Well (the last shadow-animal level) leaves the story: 18 levels, 17 Journal pages
+- [x] The Old Well (the last shadow-animal level) leaves the story; with The Slide and Two Pieces added the story is 20 levels, 19 Journal pages
+- [x] Resources as real objects (log bundle, scanned stone, iron ore, herb sprig, crystals, glowing coal) instead of icon coins
 - [x] Fix: the Ink Duel crashed on Ada's headlamp sprite (ground raycast)
 
 ### Notes from building (Nov 12)
