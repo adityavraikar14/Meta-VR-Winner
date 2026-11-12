@@ -16,6 +16,7 @@ interface ArsenalInternals {
   root: Group;
   startTutorial(): void;
   startFight(): void;
+  tutorial: { active: boolean };
 }
 
 export class ArenaSystem extends ArsenalLevelSystem {
@@ -36,6 +37,11 @@ export class ArenaSystem extends ArsenalLevelSystem {
       this.awake = true;
       if (Tutorial.seen()) self.startFight();
       else self.startTutorial();
+    }
+    // The boss picked on the menu's roster, once the tutorial (if any) is out of the way.
+    if (stage.arenaBoss && !self.tutorial.active) {
+      this.fightByName(stage.arenaBoss);
+      stage.arenaBoss = null;
     }
     super.update(delta, time);
   }

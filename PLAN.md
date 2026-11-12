@@ -287,6 +287,17 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [x] Fix: the Test button on the bridge levels was half sunk into the bank; the river is a brighter blue
 - [ ] On Quest: check frame rate with render scale 1.2 (drop to 1.1 if it stutters); check the mood light's strength over real passthrough
 
+### Nov 13, second pass: real, HD, one Arena (Aditya: "themes don't match; HD and real; merge the bosses into the Arena; bosses should roam; keep my real room; not childish")
+- [x] One style everywhere: the spark courses are cut from the world's own photographed ground (earth and grass in the jungle, pebbles and moss by the river, rock and embers at the forge, rock and snow on the mountain, iron and gold for the dragon), so the screen matches the 3D scenery in front of it
+- [x] Your real room by default (passthrough, nothing added); Settings → Around also offers a tinted room or a sky. The photographed room tried today is removed; the emulator shows its own living-room passthrough again
+- [x] One Arena: the duel's six rivals are Arena bosses too. Battles → Arena opens one roster of all 8 bosses (Sentinel, Dragon, Morwen, Vance, Rook, Vex, Mako, Kai); each stands beside the screen as you browse; **Arena** fights them life-size with the seven weapons, **Ink** (rivals only) is the tabletop drawing duel. The boss button in the Arena cycles all eight
+- [x] Life-size rivals roam: they walk an arc in front of you between attacks (closer when enraged below half health), turn to face you to throw, and react to what you do: Vance rolls aside, Rook ducks, Vex tumbles, Kai's blade sends blows back, Mako's hide shrugs off the sword and blaster and he charges in to slam the ground
+- [x] Arena records and the Journal count every boss; "Undisputed" counts a rival beaten in either mode
+- [x] Name plates fit; spark drawn as a shaded ball
+- [ ] On Quest: Arena fights against each rival (walk speed, shot speed, dodge rate by feel)
+- [ ] Machine levels (forge, brewing, sky lantern, lock): same "Your move" box is there; their own look still to brighten
+- [ ] Trailer and Devpost text: show the Arena roster and a roaming rival
+
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
 - Fixed: winning the Ink Duel saved the story as finished, so Continue restarted at level 1. Side games (duel, Daily Light) now keep the story's place.

@@ -9,7 +9,7 @@ import { play, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
 import { PUZZLES, WORLDS } from './world/puzzles.js';
-import { ABILITY_NAME, rivalIndex, RIVALS, rivalsBeaten, setRivalIndex, winsAgainst } from './fight/rivals.js';
+import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './fight/rivals.js';
 
 /**
  * The game's menus, shown on the shadow screen with a row of physical push
@@ -19,7 +19,7 @@ import { ABILITY_NAME, rivalIndex, RIVALS, rivalsBeaten, setRivalIndex, winsAgai
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena' };
+export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena'; boss?: string };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -79,7 +79,7 @@ export class MainMenu {
       const earned = JOURNAL.map((p, i) => (play.journal[p.id] && p.id !== 'duel' ? i : -1)).filter((i) => i >= 0);
       this.journalPage = earned.length ? earned[earned.length - 1] : 0;
     }
-    if (page === 'rivals' && this.page !== 'rivals') this.rival = rivalIndex();
+    if (page === 'rivals' && this.page !== 'rivals') this.rival = Math.max(0, ARENA.findIndex((b) => b.id === RIVALS[rivalIndex()].id));
     if (page !== 'rivals') stage.previewRival = null;
     this.page = page;
     this.layout();
@@ -283,32 +283,39 @@ export class MainMenu {
     this.draw(
       'Side games',
       'Side games',
-      `Daily Light: a new course every day.  ·  Workshop: build your own course from light and glass.  ·  Ink Duel: pick one of ${RIVALS.length} rivals; your drawings come alive and fight.  ·  Arena: seven weapons against three bosses.`,
+      `Daily Light: a new course every day.  ·  Workshop: build your own course from light and glass.  ·  Arena: pick one of ${ARENA.length} bosses and fight them life-size with seven weapons, or duel a rival with ink that comes alive.`,
       `Bring draughts, wards and sun shards from your bag${streak}`,
     );
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Daily', run: () => ({ do: 'daily' }) },
       { label: 'Workshop', run: () => ({ do: 'workshop' }) },
-      { label: 'Duel', run: () => this.go('rivals') },
-      { label: 'Arena', run: () => ({ do: 'arena' }) },
+      { label: 'Arena', run: () => this.go('rivals') },
     ];
   }
 
   private rival = 0;
 
-  /** The Ink Duel's roster: step through the rivals (each stands beside the screen), then fight one. */
+  /**
+   * The Arena's roster: every boss in one list. Each stands beside the screen
+   * as you step through. Arena fights them life-size with the Arsenal's seven
+   * weapons; Ink (the rivals only) is the tabletop duel, where your drawings
+   * come alive.
+   */
   private rivals(): Slot[] {
-    const n = RIVALS.length;
-    const spec = RIVALS[this.rival];
+    const n = ARENA.length;
+    const boss = ARENA[this.rival];
+    const rivalAt = RIVALS.findIndex((r) => r.id === boss.id);
     stage.previewWorld = null;
-    stage.previewRival = this.rival;
-    const wins = winsAgainst(spec.id);
+    stage.previewRival = rivalAt >= 0 ? rivalAt : null;
+    const record = play.arena[boss.id] ?? (boss.id === 'morwen' ? play.arena.witch : undefined);
+    const wins = (record?.wins ?? 0) + (rivalAt >= 0 ? winsAgainst(boss.id) : 0);
+    const special = rivalAt >= 0 ? `Special: ${ABILITY_NAME[RIVALS[rivalAt].ability]}  ·  ` : '';
     this.draw(
-      `Ink Duel  ·  Rival ${this.rival + 1} of ${n}${wins > 0 ? `  ·  Beaten ×${wins}` : ''}`,
-      `${spec.name}, ${spec.title}`,
-      `${spec.style}  ·  Tip: ${spec.tip}`,
-      `Special: ${ABILITY_NAME[spec.ability]}  ·  Strength ${spec.health}  ·  ${rivalsBeaten()} of ${n} rivals beaten`,
+      `The Arena  ·  Boss ${this.rival + 1} of ${n}${wins > 0 ? `  ·  Beaten ×${wins}` : ''}`,
+      `${boss.name}, ${boss.title}`,
+      boss.style,
+      `${special}${rivalAt >= 0 ? 'Arena: life-size, seven weapons  ·  Ink: draw and throw' : 'Life-size, with the seven hand-sign weapons'}`,
     );
     const step = (d: number) => () => {
       this.rival = (this.rival + d + n) % n;
@@ -316,19 +323,29 @@ export class MainMenu {
       this.layout();
       return null;
     };
-    return [
+    const slots: Slot[] = [
       { label: 'Back', run: () => this.go('battles') },
       { label: 'Prev', run: step(-1) },
       {
-        label: 'Fight',
+        label: 'Arena',
         primary: true,
         run: () => {
-          setRivalIndex(this.rival);
-          return { do: 'duel' };
+          if (rivalAt >= 0) setRivalIndex(rivalAt);
+          return { do: 'arena', boss: boss.id };
         },
       },
-      { label: 'Next', run: step(1) },
     ];
+    if (rivalAt >= 0) {
+      slots.push({
+        label: 'Ink',
+        run: () => {
+          setRivalIndex(rivalAt);
+          return { do: 'duel' };
+        },
+      });
+    }
+    slots.push({ label: 'Next', run: step(1) });
+    return slots;
   }
 
   private journalPage = 0;
@@ -336,7 +353,7 @@ export class MainMenu {
   /** Turn the open Journal by `d` pages (dev keys ← →); the Trophy Shelf is the last spread. */
   turnJournal(d: number): void {
     if (this.page === 'rivals') {
-      this.rival = (this.rival + d + RIVALS.length) % RIVALS.length;
+      this.rival = (this.rival + d + ARENA.length) % ARENA.length;
       this.layout();
       return;
     }
@@ -406,6 +423,23 @@ export class MainMenu {
     return null;
   }
 }
+
+/** How each rival fights at life size in the Arena (their duel style is in rivals.ts). */
+const ARENA_STYLE: Record<string, string> = {
+  morwen: 'Lobs ink in arcs, flicks fast bolts, walks in close, and raises a ward of runes that stops every hit while it turns.',
+  vance: 'Roams from spot to spot firing flat, fast shots, then a burst of three. Rolls aside when he sees something coming.',
+  rook: 'Stalks around you and throws a fan of three knives of ink that land one after another. Ducks under anything aimed high.',
+  vex: 'Never where you last aimed: she tumbles across the room, throws two lobs at once and is gone again.',
+  mako: 'Huge and slow. The sword and the blaster bounce off his hide: use the spear, the power ball or the slingshot. He charges in and slams the ground.',
+  kai: 'A swordsman who circles you. Hit him while his blade is up and your blow comes straight back. Strike when he attacks.',
+};
+
+/** Every boss of the Arena, in roster order: the Arsenal's own two, then the six rivals. */
+const ARENA: Array<{ id: string; name: string; title: string; style: string }> = [
+  { id: 'sentinel', name: 'The Sentinel', title: 'training drone', style: 'Floats in front of you and fires slow orbs. The place to learn the seven weapons: sword, spear, power ball, wall, blaster, slingshot and shield.' },
+  { id: 'dragon', name: 'The Shadow Dragon', title: 'life-size', style: 'Fills the room. Breathes fire and spits fireballs: raise the wall, cut them down, or send them back.' },
+  ...RIVALS.map((r) => ({ id: r.id, name: r.name, title: r.title, style: ARENA_STYLE[r.id] ?? r.style })),
+];
 
 /** Who made what (full list with links in CREDITS.md). */
 const CREDITS: Array<[string, string]> = [

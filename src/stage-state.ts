@@ -47,6 +47,8 @@ export const stage = {
   sceneryHidden: false,
   /** A world to show while the player browses chapters (null: the current level's world). */
   previewWorld: null as number | null,
+  /** The world's root (the earth and everything on it), for the things that stand under or around it. */
+  worldRoot: null as Group | null,
   /** The chapter whose colours the room's mood light should take (set by the world each frame). */
   moodWorld: 0,
   /** A duel rival to stand beside the screen while the player browses the roster (null: no one). */
@@ -57,6 +59,8 @@ export const stage = {
   titleMenu: false,
   /** In Yash's Arena: the paper and the stage step aside. */
   arena: false,
+  /** The boss picked on the roster, for the Arena to bring out (consumed once). */
+  arenaBoss: null as string | null,
   /** The level is being played right now (not the menu, the table or the story card). */
   playing: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */

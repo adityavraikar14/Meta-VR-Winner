@@ -828,6 +828,7 @@ export class ShadowGameSystem extends createSystem({
       playAwaken();
       this.startPuzzle(DUEL_INDEX);
     } else if (action.do === 'arena') {
+      stage.arenaBoss = action.boss ?? null;
       this.enterArena();
     } else if (this.fresh) {
       this.startIntro();

@@ -93,48 +93,84 @@ function glowTexture(inner: string, outer: string): CanvasTexture {
   return texture;
 }
 
-/** Each chapter's course in its own bright colours: fill (top, bottom), the lit top edge, the outline. */
-const COURSE_THEMES: Array<[string, string, string, string]> = [
-  ['#52c46a', '#1f8a4c', '#c8f56a', '#0f5a30'], // Light & Shadow: jungle green, lime tops
-  ['#4aa8e8', '#1f66b8', '#a8ecff', '#123f7a'], // Structures: river blue, foam tops
-  ['#f08a4a', '#b8451f', '#ffd27a', '#7a2a10'], // Fire & Iron: forge orange
-  ['#a48cf0', '#5a3fc0', '#ffd1f0', '#33208a'], // Hot Air: dawn violet
-  ['#e85a6a', '#9a2038', '#ffc928', '#5a0f20'], // The Dragon: crimson and gold
+/**
+ * Each chapter's course is made of its world: the same photographed earth,
+ * pebbles and stone as the 3D scenery in front of the screen, with a living
+ * top (grass, moss, embers, snow) where the spark rolls.
+ */
+interface CourseLook {
+  /** The photographed surface that fills the ground (public/textures/<name>_diff.jpg). */
+  fill: string;
+  /** Flat colours used until the photograph has loaded: top, bottom. */
+  flat: [string, string];
+  /** The top band where the spark rolls: its body and its bright lip. */
+  top: [string, string];
+  /** Blades standing up from the top (grass, moss), or none. */
+  tufts: string | null;
+  outline: string;
+}
+
+const COURSE_LOOKS: CourseLook[] = [
+  { fill: 'soil', flat: ['#7a5a3a', '#4a3422'], top: ['#4fae3e', '#a8e86a'], tufts: '#5cc04a', outline: '#2e2114' }, // Light & Shadow: jungle earth and grass
+  { fill: 'pebbles', flat: ['#8a8f8a', '#5a605e'], top: ['#3f9a7a', '#9fe8c8'], tufts: '#4fb08a', outline: '#2a3030' }, // Structures: river pebbles and moss
+  { fill: 'stone', flat: ['#6a5a52', '#3a2e2a'], top: ['#e8742a', '#ffd27a'], tufts: null, outline: '#241a16' }, // Fire & Iron: rock and embers
+  { fill: 'stone', flat: ['#8a90a0', '#5a6070'], top: ['#dfe8f4', '#ffffff'], tufts: null, outline: '#3a4050' }, // Hot Air: mountain rock and snow
+  { fill: 'iron', flat: ['#5a3a3a', '#2e1a1e'], top: ['#d8a020', '#ffe07a'], tufts: null, outline: '#1e1014' }, // The Dragon: dark iron and gold
 ];
 
-/** The course: bright cut-paper ground with a lit top edge, in the chapter's colours. */
-function courseTexture(level: RunLevel): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = Math.round((1024 * H) / W);
+const photos = new Map<string, Promise<HTMLImageElement | null>>();
+
+/** A photographed surface, loaded once; null if it cannot be had. */
+function photo(name: string): Promise<HTMLImageElement | null> {
+  let wait = photos.get(name);
+  if (!wait) {
+    wait = new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = `${import.meta.env.BASE_URL}textures/${name}_diff.jpg`;
+    });
+    photos.set(name, wait);
+  }
+  return wait;
+}
+
+/** The course painted on its canvas: flat colours at first, the photograph once it is here. */
+function paintCourse(canvas: HTMLCanvasElement, level: RunLevel, look: CourseLook, image: HTMLImageElement | null): void {
   const g = canvas.getContext('2d')!;
+  g.clearRect(0, 0, canvas.width, canvas.height);
   const px = (x: number) => ((x + W / 2) / W) * canvas.width;
   const py = (y: number) => ((H / 2 - y) / H) * canvas.height;
-  // Every piece filled first (they overlap at shared edges), then the outline once.
-  const [top, bottom, edge, outline] = COURSE_THEMES[(level.world ?? 0) % COURSE_THEMES.length];
-  const fill = g.createLinearGradient(0, py(0.2), 0, py(-0.2));
-  fill.addColorStop(0, top);
-  fill.addColorStop(1, bottom);
-  g.fillStyle = fill;
-  g.strokeStyle = outline;
-  g.lineWidth = 3;
-  g.lineJoin = 'round';
   const all = new Path2D();
   for (const piece of level.terrain) {
     const path = new Path2D();
     piece.forEach(([x, y], i) => (i ? path.lineTo(px(x), py(y)) : path.moveTo(px(x), py(y))));
     path.closePath();
-    g.fill(path);
-    g.stroke(path);
     all.addPath(path);
   }
-  // The top surfaces, lit where the spark rolls: a thick band, kept inside the ground
-  // so the surface you see is exactly the surface the spark stands on.
+  // The ground itself: the photograph, tiled about every 40 cm, darker with depth like a cut bank.
   g.save();
   g.clip(all);
-  g.strokeStyle = edge;
-  g.lineWidth = 16;
-  g.lineCap = 'round';
+  if (image) {
+    const pattern = g.createPattern(image, 'repeat')!;
+    pattern.setTransform(new DOMMatrix().scale(420 / image.width));
+    g.fillStyle = pattern;
+  } else {
+    const flat = g.createLinearGradient(0, py(0.2), 0, py(-0.2));
+    flat.addColorStop(0, look.flat[0]);
+    flat.addColorStop(1, look.flat[1]);
+    g.fillStyle = flat;
+  }
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  const depth = g.createLinearGradient(0, py(0.25), 0, py(-0.2));
+  depth.addColorStop(0, 'rgba(255,255,255,0.12)');
+  depth.addColorStop(0.35, 'rgba(0,0,0,0)');
+  depth.addColorStop(1, 'rgba(10,6,2,0.5)');
+  g.fillStyle = depth;
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  // The top surfaces: a thick living band and a bright lip, kept inside the ground
+  // so the surface you see is exactly the surface the spark stands on.
+  const tops: Array<[number, number, number, number]> = [];
   for (const piece of level.terrain) {
     for (let i = 0; i < piece.length; i++) {
       const [x0, y0] = piece[i];
@@ -145,15 +181,65 @@ function courseTexture(level: RunLevel): CanvasTexture {
       const ny = -ex;
       if (ny <= 0 || Math.abs(y0 + PAPER_BOUNDS.hh) < 1e-3 && Math.abs(y1 + PAPER_BOUNDS.hh) < 1e-3) continue;
       if (Math.hypot(ex, ey) < 1e-4) continue;
+      tops.push([px(x0), py(y0), px(x1), py(y1)]);
+    }
+  }
+  g.lineCap = 'round';
+  for (const [width, colour] of [[30, look.top[0]], [9, look.top[1]]] as const) {
+    g.strokeStyle = colour;
+    g.lineWidth = width;
+    for (const [x0, y0, x1, y1] of tops) {
       g.beginPath();
-      g.moveTo(px(x0), py(y0));
-      g.lineTo(px(x1), py(y1));
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
       g.stroke();
     }
   }
   g.restore();
+  // The outline, for a crisp edge against the white screen.
+  g.strokeStyle = look.outline;
+  g.lineWidth = 3;
+  g.lineJoin = 'round';
+  g.stroke(all);
+  // Blades standing a few millimetres proud of the top: the same blade every time (no flicker on repaint).
+  if (look.tufts) {
+    g.fillStyle = look.tufts;
+    let n = 0;
+    for (const [x0, y0, x1, y1] of tops) {
+      const length = Math.hypot(x1 - x0, y1 - y0);
+      for (let d = 6; d < length - 4; d += 11) {
+        const k = d / length;
+        const x = x0 + (x1 - x0) * k;
+        const y = y0 + (y1 - y0) * k;
+        const tall = 5 + ((n * 7) % 5);
+        const lean = ((n * 13) % 7) - 3;
+        n++;
+        g.beginPath();
+        g.moveTo(x - 3, y + 1);
+        g.lineTo(x + lean, y - tall);
+        g.lineTo(x + 3, y + 1);
+        g.closePath();
+        g.fill();
+      }
+    }
+  }
+}
+
+/** The course: the chapter's own ground, cut in section, with a living top edge. */
+function courseTexture(level: RunLevel): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = Math.round((1024 * H) / W);
+  const look = COURSE_LOOKS[(level.world ?? 0) % COURSE_LOOKS.length];
+  paintCourse(canvas, level, look, null);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
+  texture.anisotropy = 4;
+  void photo(look.fill).then((image) => {
+    if (!image) return;
+    paintCourse(canvas, level, look, image);
+    texture.needsUpdate = true;
+  });
   return texture;
 }
 

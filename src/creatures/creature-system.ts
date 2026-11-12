@@ -106,6 +106,7 @@ export class CreatureSystem extends createSystem({}) {
     void preloadNature().finally(() => preloadDragon().finally(() => preloadRival(currentRival())));
     this.stageRoot = buildStage();
     this.stageRoot.position.copy(STAGE_OFFSET);
+    stage.worldRoot = this.stageRoot;
     paper.add(this.stageRoot);
 
     // Soft warm key light from above and in front, so plush forms read in

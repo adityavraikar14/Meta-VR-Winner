@@ -35,6 +35,8 @@ import {
 import { HandState, JOINT_COUNT, Side, SIDES } from './hands.js';
 import { DragonBoss } from './dragon-boss.js';
 import { WitchBoss } from './witch-boss.js';
+import { RivalBoss } from '../fight/rival-boss.js';
+import { RIVALS } from '../fight/rivals.js';
 import { Boss, Opponent } from './opponent.js';
 import { sfx } from './sfx.js';
 import { type ArenaWin, recordArenaWin } from '../arena-records.js';
@@ -74,8 +76,15 @@ const BOSS_BUTTON_DROP = 0.12;
 const NEXT_BOSS_LABEL: Record<string, string> = {
   sentinel: '🐉 Fight the dragon',
   dragon: '🧙 Fight Morwen',
-  morwen: '🔮 Back to the sentinel',
+  morwen: '🎯 Fight Sgt. Vance',
+  vance: '🗡️ Fight Captain Rook',
+  rook: '🤸 Fight Vex',
+  vex: '🦈 Fight Mako',
+  mako: '⚔️ Fight Kai',
+  kai: '🔮 Back to the sentinel',
 };
+/** The duel's rivals who fight here too, in the order the boss button offers them (Morwen has her own boss). */
+const RIVAL_ORDER = ['vance', 'rook', 'vex', 'mako', 'kai'];
 const UP = new Vector3(0, 1, 0);
 
 export class ArsenalLevelSystem extends createSystem({}) {
@@ -95,6 +104,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
   /** Made the first time each is fought, so their models only load when needed. */
   private dragon: DragonBoss | null = null;
   private witch: WitchBoss | null = null;
+  private rivals = new Map<string, RivalBoss>();
   /** Who the fight is against right now. */
   private boss!: Boss;
   private bossButton!: PokeButton;
@@ -559,12 +569,42 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.bossButton.setText(NEXT_BOSS_LABEL[boss.name] ?? NEXT_BOSS_LABEL.sentinel);
   }
 
-  /** Sentinel, then the dragon, then Morwen, then back to the sentinel. */
+  /** Sentinel, the dragon, Morwen, then the five rivals in turn, then back to the sentinel. */
   private nextBoss(): void {
     this.tutorial.stop();
     if (this.boss === this.opponent) this.fightDragon();
     else if (this.boss === this.dragon) this.fightWitch();
+    else {
+      const at = this.boss === this.witch ? -1 : RIVAL_ORDER.indexOf(this.boss.name);
+      const next = RIVAL_ORDER[at + 1];
+      if (next && (at >= 0 || this.boss === this.witch)) this.fightRival(next);
+      else this.selectBoss(this.opponent);
+    }
+  }
+
+  /** Starts a fight with a boss by name (the menu's roster): the sentinel, the dragon, Morwen or a rival. */
+  fightByName(name: string): void {
+    this.tutorial.stop();
+    if (name === 'dragon') this.fightDragon();
+    else if (name === 'morwen') this.fightWitch();
+    else if (RIVAL_ORDER.includes(name)) this.fightRival(name);
     else this.selectBoss(this.opponent);
+  }
+
+  private fightRival(id: string): void {
+    const spec = RIVALS.find((r) => r.id === id);
+    if (!spec) {
+      this.selectBoss(this.opponent);
+      return;
+    }
+    let boss = this.rivals.get(id);
+    if (!boss) {
+      boss = new RivalBoss(spec, this.root, this.bursts, () => {
+        this.hurtLeft = HURT_TIME;
+      });
+      this.rivals.set(id, boss);
+    }
+    this.selectBoss(boss);
   }
 
   private fightDragon(): void {

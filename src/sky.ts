@@ -4,20 +4,20 @@ import { BackSide, Color, Mesh, type Object3D, ShaderMaterial, SphereGeometry, V
  * What is around the player. Three choices (Settings cycles them, remembered
  * on the device):
  *
- *   mood  (default) Your real room stays visible, washed in the chapter's
+ *   room  (default) Your real room, through passthrough, nothing added.
+ *   mood  Your real room stays visible, washed in the chapter's
  *         colours: green-gold for the jungle, aqua for the river, amber for
  *         the forge, dawn pink for the mountain, ember red for the dragon.
  *         Soft lights drift around you. On a Quest 2, whose passthrough is
  *         black and white, this is what gives the room colour at all.
- *   room  Plain passthrough, nothing added.
  *   sky   A full golden-hour sky dome instead of the room.
  *
  * The wash is a see-through dome: each pixel adds a little colour and a
  * little alpha over the camera image, so the room is tinted, never hidden.
  */
 
-export type Backdrop = 'mood' | 'room' | 'sky';
-const ORDER: Backdrop[] = ['mood', 'room', 'sky'];
+export type Backdrop = 'room' | 'mood' | 'sky';
+const ORDER: Backdrop[] = ['room', 'mood', 'sky'];
 const KEY = 'shadowplay.backdrop';
 const OLD_KEY = 'shadowplay.sky';
 
@@ -30,7 +30,8 @@ let chosen: Backdrop = (() => {
   } catch {
     // Not remembered: the default.
   }
-  return 'mood';
+  // Mixed reality first: your own room, as it is.
+  return 'room';
 })();
 
 export function backdrop(): Backdrop {
@@ -48,7 +49,7 @@ export function nextBackdrop(): Backdrop {
   return chosen;
 }
 
-export const BACKDROP_NAME: Record<Backdrop, string> = { mood: 'mood light', room: 'your room', sky: 'sky' };
+export const BACKDROP_NAME: Record<Backdrop, string> = { room: 'your room', mood: 'your room, tinted', sky: 'sky' };
 
 export function skyOn(): boolean {
   return chosen === 'sky';
@@ -148,7 +149,7 @@ export class MoodLight {
           float up = smoothstep(-0.35, 0.8, d.y);
           vec3 c = mix(mid, top, up);
           // Strongest around eye level and above; the floor keeps its own look.
-          float a = mix(0.12, 0.3, smoothstep(-0.6, 0.25, d.y));
+          float a = mix(0.06, 0.2, smoothstep(-0.6, 0.25, d.y));
           // Five lights adrift, each on its own slow circle.
           float o = 0.0;
           for (int i = 0; i < 5; i++) {

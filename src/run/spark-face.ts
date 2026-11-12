@@ -56,6 +56,24 @@ export function pickSpark(levelId: string, seed?: number): SparkKind {
   return last;
 }
 
+/** A sphere's shading on a disc: a bright spot upper left, the body colour, a darker limb. */
+function ballTexture(body: number, rim: number): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+  const shade = g.createRadialGradient(46, 42, 4, 64, 64, 66);
+  shade.addColorStop(0, '#ffffff');
+  shade.addColorStop(0.22, hex(body));
+  shade.addColorStop(0.78, hex(body));
+  shade.addColorStop(1, hex(rim));
+  g.fillStyle = shade;
+  g.fillRect(0, 0, 128, 128);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
 /** Drawn a little larger than the physics radius, so the face reads at arm's length. */
 const R = SPARK_RADIUS * 1.2;
 
@@ -86,8 +104,10 @@ export class SparkFace {
       parent.add(mesh);
       return mesh;
     };
-    add(new Mesh(new CircleGeometry(R, 40), flat(info.rim)));
-    add(new Mesh(new CircleGeometry(R * 0.86, 40), flat(info.body)));
+    // The body: a ball of light, shaded like a sphere lit from the upper left, with a crisp dark rim.
+    add(new Mesh(new CircleGeometry(R, 48), flat(info.rim)));
+    const ball = new MeshBasicMaterial({ map: ballTexture(info.body, info.rim), transparent: true, depthWrite: false });
+    add(new Mesh(new CircleGeometry(R * 0.9, 48), ball));
     // Marks on the rim that turn with the roll.
     this.group.add(this.roll);
     for (let i = 0; i < 3; i++) {
