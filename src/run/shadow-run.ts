@@ -3,6 +3,7 @@ import { sparkPace } from '../assist.js';
 import {
   AdditiveBlending,
   CanvasTexture,
+  CircleGeometry,
   Group,
   Matrix4,
   Mesh,
@@ -14,7 +15,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
-import { playAwaken, playClick, playClunk, playHiss, playTink, playTinkle, playWhoosh } from '../audio.js';
+import { playAwaken, playClick, playClunk, playCollect, playHiss, playTink, playTinkle, playWhoosh } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { PushButton } from '../push-button.js';
 import { devActions, devInfo } from '../dev-tools.js';
@@ -23,6 +24,7 @@ import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim } from './run-sim.js';
 import { ShardSet } from './shards.js';
+import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
 import { currentSlot, DEMO, nextSlot, resetWorkshop, saveWorkshop } from './workshop.js';
 import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
 
@@ -46,8 +48,10 @@ const RESPAWN = 0.7;
 const WIN_HOLD = 1.3;
 const TRAIL = 14;
 const BURSTS = 28;
+/** Where a fallen spark's flash shows: just above where it drops out of sight. */
+const LOST_FLASH_Y = -0.2;
 /** After this many misses, the caption gives the level's hint. */
-const HINT_AFTER = 3;
+const HINT_AFTER = 2;
 
 /** Layers just in front of the paper (it is z = 0 in its own space). */
 const Z_COURSE = 0.0016;
@@ -89,7 +93,16 @@ function glowTexture(inner: string, outer: string): CanvasTexture {
   return texture;
 }
 
-/** The course: cut-paper ground in deep indigo with a lit top edge. */
+/** Each chapter's course in its own bright colours: fill (top, bottom), the lit top edge, the outline. */
+const COURSE_THEMES: Array<[string, string, string, string]> = [
+  ['#52c46a', '#1f8a4c', '#c8f56a', '#0f5a30'], // Light & Shadow: jungle green, lime tops
+  ['#4aa8e8', '#1f66b8', '#a8ecff', '#123f7a'], // Structures: river blue, foam tops
+  ['#f08a4a', '#b8451f', '#ffd27a', '#7a2a10'], // Fire & Iron: forge orange
+  ['#a48cf0', '#5a3fc0', '#ffd1f0', '#33208a'], // Hot Air: dawn violet
+  ['#e85a6a', '#9a2038', '#ffc928', '#5a0f20'], // The Dragon: crimson and gold
+];
+
+/** The course: bright cut-paper ground with a lit top edge, in the chapter's colours. */
 function courseTexture(level: RunLevel): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
@@ -98,19 +111,29 @@ function courseTexture(level: RunLevel): CanvasTexture {
   const px = (x: number) => ((x + W / 2) / W) * canvas.width;
   const py = (y: number) => ((H / 2 - y) / H) * canvas.height;
   // Every piece filled first (they overlap at shared edges), then the outline once.
-  const fill = g.createLinearGradient(0, 0, 0, canvas.height);
-  fill.addColorStop(0, '#2c3170');
-  fill.addColorStop(1, '#161936');
+  const [top, bottom, edge, outline] = COURSE_THEMES[(level.world ?? 0) % COURSE_THEMES.length];
+  const fill = g.createLinearGradient(0, py(0.2), 0, py(-0.2));
+  fill.addColorStop(0, top);
+  fill.addColorStop(1, bottom);
   g.fillStyle = fill;
-  for (const piece of level.terrain) {
-    g.beginPath();
-    piece.forEach(([x, y], i) => (i ? g.lineTo(px(x), py(y)) : g.moveTo(px(x), py(y))));
-    g.closePath();
-    g.fill();
-  }
-  // The top surfaces, lit gold where the spark rolls.
-  g.strokeStyle = 'rgba(255, 200, 110, 0.9)';
+  g.strokeStyle = outline;
   g.lineWidth = 3;
+  g.lineJoin = 'round';
+  const all = new Path2D();
+  for (const piece of level.terrain) {
+    const path = new Path2D();
+    piece.forEach(([x, y], i) => (i ? path.lineTo(px(x), py(y)) : path.moveTo(px(x), py(y))));
+    path.closePath();
+    g.fill(path);
+    g.stroke(path);
+    all.addPath(path);
+  }
+  // The top surfaces, lit where the spark rolls: a thick band, kept inside the ground
+  // so the surface you see is exactly the surface the spark stands on.
+  g.save();
+  g.clip(all);
+  g.strokeStyle = edge;
+  g.lineWidth = 16;
   g.lineCap = 'round';
   for (const piece of level.terrain) {
     for (let i = 0; i < piece.length; i++) {
@@ -128,6 +151,76 @@ function courseTexture(level: RunLevel): CanvasTexture {
       g.stroke();
     }
   }
+  g.restore();
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * The guide: a dashed outline where a shadow would solve the level (a hand
+ * for hand levels, a shard's shadow for build levels), with a few words.
+ * Shown from the start in the first two levels, and after two misses elsewhere.
+ */
+function guideTexture(level: RunLevel): CanvasTexture | null {
+  const still = level.solution.filter((s) => !s.v);
+  if (still.length === 0) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = Math.round((1024 * H) / W);
+  const g = canvas.getContext('2d')!;
+  const px = (x: number) => ((x + W / 2) / W) * canvas.width;
+  const py = (y: number) => ((H / 2 - y) / H) * canvas.height;
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  let labelled = false;
+  for (const shape of still) {
+    const path = new Path2D();
+    let cx = 0;
+    let cy = 0;
+    if (shape.poly) {
+      shape.poly.forEach(([x, y], i) => (i ? path.lineTo(px(x), py(y)) : path.moveTo(px(x), py(y))));
+      path.closePath();
+      for (const [x, y] of shape.poly) {
+        cx += x / shape.poly.length;
+        cy += y / shape.poly.length;
+      }
+    } else {
+      // A capsule: the outline of a flat hand's shadow, a little fatter so it reads.
+      const r = Math.max(shape.r, 0.012) * (canvas.width / W) * 1.4;
+      const ax = px(shape.a[0]);
+      const ay = py(shape.a[1]);
+      const bx = px(shape.b[0]);
+      const by = py(shape.b[1]);
+      const angle = Math.atan2(by - ay, bx - ax);
+      path.arc(ax, ay, r, angle + Math.PI / 2, angle - Math.PI / 2);
+      path.arc(bx, by, r, angle - Math.PI / 2, angle + Math.PI / 2);
+      path.closePath();
+      cx = (shape.a[0] + shape.b[0]) / 2;
+      cy = (shape.a[1] + shape.b[1]) / 2;
+    }
+    g.fillStyle = 'rgba(20, 33, 61, 0.16)';
+    g.fill(path);
+    g.setLineDash([14, 12]);
+    g.lineWidth = 5;
+    g.strokeStyle = 'rgba(20, 33, 61, 0.85)';
+    g.stroke(path);
+    g.setLineDash([]);
+    if (!labelled) {
+      labelled = true;
+      const text = shape.poly ? 'glass shadow here' : still.length > 1 ? 'a hand shadow on each' : 'your hand’s shadow here';
+      g.font = `800 30px ${FONT}`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      const x = Math.min(canvas.width - 190, Math.max(190, px(cx)));
+      const y = py(cy) + 62;
+      g.lineWidth = 9;
+      g.strokeStyle = 'rgba(255,255,255,0.95)';
+      g.strokeText(text, x, y);
+      g.fillStyle = '#14213d';
+      g.fillText(text, x, y);
+    }
+  }
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
@@ -137,24 +230,37 @@ function moteTexture(): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
   const g = canvas.getContext('2d')!;
-  const glow = g.createRadialGradient(32, 32, 0, 32, 32, 30);
-  glow.addColorStop(0, 'rgba(255, 236, 170, 0.9)');
-  glow.addColorStop(1, 'rgba(255, 180, 60, 0)');
+  const glow = g.createRadialGradient(32, 32, 0, 32, 32, 31);
+  glow.addColorStop(0, 'rgba(255, 210, 90, 0.75)');
+  glow.addColorStop(1, 'rgba(255, 160, 40, 0)');
   g.fillStyle = glow;
   g.fillRect(0, 0, 64, 64);
-  g.fillStyle = '#fff6d6';
+  // A solid gold star with a dark-gold edge, so it stands out on the white screen.
+  g.fillStyle = '#ffc928';
+  g.strokeStyle = '#c9760a';
+  g.lineWidth = 3;
+  g.lineJoin = 'round';
   g.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 ? 7 : 20;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 ? 9 : 21;
     g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r);
   }
   g.closePath();
   g.fill();
+  g.stroke();
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
 }
+
+/** What each power does, for the caption. */
+const POWER_LINE = {
+  none: '',
+  magnet: 'she pulls motes in from further away',
+  revive: 'if he falls, he gets one second chance from the last ledge',
+  foresight: 'the dots show where she is about to go',
+};
 
 export class ShadowRun {
   readonly group = new Group();
@@ -165,8 +271,19 @@ export class ShadowRun {
 
   private paper = new Group();
   private shadows = new HandShadows();
-  private spark: Sprite;
+  /** Who the spark is this time (see spark-face.ts): a face, a name and a power. */
+  private face: SparkFace;
   private halo: Sprite;
+  /** Seconds of joy left (a mote, the gate, a second chance), and since the spark was dropped. */
+  private joy = 0;
+  private sinceDrop = 0;
+  /** Motes on their way into the spark: seconds left of the flight (0: not flying). */
+  private moteFlight: number[] = [];
+  /** Iris's dotted path ahead. */
+  private ahead: Mesh[] = [];
+  private aheadAt: Array<[number, number]> = [];
+  /** The dashed "your shadow here" guide. */
+  private guide: Mesh | null = null;
   private trail: Sprite[] = [];
   private trailAt: Array<[number, number]> = [];
   private bursts: Burst[] = [];
@@ -203,6 +320,10 @@ export class ShadowRun {
     this.sim = new RunSim(level);
     this.group.add(this.paper);
     root.add(this.group);
+    // Who turns up: the Daily Light's spark is the same for everyone that day.
+    const day = level.id === 'daily' ? Number(new Date().toISOString().slice(0, 10).replace(/-/g, '')) : undefined;
+    this.face = new SparkFace(pickSpark(level.id, day), 10);
+    this.sim.power = this.face.info.power;
 
     const course = new Mesh(
       new PlaneGeometry(W, H),
@@ -213,8 +334,8 @@ export class ShadowRun {
     this.paper.add(course);
 
     this.gateRing = new Mesh(
-      new RingGeometry(GATE_RADIUS * 0.82, GATE_RADIUS, 40),
-      new MeshBasicMaterial({ color: 0xffc95a, transparent: true, opacity: 0.95, depthWrite: false }),
+      new RingGeometry(GATE_RADIUS * 0.76, GATE_RADIUS, 40),
+      new MeshBasicMaterial({ color: 0xff9f1a, transparent: true, opacity: 1, depthWrite: false }),
     );
     this.gateRing.position.set(level.gate[0], level.gate[1], Z_GATE);
     this.gateRing.renderOrder = 4;
@@ -225,30 +346,52 @@ export class ShadowRun {
     this.gateGlow.renderOrder = 4;
     this.paper.add(this.gateGlow);
 
+    const guide = guideTexture(level);
+    if (guide) {
+      this.guide = new Mesh(new PlaneGeometry(W, H), new MeshBasicMaterial({ map: guide, transparent: true, depthWrite: false, opacity: 0 }));
+      this.guide.position.z = Z_COURSE + 0.0004;
+      this.guide.renderOrder = 4;
+      this.guide.visible = false;
+      this.paper.add(this.guide);
+    }
+
     const mote = moteTexture();
     for (const [x, y] of level.motes) {
       const sprite = new Sprite(new SpriteMaterial({ map: mote, transparent: true, depthWrite: false }));
       sprite.position.set(x, y, Z_GATE);
-      sprite.scale.setScalar(0.048);
+      sprite.scale.setScalar(0.052);
       sprite.renderOrder = 5;
       this.paper.add(sprite);
       this.motes.push(sprite);
+      this.moteFlight.push(0);
     }
 
-    const trailTexture = glowTexture('rgba(255,235,180,0.9)', 'rgba(255,170,60,0.35)');
+    const [glowIn, glowOut] = this.face.info.glow;
+    const trailTexture = glowTexture(glowIn, glowOut);
     for (let i = 0; i < TRAIL; i++) {
       const s = new Sprite(new SpriteMaterial({ map: trailTexture, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
       s.renderOrder = 6;
       this.paper.add(s);
       this.trail.push(s);
     }
-    this.halo = new Sprite(new SpriteMaterial({ map: glowTexture('rgba(200,240,255,0.95)', 'rgba(90,180,255,0.45)'), blending: AdditiveBlending, transparent: true, depthWrite: false }));
-    this.halo.scale.setScalar(SPARK_RADIUS * 9);
+    // A soft glow behind it (it is a spark of light), and the spark itself in crisp shapes.
+    this.halo = new Sprite(new SpriteMaterial({ map: glowTexture(glowIn, glowOut), transparent: true, depthWrite: false, opacity: 0.8 }));
+    this.halo.scale.setScalar(SPARK_RADIUS * 5.5);
     this.halo.renderOrder = 7;
-    this.spark = new Sprite(new SpriteMaterial({ map: glowTexture('rgba(255,255,255,1)', 'rgba(220,245,255,0.9)'), transparent: true, depthWrite: false }));
-    this.spark.scale.setScalar(SPARK_RADIUS * 3);
-    this.spark.renderOrder = 8;
-    this.paper.add(this.halo, this.spark);
+    this.paper.add(this.halo, this.face.group);
+    // Iris's path ahead: a row of dots, smaller with distance.
+    if (this.sim.power === 'foresight') {
+      const dot = new CircleGeometry(0.0042, 12);
+      for (let i = 0; i < 8; i++) {
+        const mesh = new Mesh(dot, new MeshBasicMaterial({ color: this.face.info.rim, transparent: true, depthWrite: false, opacity: 0.85 * (1 - i / 10) }));
+        mesh.renderOrder = 8;
+        mesh.visible = false;
+        mesh.scale.setScalar(1 - i * 0.07);
+        this.paper.add(mesh);
+        this.ahead.push(mesh);
+        this.aheadAt.push([0, 0]);
+      }
+    }
 
     const burstTexture = glowTexture('rgba(255,250,230,1)', 'rgba(255,200,90,0.6)');
     for (let i = 0; i < BURSTS; i++) {
@@ -300,12 +443,15 @@ export class ShadowRun {
   private release(): void {
     if (this.sim.state !== 'ready') return;
     this.sim.release();
+    this.sinceDrop = 0;
     playWhoosh(0.25);
   }
 
   update(dt: number, hands: readonly HandState[] = []): void {
     this.time += dt;
     this.alignToPaper();
+    // The course waits behind the level card: nothing shows through it.
+    this.paper.visible = stage.playing || this.sim.state === 'won';
     this.shadows.update(dt);
     this.shards?.update(dt, hands);
     if (this.level.workshop) this.followMarkers();
@@ -376,9 +522,20 @@ export class ShadowRun {
         }
       } else if (event.type === 'mote') {
         playTinkle();
+        playCollect(0.03);
         const [x, y] = this.level.motes[event.index];
-        this.motes[event.index].visible = false;
+        // It flies into the spark (from further off for Mags, whose magnet pulled it).
+        this.moteFlight[event.index] = 0.22;
+        this.joy = 0.7;
         this.burst(x, y, 10, 0.5);
+      } else if (event.type === 'revive') {
+        // Ember's second chance: a flash where he fell, and he is back on the ledge.
+        playAwaken();
+        this.joy = 1;
+        this.burst(event.from[0], LOST_FLASH_Y, 14, 0.8);
+        this.burst(sim.spark.x, sim.spark.y, 12, 0.5);
+        this.trailAt.length = 0;
+        stage.say = 'Ember’s second chance! He is back on the ledge.';
       } else if (event.type === 'lost') {
         this.lostTime = 0;
         stage.cue = 'oops';
@@ -387,6 +544,7 @@ export class ShadowRun {
         playHiss(0.03, 0.35);
       } else if (event.type === 'won') {
         this.wonTime = 0;
+        this.joy = 2;
         this.stars = sim.stars();
         playAwaken();
         this.burst(this.level.gate[0], this.level.gate[1], 20, 0.7);
@@ -428,9 +586,9 @@ export class ShadowRun {
     canvas.height = 96;
     const texture = new CanvasTexture(canvas);
     texture.colorSpace = SRGBColorSpace;
-    const mesh = new Mesh(new PlaneGeometry(0.3, 0.045), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0.92 }));
-    mesh.position.set(0, 0.318, Z_SPARK + 0.001);
-    mesh.renderOrder = 9;
+    const mesh = new Mesh(new PlaneGeometry(0.44, 0.066), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0.95 }));
+    mesh.position.set(0, 0.308, Z_SPARK + 0.001);
+    mesh.renderOrder = 30;
     this.paper.add(mesh);
     this.readout = { canvas, texture, mesh, age: 1 };
   }
@@ -507,6 +665,9 @@ export class ShadowRun {
       if (sim.state === 'live') text = 'There it goes…';
     } else if (this.shadows.capsules.length === 0 && sim.state === 'live') text = 'Raise your hand into the lantern light';
     else if (this.level.showScale && scale > 0) text = `${text}  ·  your shadow ×${scale.toFixed(1)}`;
+    // Before the first drop, say who turned up and what they can do.
+    const info = this.face.info;
+    if (sim.state === 'ready' && sim.retries === 0 && info.power !== 'none' && this.time > 4) text = `${info.name} is here: ${POWER_LINE[info.power]}`;
     const motes = `${sim.motesTaken}/${this.level.motes.length} ✦`;
     this.caption = `${text}  ·  ${motes}`;
   }
@@ -518,10 +679,47 @@ export class ShadowRun {
     const visible = sim.state !== 'lost';
     const waiting = sim.state === 'ready';
     const pulse = waiting ? 1 + 0.18 * Math.sin(this.time * 6) : 1;
-    this.spark.visible = this.halo.visible = visible && sim.state !== 'won' && this.startOk;
-    this.spark.position.set(x, y, Z_SPARK);
-    this.halo.position.set(x, y, Z_SPARK - 0.0005);
-    this.halo.scale.setScalar(SPARK_RADIUS * 9 * pulse);
+    const shown = visible && sim.state !== 'won' && this.startOk;
+    this.face.group.visible = this.halo.visible = shown;
+    // Waiting, it bobs on the spot.
+    const bob = waiting ? Math.abs(Math.sin(this.time * 3.2)) * 0.004 : 0;
+    this.face.group.position.set(x, y + bob, Z_SPARK);
+    this.halo.position.set(x, y + bob, Z_SPARK - 0.0005);
+    this.halo.scale.setScalar(SPARK_RADIUS * 5.5 * pulse);
+    // Its mood: joy at a mote or the gate, wide eyes in free fall. Waiting, it watches your shadow.
+    this.joy = Math.max(0, this.joy - dt);
+    this.sinceDrop += dt;
+    const { vx, vy, airborne } = sim.spark;
+    const mood: SparkMood = this.joy > 0 ? 'happy' : sim.state === 'live' && airborne > 0.2 && vy < -0.3 ? 'scared' : 'calm';
+    let watch: [number, number] | null = null;
+    let nearest = Infinity;
+    for (const c of this.shadows.capsules) {
+      const dx = (c.ax + c.bx) / 2 - x;
+      const dy = (c.ay + c.by) / 2 - y;
+      const d = dx * dx + dy * dy;
+      if (d < nearest) {
+        nearest = d;
+        watch = [dx, dy];
+      }
+    }
+    const tag = waiting ? 1 : Math.max(0, 1 - (this.sinceDrop - 1.2) / 0.6);
+    this.face.update(dt, sim.state === 'live' ? vx : 0, sim.state === 'live' ? vy : 0, mood, watch, sim.state === 'live' || waiting ? Math.min(1, tag) : 0);
+    // Iris: the path ahead, from the same physics run forward on a copy.
+    if (this.ahead.length) {
+      const n = sim.state === 'live' && stage.playing ? sim.foresee(this.shadows.capsules, this.shards?.shadows ?? [], this.aheadAt) : 0;
+      this.ahead.forEach((dot, i) => {
+        dot.visible = i < n;
+        if (i < n) dot.position.set(this.aheadAt[i][0], this.aheadAt[i][1], Z_SPARK - 0.0008);
+      });
+    }
+    // The guide: from the start in the first two levels, after two misses elsewhere; it fades once the spark is moving.
+    if (this.guide) {
+      const early = this.level.id === 'run-bridge' || this.level.id === 'run-ramp';
+      const want = stage.playing && (early || sim.retries >= HINT_AFTER) && (waiting || (sim.state === 'live' && this.sinceDrop < 1.2 && !this.level.build) || (this.level.build && sim.state !== 'won'));
+      const material = this.guide.material as MeshBasicMaterial;
+      material.opacity += ((want ? 0.75 + 0.2 * Math.sin(this.time * 4) : 0) - material.opacity) * Math.min(1, dt * 6);
+      this.guide.visible = material.opacity > 0.02;
+    }
     // The trail: where the spark has been, fading.
     if (sim.state === 'live') {
       this.trailAt.unshift([x, y]);
@@ -545,9 +743,19 @@ export class ShadowRun {
     this.gateGlow.position.set(gx, gy, Z_GATE);
     this.gateRing.visible = this.gateGlow.visible = this.gateOk;
     this.gateGlow.scale.setScalar(GATE_RADIUS * (3 + 0.25 * Math.sin(this.time * 2.4) + 4 * flare));
-    // Motes bob gently.
+    // Motes bob gently; a collected one flies into the spark and is gone.
     this.motes.forEach((m, i) => {
       if (!m.visible) return;
+      if (this.moteFlight[i] > 0) {
+        this.moteFlight[i] -= dt;
+        const k = Math.min(1, dt * 18);
+        m.position.x += (x - m.position.x) * k;
+        m.position.y += (y - m.position.y) * k;
+        m.scale.setScalar(Math.max(0.006, m.scale.x * (1 - dt * 6)));
+        m.material.rotation += dt * 14;
+        if (this.moteFlight[i] <= 0) m.visible = false;
+        return;
+      }
       const [mx, my] = this.level.motes[i];
       m.position.set(mx, my + Math.sin(this.time * 2 + i) * 0.004, Z_GATE);
       m.material.rotation = this.time * 0.8 + i;

@@ -1,4 +1,4 @@
-import { buildSky, skyOn } from './sky.js';
+import { buildSky, MoodLight, skyOn } from './sky.js';
 import {
   CanvasTexture,
   Color,
@@ -99,6 +99,7 @@ interface HandRig {
  */
 export class ShadowStageSystem extends createSystem({}) {
   private sky!: Mesh;
+  private mood!: MoodLight;
   private paper!: Group;
   private lantern!: SpotLight;
   private maskCamera!: PerspectiveCamera;
@@ -136,6 +137,10 @@ export class ShadowStageSystem extends createSystem({}) {
   init(): void {
     // A bright sky around you where passthrough is black and white (Quest 2) or absent (desktop).
     this.sky = buildSky(this.scene);
+    this.mood = new MoodLight(this.scene);
+    // A sharper picture in the headset: render a fifth more pixels each way than the default.
+    // (Must be set before the session starts; it costs frame time, so not more than this.)
+    this.renderer.xr.setFramebufferScaleFactor(1.2);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
@@ -204,6 +209,7 @@ export class ShadowStageSystem extends createSystem({}) {
 
   update(delta: number): void {
     this.sky.visible = skyOn();
+    this.mood.update(delta, stage.moodWorld);
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     if (stage.command === 'recenter') {
       stage.command = null;
@@ -278,7 +284,8 @@ export class ShadowStageSystem extends createSystem({}) {
     this.lantern.name = 'Lantern';
     this.lantern.castShadow = true;
     this.lantern.penumbra = 0.4;
-    this.lantern.shadow.mapSize.set(1024, 1024);
+    // A fine shadow map, so the edge of your hand's shadow is crisp on the screen.
+    this.lantern.shadow.mapSize.set(2048, 2048);
     this.lantern.shadow.bias = -0.0005;
     this.lantern.shadow.camera.near = 0.05;
     this.paper.add(this.lantern);

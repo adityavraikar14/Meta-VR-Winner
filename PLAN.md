@@ -276,6 +276,17 @@ So a hand moving across the light moves its shadow D/d times faster, and a hand 
 - [x] Fair fights: after a hit you are safe for 0.9 s, so a volley costs one heart; wins per rival are remembered; "Undisputed" trophy for beating all six
 - [ ] On Quest: play each rival once; tune pace and dodge chances by feel
 
+### Nov 13: the happy pass (Aditya: "blurry, a little depressing, instructions not clear, characters should act and have powers; like Little Critters and Tiny Golf")
+We compete in the **Gaming track** as a casual puzzle game (seated, hands only); the awards to aim at are Best New Gaming Experience, Best First Five Minutes and Boldest Original Concept.
+- [x] The spark is a character, drawn in crisp shapes instead of a glow blob: eyes that look where it is going, widen in free fall, squeeze shut with joy at a mote, blink; rim marks that turn at v ÷ r as it rolls
+- [x] Four sparks with powers, picked at random (never the same twice running; the first two levels are always Lumi; the Daily Light's spark is the same for everyone that day): Lumi (none), Mags (magnet: motes from 7.5 cm), Ember (one second chance from the last ledge), Iris (a dotted line of her next 0.6 s, from the physics run ahead on a copy)
+- [x] Mood light: your room stays visible but is washed in the chapter's colours (green-gold, aqua, forge amber, dawn pink, ember red) with soft drifting lights; Settings → Around cycles mood / room / sky. Gives a Quest 2's grey passthrough colour
+- [x] Courses in each chapter's bright colours with a lit top band; gold motes with a dark edge; a bolder gate
+- [x] Clear instructions: a yellow "Your move" box on every level card; a dashed "your hand's shadow here" guide (always in the first two levels, after two misses elsewhere); the hint comes after two misses, not three; the course waits behind the card
+- [x] Sharper: shadow map 2048 (crisp hand-shadow edges), headset render scale 1.2, a readout half as big again
+- [x] Fix: the Test button on the bridge levels was half sunk into the bank; the river is a brighter blue
+- [ ] On Quest: check frame rate with render scale 1.2 (drop to 1.1 if it stutters); check the mood light's strength over real passthrough
+
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
 - Fixed: winning the Ink Duel saved the story as finished, so Continue restarted at level 1. Side games (duel, Daily Light) now keep the story's place.

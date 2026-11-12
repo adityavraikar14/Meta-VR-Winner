@@ -181,7 +181,8 @@ export class Bridge {
     const test = new PushButton(this.group, 'Test');
     for (const [button, x] of [[undo, -0.25], [test, 0.25]] as const) {
       button.size = 0.42;
-      button.root.position.set(x, DECK_Y + 0.004, 0.066);
+      // Clear of the bank: the button tilts to face you, so its centre sits a full radius above the road.
+      button.root.position.set(x, DECK_Y + 0.034, 0.07);
       button.show(true);
     }
     this.buttons = { test, undo };
@@ -712,7 +713,7 @@ export class Bridge {
     }
     // The river running between them.
     // A body of water a few centimetres deep, so it drowns the meadow grass.
-    const river = new Mesh(new BoxGeometry(SPAN * 2 + 0.01, RIVER_Y, 0.5), new MeshStandardMaterial({ color: 0x24434c, roughness: 0.1, metalness: 0.2 }));
+    const river = new Mesh(new BoxGeometry(SPAN * 2 + 0.01, RIVER_Y, 0.5), new MeshStandardMaterial({ color: 0x3aa6c4, emissive: 0x0e5a78, emissiveIntensity: 0.2, roughness: 0.08, metalness: 0.1 }));
     river.position.set(0, RIVER_Y / 2, 0);
     this.group.add(river);
   }

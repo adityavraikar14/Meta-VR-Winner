@@ -1,5 +1,5 @@
 import { isRelaxed, setRelaxed } from './assist.js';
-import { setSky, skyOn } from './sky.js';
+import { backdrop, BACKDROP_NAME, nextBackdrop } from './sky.js';
 import type { Object3D, Vector3 } from '@iwsdk/core';
 import { isMuted, playClick, playPrompt, playTinkle, playUnfold, setMuted } from './audio.js';
 import { craft, needsText, RECIPES } from './bag.js';
@@ -212,7 +212,7 @@ export class MainMenu {
     this.draw(
       'Shadowplay',
       'Settings',
-      `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}  ·  Around you: ${skyOn() ? 'sky' : 'your room'}  ·  Spark: ${isRelaxed() ? 'relaxed (60%)' : 'full speed'}`,
+      `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}  ·  Around you: ${BACKDROP_NAME[backdrop()]}  ·  Spark: ${isRelaxed() ? 'relaxed (60%)' : 'full speed'}`,
       'During play, look at your open palm for the quick menu',
     );
     return [
@@ -227,9 +227,9 @@ export class MainMenu {
       },
       { label: 'Table', run: () => ({ do: 'table' }) },
       {
-        label: skyOn() ? 'Room view' : 'Sky',
+        label: 'Around',
         run: () => {
-          setSky(!skyOn());
+          nextBackdrop();
           this.layout();
           return null;
         },

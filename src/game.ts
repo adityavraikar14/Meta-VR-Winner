@@ -960,7 +960,7 @@ export class ShadowGameSystem extends createSystem({
           : puzzle.id === 'workshop'
             ? 'Side game · build your own course'
           : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
-      this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story);
+      this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story, `Your move: ${puzzle.ask}`);
       this.setCaption(puzzle.ask);
     } else {
       this.drawBanner(
@@ -1572,8 +1572,32 @@ export class ShadowGameSystem extends createSystem({
     }
     ctx.fillStyle = UI.ink;
     ctx.font = font(500, 34);
-    wrapText(ctx, body, w / 2, 262, w - 200, 46);
-    if (footer) {
+    const move = /^Your move: /.test(footer) ? footer.replace(/^Your move: /, '') : '';
+    // A long story steps down a size so it stays clear of the box below.
+    if (move && body.length > 150) ctx.font = font(500, 28);
+    wrapText(ctx, body, w / 2, move ? (body.length > 150 ? 236 : 246) : 262, w - 200, move ? (body.length > 150 ? 34 : 42) : 46);
+    if (move) {
+      // What to do, in a yellow box you cannot miss: a label, then the instruction in bold.
+      ctx.fillStyle = '#fff3c4';
+      themeRoundRect(ctx, 70, 344, w - 140, 124, 28);
+      ctx.fill();
+      ctx.strokeStyle = UI.yellow;
+      ctx.lineWidth = 5;
+      themeRoundRect(ctx, 70, 344, w - 140, 124, 28);
+      ctx.stroke();
+      ctx.fillStyle = UI.navy;
+      ctx.font = font(800, 22);
+      ctx.fillText('👉  YOUR MOVE', w / 2, 366);
+      // As large as fits in two lines.
+      let px = 33;
+      ctx.font = font(800, px);
+      while (px > 22 && ctx.measureText(move).width > (w - 200) * 1.85) {
+        px -= 1;
+        ctx.font = font(800, px);
+      }
+      const oneLine = ctx.measureText(move).width <= w - 200;
+      wrapText(ctx, move, w / 2, oneLine ? 420 : 403, w - 200, px + 6);
+    } else if (footer) {
       ctx.fillStyle = UI.green;
       fitFont(ctx, footer, 700, 28, w - 140);
       ctx.fillText(footer, w / 2, h - 70);

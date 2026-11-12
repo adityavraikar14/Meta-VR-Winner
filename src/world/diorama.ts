@@ -242,6 +242,7 @@ export class Diorama {
     if (this.worldIndex >= 0 && nature.version !== this.decorVersion) this.decorate(this.worldIndex);
     // Browsing chapters: the room becomes each chapter's world as it is shown.
     const want = stage.previewWorld ?? this.levelWorld();
+    stage.moodWorld = want;
     this.previewing = want !== this.levelWorld();
     if (this.worldIndex >= 0 && want !== this.worldIndex) {
       this.decorate(want);
