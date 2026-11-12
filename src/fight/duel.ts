@@ -23,7 +23,7 @@ import {
   TubeGeometry,
   Vector3,
 } from '@iwsdk/core';
-import { playBoing, playBonk, playBoom, playChuckle, playInk, playPop, playSplat, playThrow, playWhee, playWhoosh } from '../audio.js';
+import { playBoing, playBonk, playBoom, playInk, playPop, playSplat, playThrow, playWhee, playWhoosh } from '../audio.js';
 import { sfx } from '../yash/sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
@@ -532,9 +532,9 @@ export class InkDuel {
     const held = this.inks.some((i) => i.state === 'held');
     const buddy = this.doodles.find((d) => d.state !== 'gone');
     let text = hanging ? `Pinch your drawing to grab it, then throw it at ${who}` : 'Draw a line to throw, or close a shape to bring it to life';
-    if (buddy && !hanging) text = `${buddy.name} is going for ${who}! Keep drawing, or pinch ${buddy.name} and throw`;
+    if (buddy && !hanging) text = `${buddy.name} is closing on ${who}. Keep drawing, or pinch it and throw`;
     if (held) text = 'Throw! Big drawings hit harder, small ones fly faster';
-    if (this.doodles.some((d) => d.state === 'held')) text = 'Throw your doodle! It hits by ½mv², like everything else';
+    if (this.doodles.some((d) => d.state === 'held')) text = 'Throw it! It hits by ½mv², like everything else';
     if (this.rival.drawing > 0) text = 'The Rival is drawing… leave a drawing hanging in the air as a shield!';
     if (foe && (foe.moving === 'throw' || foe.moving === 'attack')) text = `${who} winds up… hang a drawing in the air as a shield!`;
     if (foe && foe.moving === 'skill' && this.spec.ability !== 'ward' && this.spec.ability !== 'parry') text = `${who}’s special is coming: shields up!`;
@@ -668,14 +668,9 @@ export class InkDuel {
       this.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.25 + Math.random() * 0.3);
       this.sparks.emit(doodle.pos, this.v, { life: 0.45, size: [0.012, 0.002], from: doodle.color });
     }
-    playChuckle(this.voice(doodle));
-    this.comic.pop(`${doodle.name}!`, this.v.copy(doodle.pos).setY(doodle.pos.y + doodle.radius + 0.07), hex(doodle.color), 0.8, 1.3);
-    this.flash(`It’s alive! ${doodle.name} the ${doodle.what} is going for ${this.foe ? this.spec.name : 'the Rival'}`, 2.2);
-  }
-
-  /** Small doodles squeak, big ones rumble. */
-  private voice(doodle: Doodle): number {
-    return Math.min(1.5, Math.max(0.7, 1.75 - doodle.radius * 13));
+    playBoom(0.05);
+    this.comic.pop(doodle.name.toUpperCase(), this.v.copy(doodle.pos).setY(doodle.pos.y + doodle.radius + 0.07), hex(doodle.color), 0.8, 1.3);
+    this.flash(`Your drawing rises: ${doodle.name} closes on ${this.foe ? this.spec.name : 'the Rival'}`, 2.2);
   }
 
   private runDoodles(dt: number, hands: readonly HandState[]): void {
@@ -746,7 +741,7 @@ export class InkDuel {
   private bonk(foe: Rival3D, doodle: Doodle): void {
     const at = foe.headAt(this.w).clone();
     if (foe.warded) {
-      this.comic.pop('BOING!', at, '#8affb8', 0.8);
+      this.comic.pop('WARDED', at, '#8affb8', 0.8);
       playBoing();
       this.flash(`Her ward bounces ${doodle.name} right off`, 1.4);
       return;
@@ -754,7 +749,7 @@ export class InkDuel {
     if (foe.parrying) {
       this.comic.pop('SLICED!', at, this.spec.accent, 0.9);
       sfx.slice();
-      this.flash(`${doodle.name} met the blade. Rude.`, 1.8);
+      this.flash(`${doodle.name} is cut down by the blade`, 1.8);
       this.popDoodle(doodle, true);
       return;
     }
@@ -764,8 +759,7 @@ export class InkDuel {
     this.tally.bonks++;
     foe.flinch();
     playBonk();
-    playChuckle(this.voice(doodle), 0.035);
-    this.comic.pop(`BONK! −${damage}`, at.setY(at.y + 0.06), hex(doodle.color), 0.9);
+    this.comic.pop(`SLAM −${damage}`, at.setY(at.y + 0.06), hex(doodle.color), 0.9);
     for (let i = 0; i < 10; i++) {
       this.v.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize().multiplyScalar(0.3 + Math.random() * 0.3);
       this.sparks.emit(at, this.v, { life: 0.35, size: [0.012, 0.002], from: doodle.color });
@@ -776,7 +770,7 @@ export class InkDuel {
       return;
     }
     if (doodle.bonks >= DOODLE_BONKS) {
-      this.flash(`${doodle.name} has done enough for one day. Off they pop!`, 1.8);
+      this.flash(`${doodle.name} is spent and breaks back into ink`, 1.8);
       this.popDoodle(doodle, true);
     }
   }
@@ -847,7 +841,6 @@ export class InkDuel {
       const doodle = this.nearDoodle(p);
       if (doodle) {
         doodle.hold(h);
-        playChuckle(this.voice(doodle) * 1.2, 0.03);
       }
     });
   }
@@ -917,7 +910,7 @@ export class InkDuel {
         // A living drawing in the way takes the hit.
         const victim = this.doodles.find((d) => d.loose && d.pos.distanceTo(ink.pos) < d.radius + 0.025);
         if (victim) {
-          this.comic.pop('SPLAT!', victim.pos, hex(this.spec.glow), 0.8);
+          this.comic.pop('DOWN', victim.pos, hex(this.spec.glow), 0.8);
           this.flash(FALLEN_LINES[Math.floor(Math.random() * FALLEN_LINES.length)].replace('%d', victim.name), 1.8);
           this.popDoodle(victim, true);
           this.remove(ink);
@@ -1140,7 +1133,6 @@ export class InkDuel {
       stage.confetti = true;
       this.comic.pop('K.O.!', this.front(), '#ffd23a', 1.9, 2);
       sfx.defeated();
-      for (const doodle of this.doodles) playChuckle(this.voice(doodle), 0.03);
     }
     // Beaten, they fall; winning, they gloat.
     if (foe) {
@@ -1455,15 +1447,15 @@ export class InkDuel {
 
 /** What the caption says when a living drawing lands a head-butt (%d the doodle, %r the rival). */
 const BONK_LINES = [
-  '%d head-butts %r. No notes.',
-  'Bonk! %d is having the time of their life',
+  '%d rams %r',
+  '%d strikes, and %r staggers',
   '%r did not see %d coming',
-  '%d: small, round, furious',
-  'That is one way to use a head, %d',
+  '%d hits low and hard',
+  'Keep drawing: %d cannot hold %r alone',
 ];
 
 /** And when the rival's ink gets one. */
-const FALLEN_LINES = ['%d took one for the team', '%d didn’t make it. Draw another!', 'Farewell, %d. We hardly knew you', '%d has left the chat'];
+const FALLEN_LINES = ['%d takes the hit for you', '%d is struck down. Draw another!', '%d breaks apart into ink', '%d falls, and buys you a moment'];
 
 function hex(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;

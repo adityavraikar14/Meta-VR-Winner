@@ -1,4 +1,5 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
   CanvasTexture,
   CatmullRomCurve3,
@@ -21,16 +22,16 @@ import { FONT } from '../ui-theme.js';
 /**
  * A drawing that came alive.
  *
- * Close a shape in the air and it puffs up into a creature with your exact
- * outline: a soft body, googly eyes, stick arms and legs, and a name. What
- * it is depends on what you drew: a round loop is a bouncy Blob, a tall one
- * walks on Stilts, a wide one scuttles like a Crab, a jagged one is a
- * bad-tempered Spike. It drops to the ground, hops at the rival and
- * head-butts them.
+ * Close a shape in the air and it rises as an ink construct with your exact
+ * outline: a slab of dark ink edged in light, a glowing core, jointed limbs.
+ * What it is depends on what you drew: a round loop is a Golem (heavy, high
+ * leaps), a tall one a Strider (long, low strides), a wide one a Shellback
+ * (short, fast), a jagged one a Thornback (hits half again as hard). It
+ * drops to the ground, closes on the rival and rams them.
  *
- * The motion is real: every hop is a ballistic arc (launch speed √(2gh)), a
+ * The motion is real: every leap is a ballistic arc (launch speed √(2gh)), a
  * landing squashes the body at constant volume (wider as it gets shorter),
- * and each pupil is a loose mass in its eye: it lies at the bottom under
+ * and the core is a loose mass in its socket: it lies at the bottom under
  * gravity, floats in free fall and slams about when the body is thrown.
  */
 
@@ -40,15 +41,12 @@ export type DoodleKind = 'blob' | 'stilts' | 'crab' | 'spike' | 'doodle';
 export type DoodleState = 'born' | 'air' | 'ground' | 'leap' | 'held' | 'thrown' | 'gone';
 export type DoodleEvent = 'land' | 'hop' | 'leap' | 'bonk' | null;
 
-const NAMES: Record<DoodleKind, string[]> = {
-  blob: ['Big Steve', 'Sir Wobbles', 'Meatball', 'Gary', 'The Unit'],
-  stilts: ['Long Gary', 'Tall Paul', 'Stretch', 'Lanky Frank', 'Beanpole'],
-  crab: ['Crabsworth', 'Wide Load', 'Flat Stanley', 'Sideways Dave', 'Pancake'],
-  spike: ['Mr. Pointy', 'Cactus Dave', 'Stabby', 'Spike Jr.', 'Angry Kevin'],
-  doodle: ['Kevin', 'The Intern', 'Doug', 'Chaos Gremlin', 'Blorp', 'Unpaid Hero'],
-};
-const WHAT: Record<DoodleKind, string> = { blob: 'Blob', stilts: 'Stilts', crab: 'Crab', spike: 'Spike', doodle: 'Doodle' };
-const PALETTE = [0xffd23a, 0x4ad6ff, 0xff6fae, 0x7be36a, 0xffa23a, 0xb48cff];
+const WHAT: Record<DoodleKind, string> = { blob: 'Golem', stilts: 'Strider', crab: 'Shellback', spike: 'Thornback', doodle: 'Construct' };
+/** How many of each kind you have raised, for their numerals. */
+const raised: Record<DoodleKind, number> = { blob: 0, stilts: 0, crab: 0, spike: 0, doodle: 0 };
+const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+/** The light along their edges and in their cores: the colours of your own ink. */
+const PALETTE = [0x4ad6ff, 0x7fa8ff, 0x3ee0c0, 0xa8c8ff];
 /** How far and how high each kind hops, metres. */
 const HOPS: Record<DoodleKind, [number, number]> = {
   blob: [0.11, 0.1],
@@ -129,7 +127,6 @@ export class Doodle {
   private readonly legs: Group[] = [];
   private readonly arms: Group[] = [];
   private readonly eyes: Eye[] = [];
-  private readonly mouth: Mesh;
   private readonly tag: Mesh;
   private readonly owned: Array<{ dispose(): void }> = [];
   private readonly foot: number;
@@ -145,7 +142,6 @@ export class Doodle {
   private squashSpeed = 0;
   private phase = Math.random() * 6;
   private armUp = 0;
-  private open = 0.3;
   private leapFor = 0;
   /** Where the head was when it leapt: if the head is still there when it arrives, it lands. */
   private readonly leapAim = new Vector3();
@@ -155,7 +151,7 @@ export class Doodle {
    * player's head, so the creature keeps the outline exactly as they drew it.
    */
   constructor(points: readonly Vector3[], at: Vector3, viewer: Vector3) {
-    const { dark: darkInk, white: whiteInk, black: blackInk } = inks();
+    const { dark: darkInk, black: blackInk } = inks();
     this.root.name = 'Doodle';
     this.pos.copy(at);
 
@@ -203,8 +199,7 @@ export class Doodle {
     this.kind =
       corners >= 4 && roundness < 0.62 ? 'spike' : aspect > 1.5 ? 'stilts' : aspect < 0.62 ? 'crab' : roundness > 0.78 ? 'blob' : 'doodle';
     this.mass = Math.max(0.03, area * 9);
-    const names = NAMES[this.kind];
-    this.name = names[(used + Math.floor(Math.random() * 2)) % names.length];
+    this.name = `${WHAT[this.kind]} ${NUMERALS[raised[this.kind]++ % NUMERALS.length]}`;
     this.color = PALETTE[used % PALETTE.length];
     used++;
 
@@ -214,51 +209,50 @@ export class Doodle {
     const shape = new Shape(outline);
     const slab = new ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3, steps: 1, curveSegments: 2 });
     slab.translate(0, 0, -depth / 2);
-    const fill = new MeshStandardMaterial({ color: this.color, emissive: this.color, emissiveIntensity: 0.3, roughness: 0.35 });
+    // Dark ink with a sheen, lit faintly from within by its own colour.
+    const fill = new MeshStandardMaterial({ color: 0x1a2236, emissive: this.color, emissiveIntensity: 0.08, roughness: 0.3, metalness: 0.35 });
     const skin = new Mesh(slab, fill);
     skin.castShadow = true;
     this.owned.push(slab, fill);
     this.body.add(skin);
     const front = depth / 2 + bevel;
-    // The line they drew, kept as a dark marker outline.
-    const line = new TubeGeometry(new CatmullRomCurve3(outline.map((q) => new Vector3(q.x, q.y, front * 0.6)), true), Math.min(160, outline.length * 2), 0.003, 5, true);
-    this.owned.push(line);
-    this.body.add(new Mesh(line, darkInk));
+    // The line you drew, still burning along its edge in your ink's light.
+    const line = new TubeGeometry(new CatmullRomCurve3(outline.map((q) => new Vector3(q.x, q.y, front * 0.6)), true), Math.min(160, outline.length * 2), 0.0028, 5, true);
+    const edge = new MeshBasicMaterial({ color: this.color });
+    this.owned.push(line, edge);
+    this.body.add(new Mesh(line, edge));
 
-    // Googly eyes: a white disc and a loose pupil each.
-    const eyeR = Math.min(0.017, Math.max(0.008, Math.min(w, h) * 0.15));
-    const pupilR = eyeR * 0.5;
-    this.limit = eyeR - pupilR;
-    this.pupilZ = front + eyeR * 0.45;
-    const eyeGeo = new SphereGeometry(eyeR, 14, 10);
-    const pupilGeo = new SphereGeometry(pupilR, 10, 8);
-    this.owned.push(eyeGeo, pupilGeo);
-    const eyeY = h * (this.kind === 'crab' ? 0.12 : 0.18);
-    const eyeX = Math.max(eyeR * 1.15, w * 0.17);
-    for (const side of [-1, 1]) {
-      const white = new Mesh(eyeGeo, whiteInk);
-      white.scale.z = 0.45;
-      white.position.set(side * eyeX, eyeY, front);
-      const pupil = new Mesh(pupilGeo, blackInk);
-      pupil.scale.z = 0.4;
-      this.body.add(white, pupil);
-      this.eyes.push({ pupil, centre: new Vector2(side * eyeX, eyeY), offset: new Vector2(0, -this.limit), speed: new Vector2() });
-      if (this.kind === 'spike') {
-        // Bad-tempered brows.
-        const browGeo = new BoxGeometry(eyeR * 2.1, eyeR * 0.42, 0.003);
-        this.owned.push(browGeo);
-        const brow = new Mesh(browGeo, darkInk);
-        brow.position.set(side * eyeX, eyeY + eyeR * 1.15, front + eyeR * 0.5);
-        brow.rotation.z = -side * 0.45;
-        this.body.add(brow);
+    // The core: a socket of dark glass, and a loose glowing mass inside it.
+    const socketR = Math.min(0.02, Math.max(0.009, Math.min(w, h) * 0.17));
+    const coreR = socketR * 0.55;
+    this.limit = socketR - coreR;
+    this.pupilZ = front + socketR * 0.4;
+    const socketGeo = new SphereGeometry(socketR, 16, 12);
+    const coreGeo = new SphereGeometry(coreR, 12, 10);
+    const coreMaterial = new MeshBasicMaterial({ color: 0xffffff });
+    const haloMaterial = new MeshBasicMaterial({ color: this.color, transparent: true, opacity: 0.5, blending: AdditiveBlending, depthWrite: false });
+    this.owned.push(socketGeo, coreGeo, coreMaterial, haloMaterial);
+    const socket = new Mesh(socketGeo, blackInk);
+    socket.scale.z = 0.4;
+    socket.position.set(0, h * 0.08, front);
+    const core = new Mesh(coreGeo, coreMaterial);
+    core.scale.z = 0.4;
+    const halo = new Mesh(coreGeo, haloMaterial);
+    halo.scale.set(1.7, 1.7, 0.3);
+    core.add(halo);
+    this.body.add(socket, core);
+    this.eyes.push({ pupil: core, centre: new Vector2(0, h * 0.08), offset: new Vector2(0, -this.limit), speed: new Vector2() });
+    if (this.kind === 'spike') {
+      // A Thornback's plates: two shards of light over the core.
+      const plateGeo = new BoxGeometry(socketR * 1.6, socketR * 0.3, 0.003);
+      this.owned.push(plateGeo);
+      for (const side of [-1, 1]) {
+        const plate = new Mesh(plateGeo, edge);
+        plate.position.set(side * socketR * 0.9, h * 0.08 + socketR * 1.3, front + 0.002);
+        plate.rotation.z = -side * 0.5;
+        this.body.add(plate);
       }
     }
-    const mouthGeo = new SphereGeometry(Math.max(0.005, w * 0.09), 12, 8);
-    this.owned.push(mouthGeo);
-    this.mouth = new Mesh(mouthGeo, blackInk);
-    this.mouth.position.set(0, eyeY - eyeR * 2.1, front);
-    this.mouth.scale.set(1.3, 0.3, 0.3);
-    this.body.add(this.mouth);
 
     // Stick legs and arms, each hanging from a pivot.
     const legLength = Math.min(0.07, Math.max(0.018, h * (this.kind === 'stilts' ? 0.6 : 0.28)));
@@ -327,7 +321,7 @@ export class Doodle {
     this.face(viewer, 1);
   }
 
-  /** "Blob", "Spike"… for the caption. */
+  /** "Golem", "Thornback"… for the caption. */
   get what(): string {
     return WHAT[this.kind];
   }
@@ -503,7 +497,7 @@ export class Doodle {
     const sxz = 1 / Math.sqrt(sy);
     this.rig.scale.set(sxz, sy, sxz);
 
-    // Waddle, limbs and mouth.
+    // Stride and limbs.
     this.phase += dt * (held ? 26 : flying ? 14 : 5);
     const swing = Math.sin(this.phase);
     this.body.rotation.z = swing * (held ? 0.22 : flying ? 0.14 : 0.05);
@@ -517,12 +511,9 @@ export class Doodle {
       const side = i === 0 ? -1 : 1;
       arm.rotation.z = side * (0.5 + 2.1 * this.armUp) + (held ? swing * 0.6 : flying ? swing * 0.25 : 0);
     });
-    this.open += ((held || this.state === 'thrown' || this.state === 'leap' ? 1 : flying ? 0.7 : 0.3) - this.open) * Math.min(1, dt * 10);
-    this.mouth.scale.set(1.3 - 0.4 * this.open, 0.3 + 0.9 * this.open, 0.3);
-
-    // Googly eyes. Each pupil is a loose mass: in the body's frame it feels
-    // gravity minus the body's own acceleration, so it floats in free fall
-    // and slams down on landing. It bounces off the rim of the eye.
+    // The core is a loose mass: in the body's frame it feels gravity minus
+    // the body's own acceleration, so it floats in free fall and slams down
+    // on landing. It bounces off the rim of its socket.
     const yaw = this.root.rotation.y;
     const ax = -(this.accel.x * Math.cos(yaw) - this.accel.z * Math.sin(yaw));
     const ay = -DOODLE_G - this.accel.y;

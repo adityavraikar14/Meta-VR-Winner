@@ -343,9 +343,9 @@ function moteTexture(): CanvasTexture {
 /** What each power does, for the caption. */
 const POWER_LINE = {
   none: '',
-  magnet: 'she pulls motes in from further away',
-  revive: 'if he falls, he gets one second chance from the last ledge',
-  foresight: 'the dots show where she is about to go',
+  magnet: 'it pulls motes in from 7.5 cm, three times the usual reach',
+  revive: 'if it falls, it reignites once on the last ledge',
+  foresight: 'the dots show its path for the next 0.6 s',
 };
 
 export class ShadowRun {
@@ -365,7 +365,7 @@ export class ShadowRun {
   private sinceDrop = 0;
   /** Motes on their way into the spark: seconds left of the flight (0: not flying). */
   private moteFlight: number[] = [];
-  /** Iris's dotted path ahead. */
+  /** The Prism's dotted path ahead. */
   private ahead: Mesh[] = [];
   private aheadAt: Array<[number, number]> = [];
   /** The dashed "your shadow here" guide. */
@@ -465,7 +465,7 @@ export class ShadowRun {
     this.halo.scale.setScalar(SPARK_RADIUS * 5.5);
     this.halo.renderOrder = 7;
     this.paper.add(this.halo, this.face.group);
-    // Iris's path ahead: a row of dots, smaller with distance.
+    // The Prism's path ahead: a row of dots, smaller with distance.
     if (this.sim.power === 'foresight') {
       const dot = new CircleGeometry(0.0042, 12);
       for (let i = 0; i < 8; i++) {
@@ -610,18 +610,18 @@ export class ShadowRun {
         playTinkle();
         playCollect(0.03);
         const [x, y] = this.level.motes[event.index];
-        // It flies into the spark (from further off for Mags, whose magnet pulled it).
+        // It flies into the spark (from further off for the Lodestone, whose magnet pulled it).
         this.moteFlight[event.index] = 0.22;
         this.joy = 0.7;
         this.burst(x, y, 10, 0.5);
       } else if (event.type === 'revive') {
-        // Ember's second chance: a flash where he fell, and he is back on the ledge.
+        // The Phoenix core's second chance: a flash where it fell, and it reignites on the ledge.
         playAwaken();
         this.joy = 1;
         this.burst(event.from[0], LOST_FLASH_Y, 14, 0.8);
         this.burst(sim.spark.x, sim.spark.y, 12, 0.5);
         this.trailAt.length = 0;
-        stage.say = 'Ember’s second chance! He is back on the ledge.';
+        stage.say = 'The Phoenix core reignites on the last ledge!';
       } else if (event.type === 'lost') {
         this.lostTime = 0;
         stage.cue = 'oops';
@@ -753,7 +753,7 @@ export class ShadowRun {
     else if (this.level.showScale && scale > 0) text = `${text}  ·  your shadow ×${scale.toFixed(1)}`;
     // Before the first drop, say who turned up and what they can do.
     const info = this.face.info;
-    if (sim.state === 'ready' && sim.retries === 0 && info.power !== 'none' && this.time > 4) text = `${info.name} is here: ${POWER_LINE[info.power]}`;
+    if (sim.state === 'ready' && sim.retries === 0 && info.power !== 'none' && this.time > 4) text = `This spark is a ${info.name}: ${POWER_LINE[info.power]}`;
     const motes = `${sim.motesTaken}/${this.level.motes.length} ✦`;
     this.caption = `${text}  ·  ${motes}`;
   }
@@ -790,7 +790,7 @@ export class ShadowRun {
     }
     const tag = waiting ? 1 : Math.max(0, 1 - (this.sinceDrop - 1.2) / 0.6);
     this.face.update(dt, sim.state === 'live' ? vx : 0, sim.state === 'live' ? vy : 0, mood, watch, sim.state === 'live' || waiting ? Math.min(1, tag) : 0);
-    // Iris: the path ahead, from the same physics run forward on a copy.
+    // The Prism: the path ahead, from the same physics run forward on a copy.
     if (this.ahead.length) {
       const n = sim.state === 'live' && stage.playing ? sim.foresee(this.shadows.capsules, this.shards?.shadows ?? [], this.aheadAt) : 0;
       this.ahead.forEach((dot, i) => {

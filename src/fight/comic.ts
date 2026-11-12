@@ -2,7 +2,7 @@ import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColor
 import { FONT } from '../ui-theme.js';
 
 /**
- * Comic-book words that pop in the air where something happens: BONK!,
+ * Impact words that pop in the air where something happens: SLAM,
  * PARRY!, K.O.! Each pops in with an overshoot, drifts up and fades. A small
  * pool of canvases, reused, so a busy fight allocates nothing.
  */

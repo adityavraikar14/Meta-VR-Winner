@@ -25,7 +25,7 @@ export type RunEvent =
 
 /** A spark's special power (see spark-face.ts). None of them is needed to finish a level. */
 export type Power = 'none' | 'magnet' | 'revive' | 'foresight';
-/** Mags pulls in motes from this far (the plain reach is MOTE_RADIUS). */
+/** The Lodestone pulls in motes from this far (the plain reach is MOTE_RADIUS). */
 export const MAGNET_RADIUS = 0.075;
 
 export class RunSim {
@@ -139,7 +139,7 @@ export class RunSim {
   }
 
   /**
-   * Iris's foresight: where the next `seconds` take the spark if nothing
+   * The Prism's foresight: where the next `seconds` take the spark if nothing
    * moves, found by running the same physics ahead on a copy. Writes up to
    * `out.length` points (every `every` steps of 1/60 s) and returns how many.
    */

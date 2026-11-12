@@ -31,7 +31,7 @@ Then you build: pinch a glass shard, bring it nearer the lantern to enlarge its 
 
 Five chapters (Light & Shadow, Structures, Fire & Iron, Hot Air, The Dragon) run on real science. You build truss bridges that buckle by Euler's law, forge steel by its glow colour, brew against two competing Arrhenius reactions, fly a hot-air lantern, and pick a pin-tumbler lock by feel. The finale is a life-size Shadow Dragon, fought with Light or with the Arsenal, seven weapons summoned by hand signs. Every level fills a page of the Inventor's Journal with the formula and your own numbers. A Daily Light course brings you back each day.
 
-And for fun there is the Ink Duel. Pick one of six rivals, each with their own trick (a ward, a three-shot burst, a duck, a tumble, a thick hide, a parry). Draw a line in the air and it is ink to throw, hitting by its kinetic energy, ½mv². Close a shape and it comes alive: a creature with your exact outline and googly eyes, who hops over and head-butts your rival.
+Then the Arena: pick one of eight bosses and fight them life-size with seven weapons summoned by hand signs, or duel the six rivals with ink on the table. Each rival has their own trick (a ward, a three-shot burst, a duck, a tumble, a thick hide, a parry), and the life-size ones roam the room around you. In the ink duel a line you draw is a projectile that hits by its kinetic energy, ½mv², and a closed shape rises as an ink construct with your exact outline that fights beside you.
 
 **How we built it.** The game is WebXR on the Immersive Web SDK and three.js, with hand tracking only. We don't read the shadow back from the screen, which would lag. Instead, all 25 tracked joints of each hand are projected through the lantern every frame, P′ = L + (P − L)·D/d, and each bone becomes a 2D capsule the same size as the shadow you see. The spark is sub-stepped so it cannot tunnel through a thin shadow, and it bounces with restitution against the velocity of the moving shadow. Automated tests prove every spark course can be finished, and cannot be finished without you. A generator makes each day's course and proves it in simulation before anyone plays it.
 
@@ -76,6 +76,6 @@ Record on a Quest with **[passthrough / sky]**, seated at a table, hands only.
 | 1:05–1:30 | Workshop: place star, ring and glass; Drop; catch the spark with a hand | *Design your own course* |
 | 1:30–1:55 | Machines montage: horse whim with a real neigh, a truss buckling, glowing steel, brewing, the sky lantern rising, the lock's pins setting | *Real physics, real science* |
 | 1:55–2:15 | The dragon: choose Light or the Arsenal; sword, shield, slingshot; a fireball mirrored back | — |
-| 2:15–2:30 | Ink Duel: the roster, draw a blob, it comes alive and head-butts Mako ("BONK!"), Kai parries, K.O. with confetti | *Whatever you draw comes alive* |
+| 2:15–2:30 | Arena: the roster of eight, Vance roaming life-size and rolling aside, Kai parrying; then the ink duel: a drawn shape rises and rams Mako, K.O. | *Whatever you draw fights* |
 | 2:30–2:45 | Daily Light with its streak, a Journal page with your numbers, the Trophy Shelf | *A new course every day* |
 | 2:45–3:00 | End card | *Shadowplay · hands only · seated · [URL]* |
