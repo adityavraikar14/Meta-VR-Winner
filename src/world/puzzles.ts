@@ -88,6 +88,8 @@ export interface Puzzle {
   handsOn?: boolean;
   /** A fight (the dragon, a captain, Morwen): friends stay back and the music turns to battle. */
   fight?: boolean;
+  /** Paints its own picture on the screen (the Shadow Run levels); others get their chapter's painting. */
+  painted?: boolean;
   /** Caption once solved. */
   solved: string;
   build(root: Group, kit: Kit): PuzzleScene;
@@ -979,6 +981,7 @@ function runPuzzle(level: RunLevel): Puzzle {
     story: level.story,
     ask: level.ask,
     handsOn: true,
+    painted: true,
     get solved() {
       return line;
     },

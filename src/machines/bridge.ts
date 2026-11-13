@@ -1,5 +1,8 @@
 import {
   BoxGeometry,
+  CanvasTexture,
+  RepeatWrapping,
+  SRGBColorSpace,
   type BufferGeometry,
   Color,
   CylinderGeometry,
@@ -82,6 +85,8 @@ interface Drag {
 
 export class Bridge {
   readonly group = new Group();
+  /** The river's painted water, scrolled so it flows. */
+  private readonly flow = waterTexture();
   caption = '';
   done = false;
   /** Tests that failed: a perfect run passes first time. */
@@ -214,6 +219,8 @@ export class Bridge {
   // ================================================================ Update
 
   update(dt: number, hands: readonly HandState[]): void {
+    // The river runs from left to right under the bridge.
+    this.flow.offset.y = (this.flow.offset.y - dt * 0.06) % 1;
     if (!this.faced && stage.paper) {
       // Turn the buttons to the player's eyes, now the bridge is in the scene.
       this.faced = true;
@@ -713,7 +720,7 @@ export class Bridge {
     }
     // The river running between them.
     // A body of water a few centimetres deep, so it drowns the meadow grass.
-    const river = new Mesh(new BoxGeometry(SPAN * 2 + 0.01, RIVER_Y, 0.5), new MeshStandardMaterial({ color: 0x3aa6c4, emissive: 0x0e5a78, emissiveIntensity: 0.2, roughness: 0.08, metalness: 0.1 }));
+    const river = new Mesh(new BoxGeometry(SPAN * 2 + 0.01, RIVER_Y, 0.5), new MeshStandardMaterial({ map: this.flow, color: 0xffffff, emissive: 0x2a8fc0, emissiveIntensity: 0.25, roughness: 0.15, metalness: 0.05 }));
     river.position.set(0, RIVER_Y / 2, 0);
     this.group.add(river);
   }
@@ -804,3 +811,45 @@ export class Bridge {
   }
 }
 
+
+/**
+ * Cartoon river water: deep blue in the middle, bright at the banks, with
+ * white ripple streaks. It tiles along the flow (the texture's v axis on the
+ * river's top face runs across, so the streaks run along the river).
+ */
+function waterTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const g = canvas.getContext('2d')!;
+  const across = g.createLinearGradient(0, 0, 256, 0);
+  across.addColorStop(0, '#7fe3ff');
+  across.addColorStop(0.18, '#3cc4f2');
+  across.addColorStop(0.5, '#1f8fd6');
+  across.addColorStop(0.82, '#3cc4f2');
+  across.addColorStop(1, '#7fe3ff');
+  g.fillStyle = across;
+  g.fillRect(0, 0, 256, 256);
+  // Ripples: short rounded white streaks along the flow, seeded so every river looks the same.
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  g.lineCap = 'round';
+  for (let i = 0; i < 46; i++) {
+    const x = 14 + rand() * 228;
+    const y = rand() * 256;
+    const len = 14 + rand() * 34;
+    g.strokeStyle = `rgba(255, 255, 255, ${0.35 + rand() * 0.45})`;
+    g.lineWidth = 2 + rand() * 3;
+    for (const dy of [0, 256, -256]) {
+      g.beginPath();
+      g.moveTo(x, y + dy);
+      g.quadraticCurveTo(x + 4, y + dy + len / 2, x, y + dy + len);
+      g.stroke();
+    }
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = texture.wrapT = RepeatWrapping;
+  texture.repeat.set(1, 2);
+  return texture;
+}

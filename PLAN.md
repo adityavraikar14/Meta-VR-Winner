@@ -328,7 +328,7 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [x] Arena records and the Journal count every boss; "Undisputed" counts a rival beaten in either mode
 - [x] Name plates fit; spark drawn as a shaded ball
 - [ ] On Quest: Arena fights against each rival (walk speed, shot speed, dodge rate by feel)
-- [ ] Machine levels (forge, brewing, sky lantern, lock): same "Your move" box is there; their own look still to brighten
+- [x] Machine levels (forge, brewing, sky lantern, lock, bridge, slingshot, sword): the screen behind them now shows their chapter's painted world instead of a blank sheet; the river under the Broken Bridge and the Ore Train is flowing cartoon water
 - [ ] Trailer and Devpost text: show the Arena roster and a roaming rival
 
 ### Nov 13, third pass: fights that are real fights (Aditya: "one draw and I won; boss walks like a robot; the duel hid the screen; more powerful bosses, random moves, superpowers, healing herbs; story tasks medium, not childish")
@@ -368,7 +368,7 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [x] The "blank button" was the back of a button seen from behind: every button now has a finished back (dark iron, brass ring, rivets, a sun emblem), and the screen has a solid board back with a frame instead of being see-through
 - [x] The Smithy: the lantern shard (and the bar) dropped anywhere over the hearth now land in the coals instead of sinking out of sight into the stonework; dropped things land on top of the hearth and anvil, never inside; thrown things stay on the table; grab reach 4 → 6 cm
 - [ ] On Quest: if a lantern shard still can't be picked up somewhere, note which level and where it was dropped
-- [ ] The machine levels' tables and the menus: same bright treatment (next)
+- [x] The machine levels' screens and the title menu: same bright painted treatment (the title shows the world you would continue in)
 
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.

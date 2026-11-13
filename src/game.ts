@@ -28,6 +28,8 @@ import {
 import { add as addResource, RESOURCE_ORDER } from './bag.js';
 import { diagnoseDragon } from './fight/dragon3d.js';
 import { installLevelTester, levelKeys } from './level-tester.js';
+import { PAPER_BOUNDS } from './run/run-sim.js';
+import { sceneryTexture } from './run/scenery.js';
 import { drawInventory } from './inventory-art.js';
 import { drawJournal } from './journal-art.js';
 import { installMouseHands } from './mouse-hands.js';
@@ -264,6 +266,8 @@ export class ShadowGameSystem extends createSystem({
   private skipClick = false;
   /** Always-there Home: in every level, side game and the Arena. Push twice to leave. */
   private homeButton!: PushButton;
+  /** The painted meadow behind the title card (the levels bring their own). */
+  private titlePainting: Mesh | null = null;
   private homeEntity!: Entity;
   private homeClick = false;
   private homeArmed = 0;
@@ -639,6 +643,7 @@ export class ShadowGameSystem extends createSystem({
       else this.skip();
     }
     this.updateHome(dt);
+    this.paintTitle();
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
@@ -1166,6 +1171,22 @@ export class ShadowGameSystem extends createSystem({
     }
     else if (world.mood === 'walk' && this.phaseTime > 2) text = 'Hold it steady…';
     this.setCaption(text);
+  }
+
+  /** The title menu's screen: a bright painted world behind the card, never a blank sheet. */
+  private paintTitle(): void {
+    const show = this.phase === 'title' || this.phase === 'growing' || this.phase === 'table';
+    if (!this.titlePainting && show && stage.paper) {
+      const w = PAPER_BOUNDS.hw * 2;
+      const h = PAPER_BOUNDS.hh * 2;
+      this.titlePainting = new Mesh(new PlaneGeometry(w, h), new MeshBasicMaterial({ map: sceneryTexture(0, 'title', 1024, h / w) }));
+      // Just behind a level's own painting, should both be there for a moment.
+      this.titlePainting.position.z = 0.0006;
+      this.titlePainting.renderOrder = 1;
+      this.titlePainting.name = 'TitlePainting';
+      stage.paper.add(this.titlePainting);
+    }
+    if (this.titlePainting) this.titlePainting.visible = show;
   }
 
   /** Hands-on work (the forge): the scene says what to do next and when it is done. */

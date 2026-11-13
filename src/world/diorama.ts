@@ -1,7 +1,9 @@
 import { RivalShowcase } from '../fight/showcase.js';
 import { touchables } from './touchables.js';
 import { Confetti } from './confetti.js';
-import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
+import { Group, type Material, Mesh, MeshBasicMaterial, type MeshStandardMaterial, type Object3D, PlaneGeometry, Vector3 } from '@iwsdk/core';
+import { PAPER_BOUNDS } from '../run/run-sim.js';
+import { sceneryTexture } from '../run/scenery.js';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
 import { playAwaken, playUnfold, setAmbience, tickAmbience } from '../audio.js';
@@ -12,7 +14,7 @@ import type { Creature } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import { mergeStatic } from '../merge.js';
 import { play } from '../progress.js';
-import { type Kit, puzzleAt, PUZZLES, type PuzzleScene, WORLDS } from './puzzles.js';
+import { type Kit, type Puzzle, puzzleAt, PUZZLES, type PuzzleScene, WORLDS } from './puzzles.js';
 
 interface Tween {
   time: number;
@@ -44,6 +46,8 @@ export class Diorama {
   /** Scenery asset version the current decoration was built with. */
   private decorVersion = -1;
   private scene: PuzzleScene | null = null;
+  /** The painting on the screen behind a hands-on level. */
+  private backdrop: Mesh | null = null;
   private pickups: Pickups | null = null;
   private tweens: Tween[] = [];
   private spinners: Array<{ object: Object3D; speed: number }> = [];
@@ -154,6 +158,7 @@ export class Diorama {
     if (this.growTime >= 4) this.props.scale.set(1, 1, 1);
     this.stageRoot.updateWorldMatrix(true, true);
     this.scene = puzzle ? puzzle.build(this.props, this.kit) : null;
+    this.paintScreen(puzzle);
     if (puzzle && this.growTime >= 4) {
       this.unfoldTime = 0;
       playUnfold();
@@ -170,6 +175,32 @@ export class Diorama {
       this.pickups = new Pickups(world, this.floor, blocked);
       this.props.add(this.pickups.group);
     }
+  }
+
+  /**
+   * The screen behind a hands-on level: its chapter's painted landscape, so
+   * the forge, the brew, the lock and the rest stand in front of a world, not
+   * a blank sheet. Opaque and drawn before the hand shadows, which fall across
+   * it. Spark levels paint their own; fights keep the screen for the rival.
+   */
+  private paintScreen(puzzle: Puzzle | null): void {
+    if (this.backdrop) {
+      this.backdrop.removeFromParent();
+      const material = this.backdrop.material as MeshBasicMaterial;
+      material.map?.dispose();
+      material.dispose();
+      this.backdrop.geometry.dispose();
+      this.backdrop = null;
+    }
+    const paper = stage.paper;
+    if (!paper || !puzzle?.handsOn || puzzle.painted || puzzle.fight || puzzle.id === 'duel') return;
+    const w = PAPER_BOUNDS.hw * 2;
+    const h = PAPER_BOUNDS.hh * 2;
+    this.backdrop = new Mesh(new PlaneGeometry(w, h), new MeshBasicMaterial({ map: sceneryTexture(puzzle.world, puzzle.id, 1024, h / w) }));
+    this.backdrop.position.z = 0.0008;
+    this.backdrop.renderOrder = 1;
+    this.backdrop.name = 'ScreenPainting';
+    paper.add(this.backdrop);
   }
 
   private decorate(world: number): void {
