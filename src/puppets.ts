@@ -238,3 +238,268 @@ export function grass(ctx: CanvasRenderingContext2D): void {
     ctx.fill();
   }
 }
+
+// ------------------------------------------------------------------ The villains (shadow puppets)
+// Each stands with its feet at (x, y) and is about 210·s pixels tall. No faces: silhouettes only.
+
+/** A long cloak flaring from the shoulders to the ground. */
+function cloak(ctx: CanvasRenderingContext2D, s: number, top: number, wide: number, sway: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-16 * s, -top * s);
+  ctx.quadraticCurveTo(-wide * 0.6 * s, -top * 0.5 * s, (-wide + sway) * s, 0);
+  ctx.lineTo((wide + sway) * s, 0);
+  ctx.quadraticCurveTo(wide * 0.6 * s, -top * 0.5 * s, 16 * s, -top * s);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Morwen, the Ink Witch: a crooked pointed hat, a sweeping cloak, a staff dripping ink. */
+export function witch(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, sway = 0): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = INK;
+  cloak(ctx, s, 150, 58, sway * 20);
+  ellipse(ctx, 0, -162 * s, 15 * s, 18 * s);
+  // Hat: a wide brim and a tall crooked cone.
+  ellipse(ctx, 0, -176 * s, 40 * s, 7 * s);
+  ctx.beginPath();
+  ctx.moveTo(-20 * s, -178 * s);
+  ctx.quadraticCurveTo(-4 * s, -230 * s, 26 * s + sway * 8 * s, -248 * s);
+  ctx.quadraticCurveTo(6 * s, -222 * s, 20 * s, -178 * s);
+  ctx.closePath();
+  ctx.fill();
+  // Raised arm and the staff, ink dripping from its head.
+  ctx.save();
+  ctx.translate(30 * s, -130 * s);
+  ctx.rotate(-0.5 + sway * 0.2);
+  ctx.fillRect(0, -5 * s, 42 * s, 10 * s);
+  ctx.restore();
+  ctx.fillRect(58 * s, -228 * s, 6 * s, 228 * s);
+  ellipse(ctx, 61 * s, -234 * s, 13 * s, 13 * s);
+  for (let i = 0; i < 3; i++) ellipse(ctx, (56 + i * 6) * s, (-212 + i * 9 + ((sway * 40 + i * 13) % 12)) * s, 3 * s, 5 * s);
+  ctx.restore();
+}
+
+/** Captain Rook, the Corsair: a tricorn hat, a long coat, a raised cutlass. */
+export function corsair(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, swing = 0): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = INK;
+  // Boots planted wide, then a knee-length frock coat, flared at the hem.
+  ctx.beginPath();
+  ctx.moveTo(-30 * s, 0);
+  ctx.lineTo(-18 * s, -62 * s);
+  ctx.lineTo(-6 * s, -62 * s);
+  ctx.lineTo(-12 * s, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(30 * s, 0);
+  ctx.lineTo(18 * s, -62 * s);
+  ctx.lineTo(6 * s, -62 * s);
+  ctx.lineTo(12 * s, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-22 * s, -140 * s);
+  ctx.lineTo(-38 * s, -54 * s);
+  ctx.lineTo(38 * s, -54 * s);
+  ctx.lineTo(22 * s, -140 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(-26 * s, -100 * s, 52 * s, 8 * s);
+  ellipse(ctx, 0, -152 * s, 15 * s, 17 * s);
+  // Tricorn: three upturned points.
+  ctx.beginPath();
+  ctx.moveTo(-38 * s, -170 * s);
+  ctx.lineTo(0, -192 * s);
+  ctx.lineTo(38 * s, -170 * s);
+  ctx.lineTo(0, -160 * s);
+  ctx.closePath();
+  ctx.fill();
+  // The cutlass arm.
+  ctx.save();
+  ctx.translate(26 * s, -122 * s);
+  ctx.rotate(-1.1 + swing);
+  ctx.fillRect(0, -5 * s, 40 * s, 10 * s);
+  ctx.translate(40 * s, 0);
+  ctx.beginPath();
+  ctx.moveTo(0, -4 * s);
+  ctx.quadraticCurveTo(40 * s, -14 * s, 74 * s, 4 * s);
+  ctx.lineTo(0, 5 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+/** Sergeant Vance, the Musketeer: a plumed hat, a long musket with a bayonet. */
+export function musketeer(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, aim = 0): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = INK;
+  ctx.fillRect(-20 * s, -70 * s, 15 * s, 70 * s);
+  ctx.fillRect(5 * s, -70 * s, 15 * s, 70 * s);
+  ctx.beginPath();
+  ctx.moveTo(-26 * s, -70 * s);
+  ctx.lineTo(-22 * s, -140 * s);
+  ctx.lineTo(22 * s, -140 * s);
+  ctx.lineTo(26 * s, -70 * s);
+  ctx.closePath();
+  ctx.fill();
+  ellipse(ctx, 0, -152 * s, 14 * s, 16 * s);
+  // A broad hat with a sweeping plume.
+  ellipse(ctx, 0, -166 * s, 34 * s, 7 * s);
+  ctx.fillRect(-16 * s, -186 * s, 32 * s, 20 * s);
+  ctx.beginPath();
+  ctx.moveTo(10 * s, -184 * s);
+  ctx.quadraticCurveTo(46 * s, -214 * s, 58 * s, -176 * s);
+  ctx.quadraticCurveTo(36 * s, -196 * s, 14 * s, -176 * s);
+  ctx.fill();
+  // The musket, shouldered (aim 0) or levelled (aim 1).
+  ctx.save();
+  ctx.translate(-10 * s, -118 * s);
+  ctx.rotate(-0.9 + aim * 0.85);
+  ctx.fillRect(-10 * s, -4 * s, 150 * s, 8 * s);
+  ctx.fillRect(-26 * s, -7 * s, 30 * s, 14 * s);
+  ctx.beginPath();
+  ctx.moveTo(140 * s, -3 * s);
+  ctx.lineTo(176 * s, 0);
+  ctx.lineTo(140 * s, 3 * s);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+/** Kai, the Ronin: a wide straw kasa, broad hakama, a drawn katana. */
+export function ronin(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, draw = 1): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = INK;
+  // Hakama: wide, pleated trousers.
+  ctx.beginPath();
+  ctx.moveTo(-18 * s, -88 * s);
+  ctx.lineTo(-42 * s, 0);
+  ctx.lineTo(42 * s, 0);
+  ctx.lineTo(18 * s, -88 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-30 * s, -88 * s);
+  ctx.lineTo(-24 * s, -146 * s);
+  ctx.lineTo(24 * s, -146 * s);
+  ctx.lineTo(30 * s, -88 * s);
+  ctx.closePath();
+  ctx.fill();
+  ellipse(ctx, 0, -156 * s, 13 * s, 14 * s);
+  // The kasa: a wide, shallow cone.
+  ctx.beginPath();
+  ctx.moveTo(-52 * s, -160 * s);
+  ctx.lineTo(0, -188 * s);
+  ctx.lineTo(52 * s, -160 * s);
+  ctx.closePath();
+  ctx.fill();
+  // The katana, held two-handed, drawn up as `draw` goes 0 to 1.
+  ctx.save();
+  ctx.translate(18 * s, -112 * s);
+  ctx.rotate(0.9 - draw * 1.9);
+  ctx.fillRect(0, -6 * s, 26 * s, 12 * s);
+  ctx.fillRect(24 * s, -9 * s, 5 * s, 18 * s);
+  ctx.beginPath();
+  ctx.moveTo(29 * s, -4 * s);
+  ctx.quadraticCurveTo(80 * s, -10 * s, 128 * s, -22 * s);
+  ctx.lineTo(29 * s, 4 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+/** An old history book, open, its pages lifting. */
+export function book(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, open: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = INK;
+  ctx.fillRect(-110 * s, -14 * s, 220 * s, 14 * s);
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(0, -14 * s);
+    ctx.quadraticCurveTo(side * 50 * s, (-30 - open * 18) * s, side * 106 * s, (-20 - open * 10) * s);
+    ctx.lineTo(side * 106 * s, -10 * s);
+    ctx.lineTo(0, -6 * s);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A slingshot: a forked branch, its band pulled back by `pull` (0..1). */
+export function slingshot(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, pull: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = INK;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 16 * s;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -70 * s);
+  ctx.lineTo(-34 * s, -130 * s);
+  ctx.moveTo(0, -70 * s);
+  ctx.lineTo(34 * s, -130 * s);
+  ctx.stroke();
+  ctx.lineWidth = 4 * s;
+  const px = -pull * 60 * s;
+  const py = -112 * s + pull * 40 * s;
+  ctx.beginPath();
+  ctx.moveTo(-34 * s, -130 * s);
+  ctx.lineTo(px, py);
+  ctx.lineTo(34 * s, -130 * s);
+  ctx.stroke();
+  ellipse(ctx, px, py, 10 * s, 10 * s);
+  ctx.restore();
+}
+
+/** A sword, point up, as a shadow. */
+export function sword(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, angle: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = INK;
+  ctx.fillRect(-5 * s, 0, 10 * s, 40 * s);
+  ctx.fillRect(-26 * s, -6 * s, 52 * s, 10 * s);
+  ctx.beginPath();
+  ctx.moveTo(-8 * s, -6 * s);
+  ctx.lineTo(0, -170 * s);
+  ctx.lineTo(8 * s, -6 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Ink spreading over the ground from the left; `k` is how far (0..1), with waves on its edge. */
+export function inkFlood(ctx: CanvasRenderingContext2D, k: number, t: number): void {
+  ctx.fillStyle = INK;
+  const edge = k * (W + 120);
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND - 6);
+  for (let x = 0; x <= edge; x += 16) ctx.lineTo(x, GROUND - 14 - Math.sin(x * 0.03 + t * 3) * 8 - 30 * Math.max(0, 1 - (edge - x) / 140));
+  ctx.lineTo(edge, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Rings of a trance turning around a point (the bewitched dragon). */
+export function trance(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number, alpha: number): void {
+  ctx.save();
+  ctx.strokeStyle = `rgba(122, 76, 220, ${alpha})`;
+  ctx.lineWidth = 5;
+  for (let i = 0; i < 4; i++) {
+    const rr = ((r * (i + 1)) / 4 + t * 30) % r;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rr, rr * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}

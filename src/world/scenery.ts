@@ -1,4 +1,5 @@
 import { BufferAttribute, Group, Mesh, RingGeometry, Vector3 } from '@iwsdk/core';
+import { touchables } from './touchables.js';
 import { bambooFrame, fallingLeaves, fireflies, giantLeafPlant, vine } from './jungle.js';
 import { crystals, driftwoodFrame, mineFrame } from './themes.js';
 import {
@@ -55,8 +56,15 @@ function placeAll(root: Group, spec: GroundSpec | null, items: Placement[]): voi
     object.rotation.y = item.turn ?? 0;
     object.scale.setScalar(item.scale);
     root.add(object);
+    // Every plant, flower and stone can be touched, bent, picked up and thrown (kept out of mesh merging).
+    object.userData.keep = true;
+    object.traverse((o) => (o.userData.keep = true));
+    touchables.register(object, HEAVY.has(item.model) ? 'stone' : 'plant');
   }
 }
+
+/** Placed models that are heavy things, not plants. */
+const HEAVY = new Set<NatureModel>(['rocks', 'stump', 'lantern']);
 
 /** A base group at floor height holding the earth and everything on it. */
 function base(roots: SceneryRoots, spec: GroundSpec): Group {
@@ -162,6 +170,7 @@ export function decorateJungle(roots: SceneryRoots): void {
     const plant = giantLeafPlant(h, 7, s);
     plant.position.set(x, groundHeight(spec, x, z), z);
     g.add(plant);
+    touchables.register(plant, 'plant');
   }
 
   roots.screen.add(bambooFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
@@ -195,6 +204,7 @@ function junglePlantsInRoom(room: Group): void {
     const plant = giantLeafPlant(h, 8, s);
     plant.position.set(x, 0, z);
     room.add(plant);
+    touchables.register(plant, 'plant');
   }
   room.add(hangingVine(-0.68, 0.15, 2.4, 0.9, 1));
   room.add(hangingVine(0.72, 0.3, 2.4, 1.05, 2));

@@ -109,6 +109,13 @@ export const JOURNAL: JournalPage[] = [
     diagram: 'truss',
   },
   {
+    id: 'shadow-slingshot',
+    topic: 'Stored in a Stretch',
+    formula: 'v = ω·x  ·  range ≈ v² sin 2θ ÷ g',
+    body: 'A stretched band stores energy, ½kx², and gives it back as speed: pull twice as far and the stone leaves twice as fast. Then only gravity acts, so the path is a parabola. Aim higher for distance, up to 45 degrees; beyond that the stone just climbs and drops.',
+    diagram: 'projectile',
+  },
+  {
     id: 'broken-bridge',
     topic: 'Why Bridges Are Triangles',
     formula: 'three sides fix one shape',

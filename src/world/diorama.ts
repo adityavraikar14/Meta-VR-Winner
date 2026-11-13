@@ -1,4 +1,5 @@
 import { RivalShowcase } from '../fight/showcase.js';
+import { touchables } from './touchables.js';
 import { Confetti } from './confetti.js';
 import { Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
@@ -175,6 +176,8 @@ export class Diorama {
     this.worldIndex = world;
     setAmbience(WORLDS[world].ambience);
     this.decorVersion = nature.version;
+    // A new world: forget the old one's touchable things (and any carried off into the room).
+    touchables.clear();
     clear(this.decor);
     clear(this.screen);
     clear(this.room);

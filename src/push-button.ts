@@ -600,7 +600,42 @@ const square: Icon = (g) => {
   g.strokeRect(-22, -22, 44, 44);
 };
 
+/** A house: home. */
+const house: Icon = (g) => {
+  g.beginPath();
+  g.moveTo(-26, -2);
+  g.lineTo(0, -26);
+  g.lineTo(26, -2);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(-18, -8);
+  g.lineTo(-18, 22);
+  g.lineTo(18, 22);
+  g.lineTo(18, -8);
+  g.stroke();
+  g.fillRect(-6, 6, 12, 16);
+};
+
+/** A door ajar with an arrow out: leave. */
+const leave: Icon = (g) => {
+  g.beginPath();
+  g.moveTo(4, -22);
+  g.lineTo(-18, -22);
+  g.lineTo(-18, 22);
+  g.lineTo(4, 22);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(-4, 0);
+  g.lineTo(26, 0);
+  g.moveTo(16, -10);
+  g.lineTo(26, 0);
+  g.lineTo(16, 10);
+  g.stroke();
+};
+
 const ICONS: Partial<Record<string, Icon>> = {
+  home: house,
+  'leave?': leave,
   play,
   continue: play,
   replay: loop,

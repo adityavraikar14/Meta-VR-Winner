@@ -73,6 +73,8 @@ gears, ratchet, rope, bucket, well and gauge) is made in code for this project.
 
 - **Horse neigh** (`public/audio/horse-neigh.ogg`): "Wiehern.ogg" by Hü, Wikimedia Commons, public domain. https://commons.wikimedia.org/wiki/File:Wiehern.ogg (trimmed and loudness-normalized).
 - **Horse whinny** (`public/audio/horse-whinny.ogg`): Supplementary Audio S1 of Briefer E, Maigrot A, Mandel R, Freymond S, Bachmann I, Hillmann E (2015), "Segregation of information about emotional arousal and valence in horse whinnies", *Scientific Reports* 5:9989, via Wikimedia Commons, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). First whinny only, trimmed and loudness-normalized.
+- **Fox bark and yip** (`public/audio/fox-bark.ogg`, `public/audio/fox-yip.ogg`): "Red Fox (Vulpes vulpes) (W1CDR0001529 BD12).ogg", recorded by Aubrey John Williams, Pinbury Park, Gloucestershire, 1977, British Library, via Wikimedia Commons, CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). https://commons.wikimedia.org/wiki/File:Red_Fox_(Vulpes_vulpes)_(W1CDR0001529_BD12).ogg. Two short excerpts, high-passed, faded and loudness-normalized; the excerpts are shared under the same licence.
+- **Stag roar** (`public/audio/stag-roar.ogg`): "Hirsch roehrt.ogg" by Jugrü, Wikimedia Commons, CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). https://commons.wikimedia.org/wiki/File:Hirsch_roehrt.ogg. One roar, faded and loudness-normalized; shared under the same licence.
 
 ## Characters
 

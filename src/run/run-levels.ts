@@ -81,7 +81,7 @@ export const RUN_LEVELS: RunLevel[] = [
   {
     id: 'run-bridge',
     title: 'First Light',
-    story: 'A spark of the Great Lantern is loose on the screen. It can only touch shadow.',
+    story: 'A spark of the Great Lantern slipped past the witch. It can only stand on shadow; the ink below would swallow it.',
     ask: 'Hold your flat hand in the light: its shadow is the bridge',
     hint: 'Hold your hand flat, palm down, at chest height, until its shadow spans the gap',
     terrain: [
@@ -97,7 +97,7 @@ export const RUN_LEVELS: RunLevel[] = [
   {
     id: 'run-ramp',
     title: 'The Climb',
-    story: 'The way on is a ledge above you. The spark has speed; give it a slope.',
+    story: 'The way out of the ink is a ledge above you. The spark has speed; give it a slope.',
     ask: 'Tilt your hand: make a ramp from the floor up to the ledge',
     hint: 'Fingertips higher than the wrist: the shadow of a tilted hand is a ramp',
     terrain: [
@@ -114,7 +114,7 @@ export const RUN_LEVELS: RunLevel[] = [
   {
     id: 'run-kick',
     title: 'The Kick',
-    story: 'The spark has fallen into a hollow. A still shadow is ground; a moving one is a bat.',
+    story: 'The spark has fallen into a hollow of ink. A still shadow is ground; a moving one is a bat.',
     ask: 'Swing your hand up through the spark to kick it onto the high shelf',
     hint: 'Start with your hand low, then flick it up and to the right in one quick move',
     terrain: [
@@ -150,7 +150,7 @@ export const RUN_LEVELS: RunLevel[] = [
   {
     id: 'run-tunnel',
     title: 'The Low Tunnel',
-    story: 'Under the ridge runs a low tunnel with a hole in its floor. A big, thick shadow will jam it.',
+    story: 'Under the ridge runs Morwen’s old drain, with a hole in its floor. A big, thick shadow will jam it.',
     ask: 'Bridge the hole with a thin shadow: hold your hand nearer the screen',
     hint: 'Move your hand away from your face, toward the screen: a smaller shadow is a thinner one',
     terrain: [
@@ -170,7 +170,7 @@ export const RUN_LEVELS: RunLevel[] = [
   {
     id: 'run-twin',
     title: 'Twin Gaps',
-    story: 'Two gaps, one spark, and it will not wait for you.',
+    story: 'Two gaps, one spark, and the ink rising behind it: it will not wait for you.',
     ask: 'Use both hands: one shadow bridge for each gap',
     hint: 'Hold both hands flat in the light, one over each gap, before the spark arrives',
     terrain: [
@@ -194,7 +194,7 @@ export const RUN_LEVELS: RunLevel[] = [
     world: 1,
     build: true,
     title: 'The Plank',
-    story: 'Your hands are not the only things that cast shadows. Glass shards from the Great Lantern float in the light.',
+    story: 'Captain Rook the Corsair has flooded the river valley. Your hands are not the only things that cast shadows: glass shards of the Great Lantern float in the light.',
     ask: 'Pinch the shard, hold it in the light so its shadow bridges the gap, let go, then push Drop',
     hint: 'Pinch the glowing shard by your chest and lift it to eye height: watch its shadow, and line it up with the gap',
     terrain: [
@@ -233,7 +233,7 @@ export const RUN_LEVELS: RunLevel[] = [
     world: 1,
     build: true,
     title: 'Launch',
-    story: 'A wedge of glass, a fast spark, a high ledge. Angles do the rest.',
+    story: 'Rook’s lookouts watch from a high ledge. A wedge of glass and a fast spark will get past them: angles do the rest.',
     ask: 'Set the wedge’s shadow as a ramp from the floor up to the ledge, then push Drop',
     hint: 'The wedge’s high corner must sit just above the ledge’s edge, or the spark bounces back off it',
     terrain: [

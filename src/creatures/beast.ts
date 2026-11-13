@@ -17,7 +17,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { playHoof, playHorseCall, playNicker, playSnort } from '../audio.js';
+import { playAnimalCall, playHoof, playHorseCall, playNicker, playSnort, playWhoosh } from '../audio.js';
 import type { Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
@@ -107,12 +107,17 @@ export function createBeast(kind: string, fx: Effects, size = 1): Beast | null {
   return new Beast(kind, spec, gltf.scene, gltf.animations, fx, size);
 }
 
-type BeastState = 'emerging' | 'leaping' | 'idle' | 'task';
+type BeastState = 'emerging' | 'leaping' | 'idle' | 'task' | 'held' | 'thrown';
 type BeastGround = Pick<Ground, 'center' | 'radius' | 'viewer' | 'blockers'>;
 type Mood = 'stand' | 'graze' | 'rest' | 'shift' | 'stroll' | 'approach';
 
 const EMERGE_TIME = 0.9;
 const LEAP_TIME = 0.9;
+/** A pinch this far outside the body still takes it (hand tracking is a centimetre or two off). */
+const GRAB_SLACK = 0.045;
+const GRAVITY = 9.8;
+/** The real floor (WebXR local-floor), where a thrown pet can land if it misses the table. */
+const FLOOR_Y = 0;
 /** Shadow colour the body fades in from as it steps out of the paper. */
 const SHADOW = new Color(0x140b05);
 const UP = new Vector3(0, 1, 0);
@@ -161,6 +166,13 @@ export class Beast {
   private readonly neckRest = new Quaternion();
 
   private yaw = 0;
+  /** Picked up and thrown: the hand holding it, its flight, and its tumble (roll about its own length). */
+  private holder = -1;
+  private readonly flight = new Vector3();
+  private roll = 0;
+  private rollSpeed = 0;
+  private leapTime = LEAP_TIME;
+  private bounces = 0;
   private stateTime = 0;
   private moodTime = 0;
   private moodLength = 3;
@@ -347,6 +359,8 @@ export class Beast {
   /** Its voice: a real recording for the horse; the others keep their synthesized calls. */
   private call(volume = 1): void {
     if (this.kind === 'horse' && playHorseCall(0.45 * volume)) return;
+    // The fox and the stag have their own real voices: a full call when it matters, a short one otherwise.
+    if ((this.kind === 'fox' || this.kind === 'stag') && playAnimalCall(this.kind, volume >= 0.9, 0.5 * volume)) return;
     playNicker(this.spec.voice, volume);
   }
 
@@ -368,7 +382,7 @@ export class Beast {
         break;
       }
       case 'leaping': {
-        const k = Math.min(1, this.stateTime / LEAP_TIME);
+        const k = Math.min(1, this.stateTime / this.leapTime);
         this.position.lerpVectors(this.leapFrom, this.leapTo, k);
         this.position.y += Math.sin(k * Math.PI) * this.height * 0.9;
         this.setTint(1);
@@ -376,6 +390,7 @@ export class Beast {
         if (k >= 1) {
           playHoof(0.06);
           this.fx.burst(this.position, 6, 0.12);
+          this.leapTime = LEAP_TIME;
           const next = this.afterLeap;
           this.setState(next);
           this.afterLeap = 'idle';
@@ -388,6 +403,12 @@ export class Beast {
         break;
       case 'idle':
         this.live(dt, ground, hands);
+        break;
+      case 'held':
+        this.carried(dt, hands);
+        break;
+      case 'thrown':
+        this.tumble(dt, ground);
         break;
     }
 
@@ -488,6 +509,17 @@ export class Beast {
     hands.forEach((hand, h) => {
       let touch = false;
       let speed = 0;
+      // A pinch on its back or head picks it up.
+      if (hand.tracked && hand.pinchStarted && this.state === 'idle') {
+        const rel = this.rel.copy(hand.pinch).sub(this.position);
+        const along = Math.max(-half, Math.min(half, rel.dot(forward)));
+        const d = Math.hypot(rel.x - forward.x * along, rel.y - mid, rel.z - forward.z * along);
+        const toHead = headAt ? hand.pinch.distanceTo(headAt) : Infinity;
+        if (d < radius + GRAB_SLACK || toHead < this.height * 0.14 + GRAB_SLACK) {
+          this.pickUp(h);
+          return;
+        }
+      }
       if (hand.tracked) {
         hand.tips.forEach((tip, i) => {
           // Distance from the fingertip to the body's spine segment.
@@ -536,6 +568,93 @@ export class Beast {
     this.hoverTime = handNear && still ? this.hoverTime + dt : Math.max(0, this.hoverTime - dt);
     this.interest = nearest < 0.3 ? Math.min(1, this.interest + dt * 3) : Math.max(0, this.interest - dt);
     if (this.interest > 0.2 && this.hoverPoint.lengthSq() > 0) this.lookAt(this.hoverPoint, this.interest);
+  }
+
+  // ------------------------------------------------------------ Pick up and throw
+
+  /** Lifted by the scruff: it calls out, legs paddling. */
+  private pickUp(hand: number): void {
+    this.holder = hand;
+    this.setState('held');
+    this.oneShot = 0;
+    this.strokeTime = 0;
+    this.petting = false;
+    this.play('Gallop', true, 0.15, 0.55);
+    this.call(0.9);
+    this.happiness = Math.min(1, this.happiness + 0.2);
+  }
+
+  private carried(dt: number, hands: HandState[]): void {
+    const hand = hands[this.holder];
+    if (!hand || !hand.tracked || !hand.pinching) {
+      // Let go: it flies with the hand's speed and tumbles.
+      this.flight.copy(hand?.pinchVelocity ?? this.flight.set(0, 0, 0)).clampLength(0, 4);
+      const speed = this.flight.length();
+      this.rollSpeed = (Math.random() < 0.5 ? -1 : 1) * Math.min(9, speed * 3.5);
+      this.bounces = 0;
+      this.holder = -1;
+      this.setState('thrown');
+      this.play('Idle_HitReact_Right', true, 0.1, 0.7);
+      if (speed > 1.2) {
+        playWhoosh(Math.min(1, speed / 4));
+        this.call(1.1);
+      }
+      return;
+    }
+    // Hanging below the pinch, swinging with the hand.
+    this.position.copy(hand.pinch).addScaledVector(UP, -this.height * 0.75);
+    const swing = Math.max(-0.6, Math.min(0.6, hand.pinchVelocity.x * 0.35));
+    this.roll += (swing - this.roll) * Math.min(1, dt * 8);
+    this.lean = Math.max(-0.4, Math.min(0.4, -hand.pinchVelocity.y * 0.2));
+    if (Math.random() < dt * 0.25) this.call(0.5);
+  }
+
+  /** Gravity and a tumble; it lands on the table's earth or the floor, shakes it off, and comes back. */
+  private tumble(dt: number, ground: BeastGround): void {
+    this.flight.y -= GRAVITY * dt;
+    this.flight.multiplyScalar(1 - 0.1 * dt);
+    this.position.addScaledVector(this.flight, dt);
+    this.roll += this.rollSpeed * dt;
+    this.yaw += this.rollSpeed * 0.15 * dt;
+    const overTable = this.tmp.copy(this.position).sub(ground.center).setY(0).length() < ground.radius;
+    const surface = overTable && this.position.y > ground.center.y - 0.06 ? ground.center.y : FLOOR_Y;
+    if (this.position.y > surface && this.stateTime < 6) return;
+    this.position.y = surface;
+    const impact = -this.flight.y;
+    if (impact > 1 && this.bounces < 2) {
+      // A bounce: a thump, a puff of dust.
+      this.bounces++;
+      this.flight.y = impact * 0.3;
+      this.flight.x *= 0.5;
+      this.flight.z *= 0.5;
+      this.rollSpeed *= 0.4;
+      playHoof(Math.min(0.12, 0.04 + impact * 0.02));
+      this.fx.burst(this.position, 8, 0.15);
+      return;
+    }
+    // Down: back on its feet with a shake and a call.
+    this.roll = 0;
+    this.lean = 0;
+    this.flight.set(0, 0, 0);
+    playHoof(0.06);
+    this.fx.burst(this.position, 6, 0.12);
+    this.call(0.8);
+    if (surface === ground.center.y) {
+      this.setState('idle');
+      this.playOnce(Math.random() < 0.5 ? 'Idle_HitReact_Left' : 'Idle_HitReact_Right');
+      return;
+    }
+    // Missed the table: it leaps back up onto it.
+    this.leapFrom.copy(this.position);
+    this.leapTo.copy(this.position);
+    this.clampToStage(this.leapTo, ground);
+    this.tmp2.copy(this.leapTo).sub(ground.center).setY(0).multiplyScalar(0.6);
+    this.leapTo.set(ground.center.x + this.tmp2.x, ground.center.y, ground.center.z + this.tmp2.z);
+    this.leapTime = 1.4;
+    this.afterLeap = 'idle';
+    this.yaw = Math.atan2(this.leapTo.x - this.position.x, this.leapTo.z - this.position.z);
+    this.play('Gallop_Jump', false, 0.1);
+    this.setState('leaping');
   }
 
   private poked(at: Vector3, forward: Vector3): void {
@@ -706,7 +825,7 @@ export class Beast {
 
   private place(): void {
     this.root.position.copy(this.position);
-    this.root.rotation.set(this.lean, this.yaw, 0, 'YXZ');
+    this.root.rotation.set(this.lean, this.yaw, this.roll, 'YXZ');
   }
 
   // ------------------------------------------------------------ Animation

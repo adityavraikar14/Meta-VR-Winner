@@ -8,8 +8,9 @@ import {
 } from '@iwsdk/core';
 import { playAwaken, playPrompt, playRoar, playTinkle } from './audio.js';
 import {
-  dragon, ease, ellipse, GROUND, grass, H, hand, INK, lantern, star, W,
+  book, corsair, dragon, ease, ellipse, GROUND, grass, H, hand, INK, inkFlood, lantern, musketeer, ronin, slingshot, star, sword, trance, W, witch,
 } from './puppets.js';
+import { lineSeconds, narrate, stopNarration } from './narrator.js';
 
 /** Redraws per second; the show is soft and slow, so this is plenty. */
 const FPS = 30;
@@ -29,10 +30,10 @@ const SKY = Array.from({ length: 14 }, (_, i) => ({
   r: 11 + (i % 3) * 4,
 }));
 
-const SCENES: Scene[] = [
+export const SCENES: Scene[] = [
   {
-    line: 'This is the Lantern: a machine that turns light into shadow, and shadow into things that move.',
-    seconds: 5,
+    line: 'Long ago, the Great Lantern burned at the top of the world, and the Shadow Dragon guarded its light.',
+    seconds: 7,
     sound: playTinkle,
     draw(ctx, t, k) {
       ctx.fillStyle = INK;
@@ -41,84 +42,146 @@ const SCENES: Scene[] = [
         star(ctx, s.x, s.y, s.r, 0);
       });
       ctx.globalAlpha = 1;
-      lantern(ctx, W / 2, 120 + (1 - ease(k * 2)) * -160, 1.2, Math.sin(t * 1.4) * 0.08, ease(k * 2));
-      grass(ctx);
-    },
-  },
-  {
-    line: 'For a thousand years its light held the Shadow Dragon inside the paper.',
-    seconds: 4.5,
-    sound: playPrompt,
-    draw(ctx, t, k) {
-      lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t * 1.4) * 0.08, 1);
-      ctx.globalAlpha = 0.3 + 0.35 * ease(k * 2);
-      dragon(ctx, W / 2 + 120, GROUND, 1.1, 0);
+      lantern(ctx, W / 2 - 140, 80 + (1 - ease(k * 2)) * -160, 1.1, Math.sin(t * 1.4) * 0.08, ease(k * 2));
+      ctx.globalAlpha = ease(k * 2 - 0.4);
+      dragon(ctx, W / 2 + 170, GROUND, 1.1, 0);
       ctx.globalAlpha = 1;
       grass(ctx);
     },
   },
   {
-    line: 'Tonight it broke free, and the Great Lantern shattered into sparks.',
-    seconds: 5.5,
-    sound: () => playRoar(0.1),
+    line: 'Then came Morwen, the Ink Witch. Out of the oldest history books she pulled three warlords, written in ink: Captain Rook the Corsair, Sergeant Vance the Musketeer, and Kai, the Ronin.',
+    seconds: 12,
+    sound: playPrompt,
     draw(ctx, t, k) {
-      const blown = ease((k - 0.55) * 4);
-      const swing = Math.sin(t * 1.4) * 0.08 + blown * Math.sin(t * 20) * 0.25 * (1 - blown);
-      lantern(ctx, W / 2 - 60, 80, 0.8, swing, 1 - blown);
-      ctx.fillStyle = INK;
-      SKY.forEach((s, i) => {
-        const fall = blown * (GROUND - s.y + 10) * Math.min(1, blown * (1 + (i % 4) * 0.3));
-        star(ctx, s.x, s.y + fall, s.r, blown * (i + 1));
-      });
-      const enter = ease(k * 2.5);
-      dragon(ctx, W + 140 - enter * 380, GROUND, 1, ease((k - 0.3) * 4) * (1 - blown));
-      if (blown > 0 && blown < 1) {
-        ctx.fillStyle = `rgba(255, 240, 220, ${0.6 * (1 - blown)})`;
-        for (let i = 0; i < 6; i++) ellipse(ctx, 640 - blown * 220 - i * 30, 230 + Math.sin(i * 2) * 30, 30 + i * 8, 18 + i * 4);
-      }
       grass(ctx);
-    },
-  },
-  {
-    line: 'Light cannot rest on paper. A spark can only stand on shadow.',
-    seconds: 5,
-    sound: playTinkle,
-    draw(ctx, t, k) {
-      lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t) * 0.03, 0.25);
-      grass(ctx);
-      const hx = W / 2 + 60;
-      const hy = H + 60 - ease(k * 2) * 220;
-      hand(ctx, hx, hy, 1.4, 0);
-      // A spark drifts down and settles on the shadow of the middle fingertip.
-      const tipY = hy - 232 - 14;
-      const sy = Math.min(-20 + ease(k * 1.4) * 400, tipY);
+      witch(ctx, 170, GROUND, 1.25, Math.sin(t * 1.5) * 0.4);
+      book(ctx, 600, GROUND - 8, 1.5, 0.5 + 0.5 * Math.sin(t * 2));
+      // The three rise out of the book one after another.
+      const rise = (i: number) => ease((k - 0.25 - i * 0.18) * 4);
       ctx.save();
-      ctx.shadowColor = 'rgba(255, 214, 130, 0.95)';
-      ctx.shadowBlur = 26;
-      ctx.fillStyle = '#fff3c4';
-      star(ctx, hx + 14, sy, 15, t * 2);
+      ctx.beginPath();
+      ctx.rect(0, 0, W, GROUND - 14);
+      ctx.clip();
+      corsair(ctx, 470, GROUND - 14 + (1 - rise(0)) * 230, 1.05, Math.sin(t * 2) * 0.2);
+      musketeer(ctx, 610, GROUND - 14 + (1 - rise(1)) * 230, 1.05, 0);
+      ronin(ctx, 760, GROUND - 14 + (1 - rise(2)) * 230, 1.05, rise(2));
       ctx.restore();
     },
   },
   {
-    line: 'Your hands cast the only shadows left. Catch the sparks, rebuild the light, end the dragon.',
-    seconds: 5.5,
+    line: 'Together they captured the dragon, and Morwen bewitched it with her ink. Now it obeys only her.',
+    seconds: 8,
+    sound: () => playRoar(0.1),
+    draw(ctx, t, k) {
+      grass(ctx);
+      dragon(ctx, W / 2 + 60, GROUND, 1.2, 0);
+      trance(ctx, W / 2 + 60, GROUND - 120, 190, t, 0.35 + 0.4 * ease(k * 2));
+      witch(ctx, 150, GROUND, 1.1, Math.sin(t * 3) * 0.6);
+      corsair(ctx, 860, GROUND, 0.9, 0);
+      ronin(ctx, 960, GROUND, 0.9, 1);
+    },
+  },
+  {
+    line: 'Then she spilled her ink across the land. Whatever ink touches, she owns: every road, every door, every wall.',
+    seconds: 9,
+    sound: playPrompt,
+    draw(ctx, t, k) {
+      lantern(ctx, W - 160, 80, 0.8, Math.sin(t) * 0.05, 1 - ease(k * 1.4));
+      grass(ctx);
+      inkFlood(ctx, ease(k * 1.3), t);
+      ctx.fillStyle = `rgba(11, 20, 48, ${0.5 * ease(k * 1.5 - 0.3)})`;
+      ctx.fillRect(0, 0, W, H);
+    },
+  },
+  {
+    line: 'But ink cannot stain a shadow. A shadow is only where light is not, so the witch can never hold it.',
+    seconds: 8,
+    sound: playTinkle,
+    draw(ctx, t, k) {
+      lantern(ctx, W / 2 - 220, 80, 0.8, Math.sin(t * 1.4) * 0.05, 0.6);
+      grass(ctx);
+      inkFlood(ctx, 1, t);
+      // A hand rises and its shadow parts the ink.
+      hand(ctx, W / 2 + 60, H + 60 - ease(k * 2) * 230, 1.4, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,0.9)';
+      ellipse(ctx, W / 2 + 60, GROUND + 20, ease(k * 2 - 0.4) * 180, 40);
+      ctx.restore();
+    },
+  },
+  {
+    line: 'The last sparks of the Lantern have found you. In their light your shadows become real: a bridge, a ramp, a slingshot, a sword.',
+    seconds: 10,
+    sound: playAwaken,
+    draw(ctx, t, k) {
+      grass(ctx);
+      const step = Math.min(3, Math.floor(k * 4));
+      const pop = ease((k * 4 - step) * 3);
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 214, 130, 0.95)';
+      ctx.shadowBlur = 26;
+      ctx.fillStyle = '#fff3c4';
+      star(ctx, 160 + k * 700, 120 + Math.sin(t * 3) * 20, 14, t * 2);
+      ctx.restore();
+      ctx.fillStyle = INK;
+      ctx.globalAlpha = pop;
+      if (step === 0) ctx.fillRect(W / 2 - 200, GROUND - 120, 400, 26);
+      if (step === 1) {
+        ctx.beginPath();
+        ctx.moveTo(W / 2 - 220, GROUND);
+        ctx.lineTo(W / 2 + 220, GROUND - 160);
+        ctx.lineTo(W / 2 + 220, GROUND);
+        ctx.fill();
+      }
+      if (step === 2) slingshot(ctx, W / 2, GROUND, 1.6, 0.5 + 0.5 * Math.sin(t * 4));
+      if (step === 3) sword(ctx, W / 2, GROUND - 30, 1.7, Math.sin(t * 3) * 0.3);
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    line: 'Escape through the shadows. Beat her three captains, break the dragon’s trance, and face the Ink Witch herself.',
+    seconds: 9,
+    sound: () => playRoar(0.06),
+    draw(ctx, t, k) {
+      grass(ctx);
+      const show = (i: number) => ease((k - i * 0.2) * 4);
+      ctx.globalAlpha = show(0);
+      corsair(ctx, 130, GROUND, 0.85, Math.sin(t * 2) * 0.3);
+      ctx.globalAlpha = show(1);
+      musketeer(ctx, 300, GROUND, 0.85, 0.5 + 0.5 * Math.sin(t));
+      ctx.globalAlpha = show(2);
+      ronin(ctx, 470, GROUND, 0.85, 1);
+      ctx.globalAlpha = show(3);
+      dragon(ctx, 700, GROUND, 0.8, 0);
+      trance(ctx, 700, GROUND - 80, 120, t, 0.4);
+      ctx.globalAlpha = show(4);
+      witch(ctx, 930, GROUND, 1, Math.sin(t * 2) * 0.5);
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    line: 'You can stop whenever you like: push the Home button beside the screen. Now, raise your hand into the light.',
+    seconds: 8,
     sound: playAwaken,
     draw(ctx, t, k) {
       lantern(ctx, W / 2 - 60, 80, 0.8, Math.sin(t * 1.4) * 0.08, ease(k * 3));
       grass(ctx);
       hand(ctx, W / 2 + 40, H + 60 - ease(k * 2) * 220, 1.4, Math.sin(t * 5) * 0.18 * ease(k * 2 - 1));
-      ctx.fillStyle = `rgba(11, 20, 48, ${0.55 * (1 - ease(k * 3))})`;
-      ctx.fillRect(0, 0, W, H);
     },
   },
 ];
 
+// Each scene lasts at least as long as its line takes to say.
+for (const scene of SCENES) scene.seconds = Math.max(scene.seconds, lineSeconds(scene.line) + 1);
+
 /**
- * The opening shadow-puppet show: five short scenes drawn on the paper,
- * narrated in the caption bar, before the first chapter. The Lantern held
- * the Shadow Dragon; it broke free and the Lantern shattered into sparks;
- * a spark can only stand on shadow; your hands cast the only shadows left.
+ * The opening shadow-puppet show, told by a narrator and shown in the
+ * caption bar: the Lantern and its dragon; Morwen the Ink Witch and the three
+ * warlords she pulled out of history books; the dragon bewitched; the land
+ * drowned in ink; why a shadow is the one thing ink cannot hold; shadows made
+ * real; the road ahead; and how to stop (the Home button).
  */
 export class IntroShow {
   private canvas: HTMLCanvasElement;
@@ -154,6 +217,7 @@ export class IntroShow {
   }
 
   stop(): void {
+    if (this.playing) stopNarration();
     this.playing = false;
   }
 
@@ -185,6 +249,7 @@ export class IntroShow {
     this.scene++;
     this.sceneTime = 0;
     SCENES[this.scene].sound?.();
+    narrate(`intro-${this.scene + 1}`, SCENES[this.scene].line);
     this.draw();
   }
 

@@ -8,6 +8,38 @@ Priorities: **P0** = needed for a winning submission · **P1** = strongly wanted
 
 ---
 
+## 0. Quest 2 test, Nov 13 evening: Aditya's brief (top priority, in this order)
+
+Found on the Quest 2:
+- No way back: inside a chapter, a level or the Arena there is no visible way out (the palm-up menu was never found).
+- The shadow mechanic is good, but the world is not interactive enough.
+- The animals (fox, stag…) are glitchy to play with; last year's monster game let you grab characters, throw them, and they fell. Add voices.
+
+### 0.1 Interactivity and accuracy (most important)
+- [x] P0 **Home button everywhere**: always visible in every level, side game and the Arena; push twice to leave (no accidents). Also stated in the intro and on every level card.
+- [x] P0 **Everything in front of you is touchable** (src/world/touchables.ts; 61 things in the jungle world; tested in the emulator: pinched a flower out of the ground, carried it, let go, it fell and lay down): plants, grass, flowers and leaves bend away from your fingers and spring back; a plant in your way can be pinched, pulled out and thrown away; stones can be picked up, thrown, and fall and bounce on the table and floor.
+- [x] P0 **Pets** (fox, stag, horse: pinch the back or head; small friends: throws up to 3.5 m/s with a bounce; real recorded fox bark/yip and stag roar, CC BY-SA, in CREDITS.md; not yet tried with real hands): pick up the fox, stag, horse… with a pinch or a grab, carry them, throw them; they tumble, fall with gravity, land, shake it off and come back to you. Each has its own voice (yip, bark, bleat, whinny) on pick-up, throw, landing and petting.
+- [x] P0 Accuracy: generous grab reach (5–14 cm for plants, 4.5 cm outside a pet's body, 6 cm in the Smithy), a highlight on whatever a pinch would take, things never fall through a surface or out of reach (they land on the table or floor and can be picked up again).
+
+### 0.2 The story (the main thing)
+- [x] P0 **A proper opening, with voice-over** (eight shadow-puppet scenes with the four villains, src/intro.ts; spoken by src/narrator.ts with the device's voice; every level card is read aloud and waits for the line; recorded neural voice pending: Piper install needs Aditya's OK), the first time a player ever enters: who the villains are, what happened to the dragon, why shadows, what you must do. Every later level opens with a spoken one-line instruction of exactly what to do.
+- The story (proposed; Aditya to confirm):
+  - The **Shadow Dragon** guarded the Great Lantern, the light that keeps ink in its pages.
+  - **Four villains** captured it: **Morwen, the Ink Witch** (their leader), and three warlords she pulled out of old history books in ink: **Captain Rook, the Corsair** (a golden-age pirate), **Sergeant Vance, the Musketeer** (a redcoat marksman), and **Kai, the Ronin** (a masterless samurai).
+  - Morwen **hypnotised the dragon** and drowned the land in ink. Whatever ink touches, she owns: doors, walls, roads.
+  - **Why shadow**: ink can stain anything except a shadow. A shadow is the absence of light, so it is the one thing the witch cannot hold. Your hands cast shadows, and the lantern's sparks make shadows real. Shadows are the way through, and the way out.
+  - **Escape through shadow**: every level is a step of the escape: carry the spark over the ink (shadow bridges), build with shadow, make shadow things come alive and use them.
+  - Each chapter ends with one of the captains; then the **hypnotised dragon** (break the trance: fight it without killing it); then **Morwen** herself.
+- [x] P0 **Shadow things that come alive** (The Shadow Slingshot, chapter 2, src/machines/slingshot.ts): make a shadow of a **slingshot** with your hand; it becomes a real slingshot; pull and let go to fire a stone and knock something down (a cage, a key, a bridge rope). Tasks built around it.
+- [ ] P1 **Sword training in the shadows**: your hand's shadow becomes a sword; learn to block and parry ink strikes (left, right, high, low) before the captains. A special power is earned by training.
+- [ ] P1 Chapter bosses: Rook, Vance and Kai as the chapter finales (reuse the Arena bosses), then the hypnotised dragon, then Morwen.
+- Side games stay: **Ink Duel** (draw and fight) and the **Arena**.
+- [x] Every level's story rewritten for the villains (Rook floods the river, Vance holds the mine, Kai guards the pass, Morwen's gate and tower); the ending too
+- [ ] Recorded narration (Piper, voice "Cori", public domain) once installing it is allowed; drop the files in public/audio/voice/ and list them in RECORDED (src/narrator.ts)
+- [ ] Test the pets and the slingshot with real hands on the Quest
+
+---
+
 ## 1. What the competition actually wants (research, Nov 11)
 
 Sources:

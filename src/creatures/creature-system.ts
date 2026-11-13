@@ -13,6 +13,7 @@ import {
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
+import { touchables } from '../world/touchables.js';
 import { playTransform, setPurr } from '../audio.js';
 import { devInfo } from '../dev-tools.js';
 import { preloadDragon } from '../fight/dragon3d.js';
@@ -82,6 +83,12 @@ export class CreatureSystem extends createSystem({}) {
   private stageRoot!: Group;
   private fx!: Effects;
   private handInput!: HandInput;
+  private readonly tableLocal = new Vector3();
+  /** Whether a world point is over the table's earth (the slab: ±0.62 wide, 0.62 back, 0.28 forward). */
+  private readonly overTable = (p: Vector3): boolean => {
+    const local = this.stageRoot.worldToLocal(this.tableLocal.copy(p));
+    return Math.abs(local.x) < 0.62 && local.z > -0.62 && local.z < 0.28;
+  };
   private creatures: Living[] = [];
   private blobGeometry!: CircleGeometry;
   private blobMaterial!: MeshBasicMaterial;
@@ -186,6 +193,9 @@ export class CreatureSystem extends createSystem({}) {
       stage.grow = null;
     }
     this.diorama.update(dt, this.handInput.hands, this.ground.viewer);
+    // Plants, flowers and stones: bend, pick up, throw (they land on the table's earth or the floor).
+    touchables.setTable(this.ground.center.y, this.overTable);
+    touchables.update(dt, this.handInput.hands, this.scene);
     this.ground.blockers = this.diorama.blockers;
 
     while (stage.spawns.length > 0) {

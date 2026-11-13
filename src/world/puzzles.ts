@@ -1,4 +1,5 @@
 import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
+import { ShadowSlingshot } from '../machines/slingshot.js';
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
@@ -152,7 +153,7 @@ const warmup: Puzzle = {
   id: 'lantern',
   world: 0,
   title: 'The Lantern',
-  story: 'The lantern is just behind your eyes. Light travels in straight lines; put your hand in its way and the paper goes dark. Here, that dark is solid.',
+  story: 'Morwen’s ink has sealed you in, but one lantern still burns, just behind your eyes. Light travels in straight lines: put your hand in its way and the screen goes dark. Here, that dark is solid, and ink cannot touch it.',
   ask: 'Raise your hand into the lantern light',
   warmup: true,
   solved: 'That is your shadow. In this world, everything is built from it.',
@@ -515,7 +516,7 @@ const oreTrain: Puzzle = {
   id: 'ore-train',
   world: 1,
   title: 'The Ore Train',
-  story: 'Now the cart is loaded with iron ore, twice the weight. A bridge that held before may not hold now.',
+  story: 'Sergeant Vance the Musketeer holds the mine, and the way in is a cart loaded with iron ore: twice the weight. A bridge that held before may not hold now.',
   ask: 'Build it stronger: brace the triangles, or add a second truss above the road',
   handsOn: true,
   solved: 'It carried the ore. Bracing turned long members that would buckle into short ones that will not.',
@@ -540,11 +541,39 @@ const oreTrain: Puzzle = {
   },
 };
 
+/** A shadow that comes alive: the slingshot, against Captain Rook's lookout. */
+const shadowSlingshot: Puzzle = {
+  id: 'shadow-slingshot',
+  world: 1,
+  title: 'The Shadow Slingshot',
+  story: 'Captain Rook’s lookout guards the river: a caged lantern shard on a rope, his flag, and an alarm bell. A shadow can be more than ground. Shape one well enough and it comes alive.',
+  ask: 'Make a V with two fingers to cast a slingshot; when it comes alive, pinch the pouch, pull back and knock down all three targets',
+  handsOn: true,
+  solved: 'The shard is free, the flag is down, and the bell rings out. Your shadow became a real slingshot.',
+  build(root, kit) {
+    const sling = new ShadowSlingshot(kit.floor);
+    root.add(sling.group);
+    stage.runNotes = () => sling.journal();
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands) => {
+        sling.update(dt, hands);
+        task.caption = sling.caption;
+        task.done = sling.done;
+        task.mistakes = sling.mistakes;
+      },
+    };
+  },
+};
+
 const brokenBridge: Puzzle = {
   id: 'broken-bridge',
   world: 1,
   title: 'The Broken Bridge',
-  story: 'The flood took the old bridge, and the cart carrying the next lantern shard has to cross the river.',
+  story: 'Captain Rook cut the old bridge, and the cart carrying the lantern shards has to cross his flooded river.',
   ask: 'Pinch timbers into place: build a truss across the river',
   handsOn: true,
   solved: 'It holds. A triangle cannot change shape unless one of its members changes length.',
@@ -571,7 +600,7 @@ const gateLock: Puzzle = {
   id: 'gate-lock',
   world: 4,
   title: 'The Dragon’s Gate',
-  story: 'An iron gate bars the last climb to the dragon. Its lock is old and its key long lost: open it the way a locksmith would, by feel.',
+  story: 'Morwen’s iron gate bars the last climb to the dragon. Its key is long lost: open it the way a locksmith would, by feel.',
   ask: 'Press the tension lever gently, lift each pin with your fingertip, and beware the spool pin',
   handsOn: true,
   solved: 'Click, click, click, click: the plug turns and the gate swings open.',
@@ -598,7 +627,7 @@ const shadowDragon: Puzzle = {
   id: 'shadow-dragon',
   world: 4,
   title: 'The Shadow Dragon',
-  story: 'At the summit the Shadow Dragon guards the last of the Great Lantern.',
+  story: 'At the summit the bewitched dragon guards Morwen’s tower. Break its trance, and the witch is next.',
   ask: 'Choose your powers: Light or the Arsenal',
   handsOn: true,
   solved: 'The shadow breaks into light. The Great Lantern burns again.',
@@ -637,7 +666,7 @@ const healingDraught: Puzzle = {
   id: 'healing-draught',
   world: 2,
   title: 'The Healing Draught',
-  story: 'The dragon’s fire will burn. In the mine hangs an old herbalist’s pot: brew something to heal you.',
+  story: 'Vance’s shot and the dragon’s fire will both burn. In the mine hangs an old herbalist’s pot: brew something to heal you.',
   ask: 'Drop the three herbs in, then keep it simmering as the fire shifts',
   handsOn: true,
   solved: 'Two healing draughts, steeped just right.',
@@ -695,7 +724,7 @@ const skyLantern: Puzzle = {
   id: 'sky-lantern',
   world: 3,
   title: 'The Sky Lantern',
-  story: 'The mountain path starts on a ledge no one can climb. A paper lantern could carry the shards up, if the air inside it is hot enough.',
+  story: 'Kai the Ronin guards the mountain pass, and no one gets past his sword. Go over him instead: a paper lantern could carry the shards up the cliff, if the air inside it is hot enough.',
   ask: 'Light it, shelter the flame with one hand, and fan it clear of the crags with the other',
   handsOn: true,
   solved: 'Hot air is less dense than cold air: it rose, and the path is open.',
@@ -722,7 +751,7 @@ const smithy: Puzzle = {
   id: 'smithy',
   world: 2,
   title: 'The Smithy',
-  story: 'Roots as hard as iron seal the mine. The old forge is cold: you need an axe, and an axe needs steel.',
+  story: 'Sergeant Vance sealed the mine with roots as hard as iron. The old forge is cold: you need an axe, and an axe needs steel.',
   ask: 'Light the forge, heat the bar, and strike each glowing mark',
   handsOn: true,
   solved: 'An axe: quenched hard, with a keen edge.',
@@ -876,6 +905,7 @@ export const PUZZLES: Puzzle[] = [
   warmup,
   ...RUN_LEVELS.filter((l) => !l.build).map(runPuzzle),
   ...RUN_LEVELS.filter((l) => l.build).map(runPuzzle),
+  shadowSlingshot,
   brokenBridge,
   oreTrain,
   smithy,

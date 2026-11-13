@@ -375,6 +375,31 @@ function sample(file: string): AudioBuffer | null {
 export function preloadCalls(): void {
   sample('horse-neigh.ogg');
   sample('horse-whinny.ogg');
+  sample('fox-bark.ogg');
+  sample('fox-yip.ogg');
+  sample('stag-roar.ogg');
+}
+
+/**
+ * A real recorded call (British Library recordings via Wikimedia Commons,
+ * CC BY-SA 4.0 / 3.0; see CREDITS.md): the fox's bark or yip, the stag's
+ * roar. Short calls (a yip) for small moments, the full call for big ones.
+ * Returns false if not loaded yet (the caller falls back to its synth call).
+ */
+export function playAnimalCall(kind: 'fox' | 'stag', big: boolean, volume = 0.5): boolean {
+  const ctx = audio();
+  if (!ctx) return false;
+  const name = kind === 'fox' ? (big ? 'fox-bark.ogg' : 'fox-yip.ogg') : 'stag-roar.ogg';
+  const buffer = sample(name);
+  if (!buffer) return false;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = (kind === 'stag' && !big ? 1.15 : 1) * (0.94 + Math.random() * 0.12);
+  const gain = ctx.createGain();
+  gain.gain.value = volume * (kind === 'stag' && !big ? 0.6 : 1);
+  source.connect(gain).connect(ctx.destination);
+  source.start();
+  return true;
 }
 
 /**

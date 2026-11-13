@@ -106,7 +106,8 @@ const KEYS: Record<string, string> = {
   'strong-draught': '[ herbs in · ] lower the pot · ; raise it · / steep fully · ’ fill the vials',
   'broken-bridge': 'L lay a strong truss · M lay a weak square one · W an X-braced one · T test · U undo',
   'ore-train': 'L lay the basic truss (it will buckle!) · W lay an X-braced one (it holds) · T test · U undo',
-  'sky-lantern': '[ light the burner · ] cup a hand under the flame (press again to take it away: too hot scorches the paper)',
+  'sky-lantern': '[ light the burner · ] cup a hand under the flame (press again to take it away: too hot scorches the paper) · ; a gust now · / fan it back',
+  'shadow-slingshot': '[ the slingshot comes alive (as if you held a V) · ] a perfect shot at the next target',
   'gate-lock': '[ hold gentle tension (press again to let go) · ] set the binding pin · ; overset it · ’ release the lever (resets)',
   'shadow-dragon': 'First choose: [ Light · ] the Arsenal. Light: [ gather light · ] throw it. Either: ; dragon breathes · ’ dragon dives',
   duel: '[ draw ink · ] throw it · \' a drawing comes alive · ; rival throws · / rival special · + next phase · ` your super · - a herb · . win · , lose'

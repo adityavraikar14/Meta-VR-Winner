@@ -376,7 +376,7 @@ export class Creature {
         const hand = hands[this.hand];
         if (!hand || !hand.tracked || !hand.pinching) {
           // Let go: keep the hand's motion so it can be gently tossed.
-          if (hand) this.velocity.copy(hand.pinchVelocity).clampLength(0, 1.2);
+          if (hand) this.velocity.copy(hand.pinchVelocity).clampLength(0, 3.5);
           else this.velocity.set(0, 0, 0);
           this.setState('falling');
           break;
@@ -936,6 +936,14 @@ export class Creature {
     }
     if (this.position.y <= ground.center.y && this.velocity.y < 0) {
       this.position.y = ground.center.y;
+      // A hard landing bounces once before it settles.
+      if (this.velocity.y < -1.5) {
+        this.velocity.y = -this.velocity.y * 0.3;
+        this.velocity.x *= 0.5;
+        this.velocity.z *= 0.5;
+        this.land(0.6);
+        return;
+      }
       const impact = Math.min(1, -this.velocity.y / 3);
       this.velocity.set(0, 0, 0);
       this.land(0.85 - impact * 0.3);

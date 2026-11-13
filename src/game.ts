@@ -1,4 +1,5 @@
 import { fitFont, font, FONT, roundRect as themeRoundRect, UI } from './ui-theme.js';
+import { narrate, narrating, stopNarration } from './narrator.js';
 import {
   CanvasTexture,
   Color,
@@ -146,6 +147,10 @@ const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
 /** The Skip button, off to the right of the paper and clear of the hands-on machines. */
 const SKIP_BUTTON = new Vector3(0.42, 0.02, 0.6);
 const SKIP_SIZE = 0.75;
+/** Home sits above Skip, on the same side, in paper space (it follows the screen even in the Arena). */
+const HOME_AT = new Vector3(0.42, 0.17, 0.6);
+/** Seconds the Home button waits for its second push. */
+const HOME_CONFIRM = 3;
 /** Phases in which a level is under way and can be skipped. */
 const SKIPPABLE: ReadonlySet<Phase> = new Set(['story', 'matching', 'awakening', 'solving', 'oops']);
 const VIEWER = new Vector3(0, 0.12, 1.0);
@@ -257,6 +262,12 @@ export class ShadowGameSystem extends createSystem({
   private skipButton!: PushButton;
   private skipEntity!: Entity;
   private skipClick = false;
+  /** Always-there Home: in every level, side game and the Arena. Push twice to leave. */
+  private homeButton!: PushButton;
+  private homeEntity!: Entity;
+  private homeClick = false;
+  private homeArmed = 0;
+  private readonly homeEye = new Vector3();
   private buttonEntity!: Entity;
   private intro!: IntroShow;
   private table!: TableFinder;
@@ -401,9 +412,15 @@ export class ShadowGameSystem extends createSystem({
     this.skipButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
     this.skipEntity = this.world.createTransformEntity(this.skipButton.root, { parent: stage.paperEntity! });
     this.skipEntity.addComponent(RayInteractable);
+    // Home lives in the room, not on the screen, so it is still there when the Arena hides the screen.
+    this.homeButton = new PushButton(this.scene, 'Home');
+    this.homeButton.size = 0.7;
+    this.homeEntity = this.world.createTransformEntity(this.homeButton.root);
+    this.homeEntity.addComponent(RayInteractable);
     this.queries.rayPressed.subscribe('qualify', (entity) => {
       if (entity === this.buttonEntity) this.rayClick = true;
       if (entity === this.skipEntity) this.skipClick = true;
+      if (entity === this.homeEntity) this.homeClick = true;
     });
     this.addDesktopPress();
     this.intro = new IntroShow(paper);
@@ -621,6 +638,7 @@ export class ShadowGameSystem extends createSystem({
       if (isSideGame(this.puzzleIndex)) this.showTitle();
       else this.skip();
     }
+    this.updateHome(dt);
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
@@ -668,7 +686,8 @@ export class ShadowGameSystem extends createSystem({
         break;
       case 'story':
         if (!this.welcomed) this.welcomeBack();
-        if (this.phaseTime >= STORY_TIME) this.beginMatching();
+        // The card stays until the storyteller has finished (but never longer than 14 s).
+        if (this.phaseTime >= STORY_TIME && (!narrating() || this.phaseTime > 14)) this.beginMatching();
         break;
       case 'matching':
         if (stage.menuOpen) {
@@ -775,6 +794,7 @@ export class ShadowGameSystem extends createSystem({
   /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
     this.leaveArena();
+    stopNarration();
     // Back from a side game: the story's place, not the side game's.
     if (isSideGame(play.puzzleIndex)) play.puzzleIndex = this.storyIndex;
     const resume = resumeIndex();
@@ -848,7 +868,7 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
-      if (!this.playButton.visible && !this.skipButton.visible && this.menu.roots.length === 0) return;
+      if (!this.playButton.visible && !this.skipButton.visible && !this.homeButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
@@ -856,6 +876,7 @@ export class ShadowGameSystem extends createSystem({
       raycaster.setFromCamera(ndc, camera);
       if (this.playButton.visible && raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
       if (this.skipButton.visible && raycaster.intersectObject(this.skipButton.root, true).length > 0) this.skipClick = true;
+      if (this.homeButton.visible && raycaster.intersectObject(this.homeButton.root, true).length > 0) this.homeClick = true;
       this.menu.roots.forEach((root, i) => {
         if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
       });
@@ -963,11 +984,13 @@ export class ShadowGameSystem extends createSystem({
           : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
       this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story, `Your move: ${puzzle.ask}`);
       this.setCaption(puzzle.ask);
+      // The storyteller reads the card: what is happening, and exactly what to do.
+      narrate(`level-${puzzle.id}`, `${puzzle.title}. ${puzzle.story} Your move: ${puzzle.ask}.`);
     } else {
       this.drawBanner(
-        'You escaped the Lantern',
+        'The ink is gone',
         'Free at last',
-        'The Great Lantern carries you home. Your hands made light, friends, a bridge and an axe, and your Journal holds the science of it all. Thank you for playing.',
+        'The dragon is itself again, Morwen’s ink has dried to dust, and the Great Lantern burns at the top of the world. Your shadows did it all, and your Journal holds the science of it. Thank you for playing.',
         `${totalStars()} of ${PUZZLES.length * 3} ★  ·  ${pagesFilled()} of ${JOURNAL.length} Journal pages`,
       );
       this.setCaption('Free play: make any friend’s shadow, or open the menu on your palm');
@@ -976,6 +999,40 @@ export class ShadowGameSystem extends createSystem({
     this.setPhase('story');
     stage.cue = 'wave';
     playPrompt();
+  }
+
+  /**
+   * Home: always beside the screen while anything is being played (a level,
+   * a side game, the Arena). The first push asks, the second goes home.
+   */
+  private updateHome(dt: number): void {
+    const paper = stage.paper;
+    const on = (this.puzzle !== null || stage.arena) && this.phase !== 'title' && this.phase !== 'intro' && !stage.menuOpen;
+    this.homeButton.show(on && !!paper);
+    if (paper) {
+      HOME_AT.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
+      const root = this.homeButton.root;
+      paper.localToWorld(root.position.copy(HOME_AT));
+      root.parent?.worldToLocal(root.position);
+      this.homeButton.root.lookAt(paper.localToWorld(this.homeEye.copy(VIEWER)));
+    }
+    if (this.homeArmed > 0) {
+      this.homeArmed -= dt;
+      if (this.homeArmed <= 0) this.homeButton.setText('Home');
+    }
+    const pushed = this.homeButton.update(dt, this.liveTips, this.homeClick);
+    this.homeClick = false;
+    if (!pushed || !on) return;
+    playClick();
+    if (this.homeArmed > 0) {
+      this.homeArmed = 0;
+      this.homeButton.setText('Home');
+      this.showTitle();
+      return;
+    }
+    this.homeArmed = HOME_CONFIRM;
+    this.homeButton.setText('Leave?');
+    if (!stage.arena) this.setCaption('Push Home again to leave this level (your stars are kept)');
   }
 
   /** Restart and Skip from the hand menu. */
