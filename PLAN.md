@@ -328,6 +328,16 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
   - The bridges already have theirs: the Ore Train doubles the load, so the first bridge's design buckles
 - [ ] On Quest: feel each machine twist (fan strength, feather-touch window, mark size)
 
+### Nov 13, fifth pass: a bright, satisfying look (Aditya: "make each level look like the references [bright cartoon physics games], not plain and boring; what is this blank button; I can't pick up the lantern I drop; things are see-through")
+- [x] Every Shadow Run level has a painted world on the screen behind the course, one per chapter: spring meadow (blossom trees, mushrooms, flowers), river valley (windmill, river), golden canyon (timber mine frames, lanterns), snowy peaks (hot-air balloons, pines), violet dusk (stars, moon, the castle). Sky, sun with rays, puffy clouds, three layers of rolling hills. Seeded, so a level always looks the same; the play area stays open sky so the hand's shadow reads
+- [x] The world is alive: near clouds drift across, fireflies wander and blink
+- [x] Cartoon ground instead of photographs: rich earth with pebbles, a chunky bright grass lip with scalloped drips, a thick sticker outline; brighter per-chapter colours
+- [x] Stars to collect are chunky gold stickers with a white edge and a glint; pop words when you take one (NICE! WOW! SUPER!) and at the gate (PERFECT! / GREAT! / CLEARED!)
+- [x] The "blank button" was the back of a button seen from behind: every button now has a finished back (dark iron, brass ring, rivets, a sun emblem), and the screen has a solid board back with a frame instead of being see-through
+- [x] The Smithy: the lantern shard (and the bar) dropped anywhere over the hearth now land in the coals instead of sinking out of sight into the stonework; dropped things land on top of the hearth and anvil, never inside; thrown things stay on the table; grab reach 4 → 6 cm
+- [ ] On Quest: if a lantern shard still can't be picked up somewhere, note which level and where it was dropped
+- [ ] The machine levels' tables and the menus: same bright treatment (next)
+
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.
 - Fixed: winning the Ink Duel saved the story as finished, so Continue restarted at level 1. Side games (duel, Daily Light) now keep the story's place.

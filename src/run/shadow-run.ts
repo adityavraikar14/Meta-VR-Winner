@@ -24,6 +24,8 @@ import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim, THORN_RADIUS } from './run-sim.js';
 import { ShardSet } from './shards.js';
+import { cloudTexture, hashString, sceneryTexture } from './scenery.js';
+import { Comic } from '../fight/comic.js';
 import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
 import { currentSlot, DEMO, nextSlot, resetWorkshop, saveWorkshop } from './workshop.js';
 import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
@@ -111,17 +113,17 @@ interface CourseLook {
 }
 
 const COURSE_LOOKS: CourseLook[] = [
-  { fill: 'soil', flat: ['#7a5a3a', '#4a3422'], top: ['#4fae3e', '#a8e86a'], tufts: '#5cc04a', outline: '#2e2114' }, // Light & Shadow: jungle earth and grass
-  { fill: 'pebbles', flat: ['#8a8f8a', '#5a605e'], top: ['#3f9a7a', '#9fe8c8'], tufts: '#4fb08a', outline: '#2a3030' }, // Structures: river pebbles and moss
-  { fill: 'stone', flat: ['#6a5a52', '#3a2e2a'], top: ['#e8742a', '#ffd27a'], tufts: null, outline: '#241a16' }, // Fire & Iron: rock and embers
-  { fill: 'stone', flat: ['#8a90a0', '#5a6070'], top: ['#dfe8f4', '#ffffff'], tufts: null, outline: '#3a4050' }, // Hot Air: mountain rock and snow
-  { fill: 'iron', flat: ['#5a3a3a', '#2e1a1e'], top: ['#d8a020', '#ffe07a'], tufts: null, outline: '#1e1014' }, // The Dragon: dark iron and gold
+  { fill: 'soil', flat: ['#b9783e', '#7a4a24'], top: ['#4cc23a', '#a6f05a'], tufts: '#3fae32', outline: '#4a2a14' }, // Light & Shadow: meadow earth and grass
+  { fill: 'pebbles', flat: ['#c08a4e', '#83572e'], top: ['#3cbf6a', '#9cf0a8'], tufts: '#30a85a', outline: '#4a2e18' }, // Structures: riverbank and moss
+  { fill: 'stone', flat: ['#d08a4e', '#94502a'], top: ['#ff9a2a', '#ffe07a'], tufts: null, outline: '#5a2a12' }, // Fire & Iron: canyon rock and embers
+  { fill: 'stone', flat: ['#9aaac4', '#62708e'], top: ['#ffffff', '#e4f2ff'], tufts: null, outline: '#3a4664' }, // Hot Air: mountain rock and snow
+  { fill: 'iron', flat: ['#8a5ab0', '#4e2e74'], top: ['#ffc83a', '#fff09a'], tufts: null, outline: '#2e1640' }, // The Dragon: violet stone and gold
 ];
 
 const photos = new Map<string, Promise<HTMLImageElement | null>>();
 
-/** A photographed surface, loaded once; null if it cannot be had. */
-function photo(name: string): Promise<HTMLImageElement | null> {
+/** A photographed surface, loaded once; null if it cannot be had. (Kept for the old look; unused.) */
+export function photo(name: string): Promise<HTMLImageElement | null> {
   let wait = photos.get(name);
   if (!wait) {
     wait = new Promise((resolve) => {
@@ -162,10 +164,25 @@ function paintCourse(canvas: HTMLCanvasElement, level: RunLevel, look: CourseLoo
     g.fillStyle = flat;
   }
   g.fillRect(0, 0, canvas.width, canvas.height);
+  // Cartoon pebbles and specks in the earth, the same every time (seeded by the level).
+  let seed = hashString(level.id);
+  const rand = () => {
+    seed = (Math.imul(seed ^ (seed >>> 15), 2246822507) + 0x9e3779b9) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < 140; i++) {
+    const x = rand() * canvas.width;
+    const y = rand() * canvas.height;
+    const r = 3 + rand() * 9;
+    g.fillStyle = rand() < 0.6 ? 'rgba(60, 30, 10, 0.22)' : 'rgba(255, 230, 190, 0.22)';
+    g.beginPath();
+    g.ellipse(x, y, r * 1.4, r, rand() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
   const depth = g.createLinearGradient(0, py(0.25), 0, py(-0.2));
   depth.addColorStop(0, 'rgba(255,255,255,0.12)');
   depth.addColorStop(0.35, 'rgba(0,0,0,0)');
-  depth.addColorStop(1, 'rgba(10,6,2,0.5)');
+  depth.addColorStop(1, 'rgba(10,6,2,0.35)');
   g.fillStyle = depth;
   g.fillRect(0, 0, canvas.width, canvas.height);
   // The top surfaces: a thick living band and a bright lip, kept inside the ground
@@ -185,7 +202,7 @@ function paintCourse(canvas: HTMLCanvasElement, level: RunLevel, look: CourseLoo
     }
   }
   g.lineCap = 'round';
-  for (const [width, colour] of [[30, look.top[0]], [9, look.top[1]]] as const) {
+  for (const [width, colour] of [[34, look.top[0]], [10, look.top[1]]] as const) {
     g.strokeStyle = colour;
     g.lineWidth = width;
     for (const [x0, y0, x1, y1] of tops) {
@@ -195,10 +212,21 @@ function paintCourse(canvas: HTMLCanvasElement, level: RunLevel, look: CourseLoo
       g.stroke();
     }
   }
+  // Scalloped drips along the underside of the grass band, the classic cartoon edge.
+  g.fillStyle = look.top[0];
+  for (const [x0, y0, x1, y1] of tops) {
+    const length = Math.hypot(x1 - x0, y1 - y0);
+    for (let d = 7; d < length - 4; d += 15) {
+      const k = d / length;
+      g.beginPath();
+      g.arc(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k + 15, 8, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
   g.restore();
-  // The outline, for a crisp edge against the white screen.
+  // A chunky dark outline, like a cut-out sticker.
   g.strokeStyle = look.outline;
-  g.lineWidth = 3;
+  g.lineWidth = 5;
   g.lineJoin = 'round';
   g.stroke(all);
   // Blades standing a few millimetres proud of the top: the same blade every time (no flicker on repaint).
@@ -235,11 +263,6 @@ function courseTexture(level: RunLevel): CanvasTexture {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 4;
-  void photo(look.fill).then((image) => {
-    if (!image) return;
-    paintCourse(canvas, level, look, image);
-    texture.needsUpdate = true;
-  });
   return texture;
 }
 
@@ -349,20 +372,34 @@ function moteTexture(): CanvasTexture {
   glow.addColorStop(1, 'rgba(255, 160, 40, 0)');
   g.fillStyle = glow;
   g.fillRect(0, 0, 64, 64);
-  // A solid gold star with a dark-gold edge, so it stands out on the white screen.
-  g.fillStyle = '#ffc928';
-  g.strokeStyle = '#c9760a';
-  g.lineWidth = 3;
+  // A chunky gold star: a white sticker edge, a dark-gold line, a glint.
+  const star = () => {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 ? 9.5 : 21;
+      g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r);
+    }
+    g.closePath();
+  };
   g.lineJoin = 'round';
-  g.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 ? 9 : 21;
-    g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r);
-  }
-  g.closePath();
-  g.fill();
+  star();
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 7;
   g.stroke();
+  const gold = g.createLinearGradient(0, 12, 0, 52);
+  gold.addColorStop(0, '#ffe45a');
+  gold.addColorStop(1, '#ffa412');
+  g.fillStyle = gold;
+  star();
+  g.fill();
+  g.strokeStyle = '#b8620a';
+  g.lineWidth = 2.5;
+  g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.75)';
+  g.beginPath();
+  g.ellipse(27, 24, 4, 2.2, -0.6, 0, Math.PI * 2);
+  g.fill();
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
@@ -398,6 +435,11 @@ export class ShadowRun {
   private aheadAt: Array<[number, number]> = [];
   /** Ink thorns on the course. */
   private thorns: Sprite[] = [];
+  /** The painted world: near clouds that drift, fireflies, and pop words. */
+  private clouds: Array<{ mesh: Mesh; speed: number }> = [];
+  private flies: Array<{ sprite: Sprite; x: number; y: number; phase: number }> = [];
+  private readonly comic = new Comic(4);
+  private readonly eye = new Vector3();
   /** The dashed "your shadow here" guide. */
   private guide: Mesh | null = null;
   private trail: Sprite[] = [];
@@ -440,6 +482,30 @@ export class ShadowRun {
     const day = level.id === 'daily' ? Number(new Date().toISOString().slice(0, 10).replace(/-/g, '')) : undefined;
     this.face = new SparkFace(pickSpark(level.id, day), 10);
     this.sim.power = this.face.info.power;
+
+    // The painted world behind the course: opaque and drawn first, so hand shadows fall across it.
+    const scenery = new Mesh(new PlaneGeometry(W, H), new MeshBasicMaterial({ map: sceneryTexture(level.world ?? 0, level.id, 1024, H / W) }));
+    scenery.position.z = 0.0008;
+    scenery.renderOrder = 1;
+    this.paper.add(scenery);
+    const puff = cloudTexture();
+    for (let i = 0; i < 3; i++) {
+      const mesh = new Mesh(new PlaneGeometry(0.16, 0.08), new MeshBasicMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0.92 }));
+      mesh.position.set(-W / 2 + (i + 0.3) * (W / 3), H / 2 - 0.06 - (i % 2) * 0.05, 0.0011);
+      mesh.scale.setScalar(0.8 + (i % 3) * 0.25);
+      mesh.renderOrder = 1;
+      this.paper.add(mesh);
+      this.clouds.push({ mesh, speed: 0.006 + i * 0.003 });
+    }
+    const fly = glowTexture('rgba(255,255,220,1)', 'rgba(255,220,90,0.5)');
+    for (let i = 0; i < 12; i++) {
+      const sprite = new Sprite(new SpriteMaterial({ map: fly, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.7 }));
+      sprite.scale.setScalar(0.012);
+      sprite.renderOrder = 4;
+      this.paper.add(sprite);
+      this.flies.push({ sprite, x: (Math.random() - 0.5) * W * 0.95, y: -H / 2 + 0.03 + Math.random() * H * 0.45, phase: Math.random() * 10 });
+    }
+    this.paper.add(this.comic.group);
 
     const course = new Mesh(
       new PlaneGeometry(W, H),
@@ -485,7 +551,7 @@ export class ShadowRun {
     for (const [x, y] of level.motes) {
       const sprite = new Sprite(new SpriteMaterial({ map: mote, transparent: true, depthWrite: false }));
       sprite.position.set(x, y, Z_GATE);
-      sprite.scale.setScalar(0.052);
+      sprite.scale.setScalar(0.064);
       sprite.renderOrder = 5;
       this.paper.add(sprite);
       this.motes.push(sprite);
@@ -654,6 +720,7 @@ export class ShadowRun {
         this.moteFlight[event.index] = 0.22;
         this.joy = 0.7;
         this.burst(x, y, 10, 0.5);
+        this.comic.pop(['NICE!', 'WOW!', 'SUPER!'][Math.min(2, sim.motesTaken - 1)], this.v.set(x, y + 0.05, 0.02), '#ffd23a', 0.32, 0.9);
       } else if (event.type === 'revive') {
         // The Phoenix core's second chance: a flash where it fell, and it reignites on the ledge.
         playAwaken();
@@ -678,6 +745,7 @@ export class ShadowRun {
         this.joy = 2;
         this.stars = sim.stars();
         playAwaken();
+        this.comic.pop(this.stars >= 3 ? 'PERFECT!' : this.stars === 2 ? 'GREAT!' : 'CLEARED!', this.v.set(this.level.gate[0], this.level.gate[1] + 0.08, 0.03), this.stars >= 3 ? '#ffd23a' : '#7fe0ff', 0.5, 1.4);
         this.burst(this.level.gate[0], this.level.gate[1], 20, 0.7);
       }
     }
@@ -805,6 +873,17 @@ export class ShadowRun {
 
   /** Spark, trail, gate and motes where the simulation says. */
   private place(dt = 0): void {
+    // The painted world is alive: near clouds drift, fireflies wander and blink.
+    for (const c of this.clouds) {
+      c.mesh.position.x += c.speed * dt;
+      if (c.mesh.position.x > W / 2 + 0.1) c.mesh.position.x = -W / 2 - 0.1;
+    }
+    for (const f of this.flies) {
+      const t = this.time * 0.6 + f.phase;
+      f.sprite.position.set(f.x + Math.sin(t) * 0.03, f.y + Math.sin(t * 1.7) * 0.015, Z_COURSE + 0.0003);
+      f.sprite.material.opacity = 0.25 + 0.55 * Math.max(0, Math.sin(t * 2.3));
+    }
+    if (dt > 0) this.comic.update(dt, this.paper.localToWorld(this.eye.copy(VIEWER)));
     const sim = this.sim;
     const { x, y } = sim.spark;
     const visible = sim.state !== 'lost';

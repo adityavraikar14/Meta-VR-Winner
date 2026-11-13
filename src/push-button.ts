@@ -53,6 +53,47 @@ const JEWEL: Record<number, number> = {
   [BUTTON.purple]: 0x5a32c0,
 };
 
+let backFace: CanvasTexture | null = null;
+
+/** The back of every button: dark iron, a brass ring and four rivets, the lantern's sun in the middle. */
+function backTexture(): CanvasTexture {
+  if (backFace) return backFace;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  const iron = g.createRadialGradient(64, 56, 4, 64, 64, 64);
+  iron.addColorStop(0, '#3a404c');
+  iron.addColorStop(1, '#15181e');
+  g.fillStyle = iron;
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = '#c9a25a';
+  g.lineWidth = 5;
+  g.beginPath();
+  g.arc(64, 64, 50, 0, Math.PI * 2);
+  g.stroke();
+  g.fillStyle = '#c9a25a';
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    g.beginPath();
+    g.arc(64 + Math.cos(a) * 38, 64 + Math.sin(a) * 38, 4, 0, Math.PI * 2);
+    g.fill();
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(64 + Math.cos(a - 0.12) * 12, 64 + Math.sin(a - 0.12) * 12);
+    g.lineTo(64 + Math.cos(a) * 24, 64 + Math.sin(a) * 24);
+    g.lineTo(64 + Math.cos(a + 0.12) * 12, 64 + Math.sin(a + 0.12) * 12);
+    g.fill();
+  }
+  g.beginPath();
+  g.arc(64, 64, 10, 0, Math.PI * 2);
+  g.fill();
+  backFace = new CanvasTexture(canvas);
+  backFace.colorSpace = SRGBColorSpace;
+  return backFace;
+}
+
 let brass: MeshStandardMaterial | null = null;
 let iron: MeshStandardMaterial | null = null;
 
@@ -106,6 +147,11 @@ export class PushButton {
     const bezel = new Mesh(new TorusGeometry(CAP_RADIUS + 0.0055, 0.0042, 12, 56), bezelMetal);
     bezel.position.z = BASE_DEPTH + 0.002;
     this.root.add(plate, bezel);
+    // The back: dark iron with a brass rosette, so a button seen from behind still looks made.
+    const back = new Mesh(new CircleGeometry(BASE_RADIUS * 1.06, 48), new MeshBasicMaterial({ map: backTexture() }));
+    back.rotation.y = Math.PI;
+    back.position.z = -0.0005;
+    this.root.add(back);
 
     // The light inside, seen as a soft ring around the bezel; it swells as a finger nears.
     this.haloMaterial = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, blending: AdditiveBlending, depthWrite: false });

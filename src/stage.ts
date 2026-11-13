@@ -259,6 +259,38 @@ export class ShadowStageSystem extends createSystem({}) {
     );
     paperMesh.name = 'PaperSurface';
     this.paper.add(paperMesh);
+    // The screen's back: warm board with a lantern emblem, so from behind it is a solid thing, not see-through.
+    const backCanvas = document.createElement('canvas');
+    backCanvas.width = 512;
+    backCanvas.height = Math.round((512 * PAPER_HEIGHT) / PAPER_WIDTH);
+    const b = backCanvas.getContext('2d')!;
+    const board = b.createLinearGradient(0, 0, 0, backCanvas.height);
+    board.addColorStop(0, '#c99a62');
+    board.addColorStop(1, '#a87a48');
+    b.fillStyle = board;
+    b.fillRect(0, 0, backCanvas.width, backCanvas.height);
+    b.strokeStyle = 'rgba(90, 56, 28, 0.25)';
+    b.lineWidth = 2;
+    for (let y = 6; y < backCanvas.height; y += 9) {
+      b.beginPath();
+      b.moveTo(0, y + Math.sin(y) * 2);
+      b.bezierCurveTo(170, y + 4, 340, y - 4, 512, y + Math.cos(y) * 2);
+      b.stroke();
+    }
+    b.strokeStyle = '#6a4224';
+    b.lineWidth = 10;
+    b.strokeRect(5, 5, backCanvas.width - 10, backCanvas.height - 10);
+    b.fillStyle = '#ffd27a';
+    b.beginPath();
+    b.arc(256, backCanvas.height / 2, 34, 0, Math.PI * 2);
+    b.fill();
+    const backTexture = new CanvasTexture(backCanvas);
+    backTexture.colorSpace = SRGBColorSpace;
+    const back = new Mesh(new PlaneGeometry(PAPER_WIDTH, PAPER_HEIGHT), new MeshBasicMaterial({ map: backTexture }));
+    back.name = 'PaperBack';
+    back.rotation.y = Math.PI;
+    back.position.z = -0.002;
+    this.paper.add(back);
 
 
     // Crisp, deep navy shadows on the white screen.

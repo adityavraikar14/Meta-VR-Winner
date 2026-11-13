@@ -88,7 +88,8 @@ const MARKS = [-0.024, 0.022, -0.006, 0.026, 0.008, -0.018];
 /** How close to the mark the hammer's face must land. */
 const MARK_REACH = 0.014;
 const TONGS = 0.05;
-const GRAB_REACH = 0.04;
+/** A pinch this close takes an item: generous, since hand tracking is a centimetre or two off. */
+const GRAB_REACH = 0.06;
 
 type Place = 'start' | 'held' | 'falling' | 'fire' | 'anvil' | 'water' | 'ground';
 type Step = 'light' | 'bellows' | 'heat' | 'heating' | 'forge' | 'quench' | 'done';
@@ -507,7 +508,9 @@ export class Forge {
   private settle(item: Item, dropped: boolean): void {
     const p = item.group.position;
     const f = this.floor;
-    const nearPot = Math.hypot(p.x - HEARTH.x, p.z - HEARTH.z) < POT_R + 0.025;
+    // Anywhere over the hearth's top counts as the coals: nothing can sink out of sight into its stonework.
+    const overHearth = Math.abs(p.x - HEARTH.x) < HEARTH_W / 2 + 0.012 && Math.abs(p.z - HEARTH.z) < HEARTH_D / 2 + 0.012;
+    const nearPot = overHearth || Math.hypot(p.x - HEARTH.x, p.z - HEARTH.z) < POT_R + 0.025;
     const onAnvil = Math.abs(p.x - ANVIL.x) < FACE_HALF.x + 0.02 && Math.abs(p.z - ANVIL.z) < FACE_HALF.z + 0.025;
     const inTrough = Math.abs(p.x - TROUGH.x) < TROUGH_SIZE.x / 2 && Math.abs(p.z - TROUGH.z) < TROUGH_SIZE.z / 2;
     const above = (y: number) => p.y >= f + y - 0.01 && (dropped || p.y <= f + y + 0.01);
@@ -528,8 +531,24 @@ export class Forge {
       item.place = 'ground';
       return;
     }
+    // The hammer on the hearth, or anything on the anvil's face: it rests on top, never inside.
+    if (!dropped && overHearth && p.y <= f + HEARTH_H + 0.006) {
+      p.y = f + HEARTH_H + 0.006;
+      item.place = 'ground';
+      item.velocity.set(0, 0, 0);
+      return;
+    }
+    if (!dropped && onAnvil && p.y <= f + FACE_Y + 0.006) {
+      p.y = f + FACE_Y + 0.006;
+      item.place = 'ground';
+      item.velocity.set(0, 0, 0);
+      return;
+    }
     if (!dropped && p.y <= f + 0.006) {
       p.y = f + 0.006;
+      // Thrown things stay on the table, within reach.
+      p.x = Math.min(0.45, Math.max(-0.45, p.x));
+      p.z = Math.min(0.24, Math.max(-0.3, p.z));
       item.place = 'ground';
       item.velocity.set(0, 0, 0);
       // Whatever lands flat lies down.
