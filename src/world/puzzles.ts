@@ -92,11 +92,15 @@ export interface Puzzle {
   painted?: boolean;
   /** Caption once solved. */
   solved: string;
+  /** What winning it gained you on the way to saving the dragon (the clear card's lead line). */
+  gain?: string;
   build(root: Group, kit: Kit): PuzzleScene;
 }
 
 export interface World {
   name: string;
+  /** What this chapter is for, in the story (the level cards' kicker). */
+  goal: string;
   /** Caption while this world grows into the room. */
   grows: string;
   /** Builds the world: its earth on the stage, the screen's frame, and the plants in your room. */
@@ -131,11 +135,11 @@ function place(root: Group, object: Object3D, x: number, y: number, z: number, t
 
 export const WORLDS: World[] = [
   // Each chapter's own world, life-size around you: the jungle, the river, the old mine, the mountain.
-  { name: 'Light & Shadow', grows: 'The jungle grows into your room…', decorate: decorateJungle, ambience: 'jungle', music: 'explore' },
-  { name: 'Structures', grows: 'The river finds its way to you…', decorate: decorateRiver, ambience: 'river', music: 'river' },
-  { name: 'Fire & Iron', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine', music: 'mine' },
-  { name: 'Hot Air', grows: 'The cliffs rise into the evening sky…', decorate: decorateMountain, ambience: 'river', music: 'river' },
-  { name: 'The Dragon', grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain', music: 'battle' },
+  { name: 'Light & Shadow', goal: 'Save the Lantern’s lost sparks', grows: 'The jungle grows into your room…', decorate: decorateJungle, ambience: 'jungle', music: 'explore' },
+  { name: 'Structures', goal: 'Cross Captain Rook’s flooded river', grows: 'The river finds its way to you…', decorate: decorateRiver, ambience: 'river', music: 'river' },
+  { name: 'Fire & Iron', goal: 'Break into Sergeant Vance’s mine', grows: 'The old mine opens around you…', decorate: decorateMine, ambience: 'mine', music: 'mine' },
+  { name: 'Hot Air', goal: 'Climb to Kai’s mountain pass', grows: 'The cliffs rise into the evening sky…', decorate: decorateMountain, ambience: 'river', music: 'river' },
+  { name: 'The Dragon', goal: 'Free the dragon, then face Morwen', grows: 'The mountain rises around you…', decorate: decorateMountain, ambience: 'mountain', music: 'battle' },
 ];
 
 // --------------------------------------------------------------- Puzzles
@@ -632,7 +636,7 @@ const shadowDragon: Puzzle = {
   id: 'shadow-dragon',
   world: 4,
   title: 'The Shadow Dragon',
-  story: 'At the summit the bewitched dragon guards Morwen’s tower. Break its trance, and the witch is next.',
+  story: 'At the summit the bewitched dragon guards Morwen’s tower. The Great Lantern is whole again: turn its light on the dragon and break the trance. Then the witch is next.',
   ask: 'Choose your powers: Light or the Arsenal',
   handsOn: true,
   fight: true,
@@ -1047,3 +1051,44 @@ export const PUZZLES: Puzzle[] = [
   shadowDragon,
   fightMorwen,
 ];
+
+/**
+ * The thread through every level: the Great Lantern lies in pieces, and
+ * each level wins one back. Sparks in the jungle, glass shards on the river,
+ * and a heart shard from each captain. Whole again, its light breaks the
+ * dragon's trance, and the freed dragon stands with you against Morwen.
+ */
+const GAINS: Record<string, string> = {
+  lantern: 'Your first shadow. Morwen’s ink cannot touch it: this is how you will escape.',
+  'run-bridge': 'The spark is home: the first piece of the Great Lantern is back.',
+  'run-ramp': 'Another spark climbs out of the ink and back to the Lantern.',
+  'run-kick': 'Knocked free of the ink, one more spark returns to the Lantern.',
+  'run-long': 'Your shadow stretched over the gap, and another spark is saved.',
+  'run-tunnel': 'Morwen’s drain is jammed shut, and its spark is free.',
+  'run-twin': 'The jungle’s last spark is safe. The road to the river is open.',
+  'build-plank': 'A shard of Lantern glass became your bridge over Rook’s flood.',
+  'build-projection': 'A small shard, a big shadow: across, and the shard goes in your pack.',
+  'build-launch': 'Past Rook’s lookouts unseen, with one more shard.',
+  'build-slide': 'Caught on glass and carried to the gate: another shard.',
+  'build-pair': 'Two shards working together. Rook’s valley is nearly crossed.',
+  'shadow-slingshot': 'The caged shard is free and Rook’s alarm is silenced: he does not know you are coming.',
+  'broken-bridge': 'The cart of Lantern shards crosses the river on your bridge.',
+  'ore-train': 'The cart rolls on towards the mine. But Rook has seen it.',
+  'fight-rook': 'Rook is beaten. His heart shard, the first of the Lantern’s three hearts, is yours.',
+  smithy: 'An axe of real steel: Vance’s iron roots will not stop you.',
+  'healing-draught': 'Two healing draughts for the fights ahead.',
+  'strong-draught': 'Full-strength draughts: enough to stand the dragon’s fire.',
+  'fight-vance': 'Vance’s ink runs dry. The second heart shard is yours.',
+  'sword-training': 'The Shadow Blade is yours: block, parry, and the Dawn Cut.',
+  'sky-lantern': 'Up the cliff to the top of the pass, where Kai is waiting.',
+  'fight-kai': 'Kai yields the third heart shard. The Great Lantern is whole again.',
+  'gate-lock': 'The gate swings open. The dragon waits at the summit.',
+  'shadow-dragon': 'The Lantern’s light breaks the trance. The dragon is free, and it stands with you now.',
+  'fight-morwen': 'Morwen is gone, her ink dries to dust, and the Great Lantern burns at the top of the world.',
+};
+for (const puzzle of PUZZLES) puzzle.gain = GAINS[puzzle.id];
+
+/** Pieces of the Great Lantern won back: one for every story level cleared. */
+export function lanternPieces(): { have: number; total: number } {
+  return { have: PUZZLES.filter((p) => (play.stars[p.id] ?? 0) > 0).length, total: PUZZLES.length };
+}

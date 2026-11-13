@@ -141,7 +141,7 @@ export const SCENES: Scene[] = [
     },
   },
   {
-    line: 'Escape through the shadows. Beat her three captains, break the dragon’s trance, and face the Ink Witch herself.',
+    line: 'Every step of your escape wins back a piece of the Great Lantern. Beat her three captains for its three heart shards, relight it to break the dragon’s trance, and face the Ink Witch herself.',
     seconds: 9,
     sound: () => playRoar(0.06),
     draw(ctx, t, k) {

@@ -81,7 +81,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, refreshWorkshop, WORKSHOP_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, lanternPieces, refreshWorkshop, WORKSHOP_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
@@ -268,6 +268,8 @@ export class ShadowGameSystem extends createSystem({
   private homeButton!: PushButton;
   /** The painted meadow behind the title card (the levels bring their own). */
   private titlePainting: Mesh | null = null;
+  /** The prologue was opened from the Story button: go back to the title after it, not into a level. */
+  private introToTitle = false;
   private homeEntity!: Entity;
   private homeClick = false;
   private homeArmed = 0;
@@ -684,7 +686,10 @@ export class ShadowGameSystem extends createSystem({
         if (pressed || this.introLine === null) {
           this.intro.stop();
           this.playButton.show(false);
-          this.startPuzzle(this.puzzleIndex);
+          if (this.introToTitle) {
+            this.introToTitle = false;
+            this.showTitle();
+          } else this.startPuzzle(this.puzzleIndex);
         } else {
           this.setCaption(this.introLine);
         }
@@ -855,6 +860,10 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'arena') {
       stage.arenaBoss = action.boss ?? null;
       this.enterArena();
+    } else if (action.do === 'story') {
+      this.introToTitle = true;
+      this.menu.close();
+      this.startIntro();
     } else if (this.fresh) {
       this.startIntro();
     } else {
@@ -987,8 +996,8 @@ export class ShadowGameSystem extends createSystem({
           ? 'Side game · a new course every day'
           : puzzle.id === 'workshop'
             ? 'Side game · build your own course'
-          : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
-      this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story, `Your move: ${puzzle.ask}`);
+          : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].goal}`;
+      this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].goal, puzzle.title, puzzle.story, `Your move: ${puzzle.ask}`);
       this.setCaption(puzzle.ask);
     } else {
       this.drawBanner(
@@ -1360,7 +1369,15 @@ export class ShadowGameSystem extends createSystem({
     play.puzzleIndex = this.puzzleIndex;
 
     const row = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-    this.drawBanner(puzzle.title, row, puzzle.solved, `${totalStars()} ★ collected${newPage ? '  ·  New page in your Journal!' : ''}${trophies ? `  ·  ${trophies}` : ''}`);
+    const lantern = lanternPieces();
+    const story = !isSideGame(this.puzzleIndex) && !!puzzle.gain;
+    this.drawBanner(
+      puzzle.title,
+      row,
+      puzzle.solved,
+      `${story ? `Great Lantern: ${lantern.have} of ${lantern.total} pieces  ·  ` : ''}${totalStars()} ★${newPage ? '  ·  New Journal page!' : ''}${trophies ? `  ·  ${trophies}` : ''}`,
+      story ? { lead: puzzle.gain, meter: lantern.have / lantern.total } : undefined,
+    );
     if (trophies) playTinkle();
     this.bannerShown = true;
     this.setCaption(puzzle.warmup ? 'Well done!' : stars === 3 ? 'Perfect!' : 'Level cleared!');
@@ -1598,7 +1615,7 @@ export class ShadowGameSystem extends createSystem({
   }
 
   /** A storybook card on the paper: small heading, big title, a line of text. */
-  private drawBanner(kicker: string, title: string, body: string, footer = ''): void {
+  private drawBanner(kicker: string, title: string, body: string, footer = '', extra?: { lead?: string; meter?: number }): void {
     this.banner.scale.setScalar(1);
     this.banner.position.y = 0.03;
     const canvas = this.bannerCanvas;
@@ -1648,9 +1665,24 @@ export class ShadowGameSystem extends createSystem({
       fitFont(ctx, title, 800, 76, w - 120);
       ctx.fillText(title, w / 2, 168);
     }
+    const move = /^Your move: /.test(footer) ? footer.replace(/^Your move: /, '') : '';
+    if (extra?.lead && !move) {
+      // A cleared level: what it won you, in bold, then the science in smaller type.
+      ctx.fillStyle = UI.navy;
+      ctx.font = font(800, 33);
+      const after = wrapText(ctx, extra.lead, w / 2, 236, w - 180, 40);
+      ctx.fillStyle = UI.ink;
+      ctx.font = font(500, 26);
+      wrapText(ctx, body, w / 2, after + 4, w - 200, 32);
+      if (extra.meter !== undefined) drawMeter(ctx, w / 2, h - 108, 560, extra.meter);
+      ctx.fillStyle = UI.green;
+      fitFont(ctx, footer, 700, 26, w - 140);
+      ctx.fillText(footer, w / 2, h - 66);
+      this.bannerTexture.needsUpdate = true;
+      return;
+    }
     ctx.fillStyle = UI.ink;
     ctx.font = font(500, 34);
-    const move = /^Your move: /.test(footer) ? footer.replace(/^Your move: /, '') : '';
     // A long story steps down a size so it stays clear of the box below.
     if (move && body.length > 150) ctx.font = font(500, 28);
     wrapText(ctx, body, w / 2, move ? (body.length > 150 ? 236 : 246) : 262, w - 200, move ? (body.length > 150 ? 34 : 42) : 46);
@@ -1790,7 +1822,7 @@ function wrapText(
   y: number,
   maxWidth: number,
   lineHeight: number,
-): void {
+): number {
   // A line break in the text starts a new paragraph.
   for (const paragraph of text.split('\n')) {
     let line = '';
@@ -1807,6 +1839,31 @@ function wrapText(
     if (line) ctx.fillText(line, x, y);
     y += lineHeight;
   }
+  return y;
+}
+
+/** The Great Lantern's progress: a glowing gold bar in a navy frame, a lantern at its end. */
+function drawMeter(ctx: CanvasRenderingContext2D, cx: number, y: number, width: number, k: number): void {
+  const x = cx - width / 2;
+  ctx.fillStyle = UI.navy;
+  themeRoundRect(ctx, x, y - 13, width, 26, 13);
+  ctx.fill();
+  const fill = Math.max(26, (width - 8) * Math.min(1, k));
+  const grad = ctx.createLinearGradient(x, 0, x + width, 0);
+  grad.addColorStop(0, '#ffb23a');
+  grad.addColorStop(1, '#ffe27a');
+  ctx.fillStyle = grad;
+  themeRoundRect(ctx, x + 4, y - 9, fill, 18, 9);
+  ctx.fill();
+  // A little lantern at the end of the bar.
+  const lx = x + width + 26;
+  ctx.fillStyle = UI.navy;
+  ctx.fillRect(lx - 7, y - 24, 14, 6);
+  themeRoundRect(ctx, lx - 13, y - 18, 26, 32, 8);
+  ctx.fill();
+  ctx.fillStyle = k >= 1 ? '#ffe27a' : '#ffb23a';
+  themeRoundRect(ctx, lx - 8, y - 13, 16, 22, 5);
+  ctx.fill();
 }
 
 function makeCanvas(width: number, height: number): HTMLCanvasElement {

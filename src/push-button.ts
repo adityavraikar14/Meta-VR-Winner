@@ -646,6 +646,7 @@ const ICONS: Partial<Record<string, Icon>> = {
   next: chevron(1),
   skip: chevron(1, true),
   chapters: book,
+  story: book,
   journal,
   bag: pouch,
   battles: swords,

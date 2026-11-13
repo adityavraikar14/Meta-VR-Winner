@@ -8,7 +8,7 @@ import { TROPHIES, trophiesEarned } from './trophies.js';
 import { play, saveProgress, totalStars } from './progress.js';
 import { PushButton } from './push-button.js';
 import { stage } from './stage-state.js';
-import { PUZZLES, WORLDS } from './world/puzzles.js';
+import { lanternPieces, PUZZLES, WORLDS } from './world/puzzles.js';
 import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './fight/rivals.js';
 
 /**
@@ -19,7 +19,7 @@ import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena'; boss?: string };
+export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena'; boss?: string };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -46,6 +46,7 @@ const LAYOUTS: Record<number, number[]> = {
   5: [-0.3, -0.15, 0, 0.15, 0.3],
   6: [-0.325, -0.195, -0.065, 0.065, 0.195, 0.325],
   7: [-0.336, -0.224, -0.112, 0, 0.112, 0.224, 0.336],
+  8: [-0.357, -0.255, -0.153, -0.051, 0.051, 0.153, 0.255, 0.357],
 };
 
 export class MainMenu {
@@ -60,7 +61,7 @@ export class MainMenu {
     private readonly viewer: Vector3,
     private readonly draw: Draw,
   ) {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
       const button = new PushButton(parent, '');
       button.show(false);
       this.buttons.push(button);
@@ -143,7 +144,7 @@ export class MainMenu {
       button.setText(slot.label);
       button.root.position.set(xs[i], ROW_Y, ROW_Z);
       // Seven to a row is tight: a little smaller.
-      button.size = this.slots.length > 6 ? BUTTON_SCALE * 0.88 : BUTTON_SCALE;
+      button.size = this.slots.length > 7 ? BUTTON_SCALE * 0.8 : this.slots.length > 6 ? BUTTON_SCALE * 0.88 : BUTTON_SCALE;
       button.root.lookAt(eye);
       button.show(true);
     });
@@ -159,9 +160,10 @@ export class MainMenu {
     const body = fresh
       ? 'The Great Lantern has shattered. Its sparks can only stand on shadow, and your hands cast the only shadows left.'
       : next
-        ? `${WORLDS[next.world].name}  ·  Next: ${next.title}`
+        ? `${WORLDS[next.world].goal}  ·  Next: ${next.title}`
         : 'Every chapter played. Pick any chapter to play again.';
-    const footer = fresh ? 'Hands only  ·  Seated  ·  Your shadow is the controller' : `${totalStars()} ★ collected`;
+    const lantern = lanternPieces();
+    const footer = fresh ? 'Hands only  ·  Seated  ·  Your shadow is the controller' : `Great Lantern: ${lantern.have} of ${lantern.total} pieces  ·  ${totalStars()} ★`;
     this.draw('Escape the Lantern', 'Shadowplay', body, footer);
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
@@ -186,6 +188,7 @@ export class MainMenu {
               },
             },
           ]),
+      { label: 'Story', run: () => ({ do: 'story' }) },
       { label: 'Journal', run: () => this.go('journal') },
       { label: 'Bag', run: () => this.go('bag') },
       { label: 'Battles', run: () => this.go('battles') },
