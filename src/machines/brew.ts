@@ -21,7 +21,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { playCrackle, playDrip, playHiss, playIgnite, playPawl, playSplat } from '../audio.js';
+import { playCrackle, playDrip, playHiss, playIgnite, playPawl, playSplat, playWhoosh } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { play, saveProgress } from '../progress.js';
@@ -42,6 +42,11 @@ import { ParticlePool } from './particles.js';
  * but are also destroyed by heat, much faster when boiling (Ea/R ≈ 15000 K).
  * So a gentle simmer around 85–95 °C makes the strongest draught; boil it
  * hard and it weakens and boils away; keep it lukewarm and it takes ages.
+ *
+ * The twist: the coals are fickle. Once the herbs are in, a draught through
+ * the mine makes them flare up, then they sink low, then settle, over and
+ * over. The pot's height has to follow the fire, notch by notch, or the
+ * simmer is lost: tending a fire, not setting it once.
  */
 
 const PIT = new Vector3(0.0, 0, -0.14);
@@ -112,9 +117,18 @@ export class Brew {
 
   /** Strength the draught must reach before it can be bottled. */
   private readonly ready: number;
+  /** How far the coals swing (0 = steady): a flare to 1 + fickle, a lull to 1 − 0.6·fickle. */
+  private readonly fickle: number;
+  /** The fire's output now, and where it is heading. */
+  private fire = 1;
+  private fireGoal = 1;
+  private firePhase = 0;
+  private fireIn = 6;
+  private flares = 0;
 
-  constructor(private readonly floor: number, options: { ready?: number } = {}) {
+  constructor(private readonly floor: number, options: { ready?: number; fickle?: number } = {}) {
     this.ready = options.ready ?? READY;
+    this.fickle = options.fickle ?? 0;
     const f = floor;
     this.group.name = 'Brew';
 
@@ -269,6 +283,7 @@ export class Brew {
       `Strength ${Math.round(this.potency * 100)}% · spoiled ${Math.round(this.spoiled * 100)}%`,
       `Hottest with the herbs in: ${Math.round(this.hottest)} °C${this.hottest >= 99.5 ? ' (it boiled!)' : ''}`,
       `${this.filled} vial${this.filled === 1 ? '' : 's'} filled`,
+      ...(this.fickle ? [`${this.flares} flare-up${this.flares === 1 ? '' : 's'} of the coals ridden out`] : []),
     ];
   }
 
@@ -288,6 +303,7 @@ export class Brew {
     }
     this.trammel(hands);
     this.carry(hands);
+    this.tendFire(dt);
     this.heat(dt);
     this.render(dt);
     this.say();
@@ -317,9 +333,38 @@ export class Brew {
 
   // ============================================================ Physics
 
+  /** Fickle coals: once the herbs are in, they flare, settle, sink low, settle, again and again. */
+  private tendFire(dt: number): void {
+    const steeping = this.fickle > 0 && this.herbs.size === 3 && this.potency < this.ready && this.filled === 0;
+    if (!steeping) {
+      this.fireGoal = 1;
+    } else {
+      this.fireIn -= dt;
+      if (this.fireIn <= 0) {
+        this.firePhase = (this.firePhase + 1) % 4;
+        if (this.firePhase === 1) {
+          this.fireGoal = 1 + this.fickle;
+          this.fireIn = 6 + Math.random() * 3;
+          this.flares++;
+          playWhoosh(0.5);
+          this.flash('A draught through the mine: the coals flare up! Lift the pot a notch or two', 2.6);
+        } else if (this.firePhase === 3) {
+          this.fireGoal = 1 - this.fickle * 0.6;
+          this.fireIn = 6 + Math.random() * 3;
+          this.flash('The coals sink low: lower the pot to keep the simmer', 2.6);
+        } else {
+          this.fireGoal = 1;
+          this.fireIn = 5 + Math.random() * 3;
+          this.flash('The fire settles again', 1.6);
+        }
+      }
+    }
+    this.fire += (this.fireGoal - this.fire) * Math.min(1, dt / 1.5);
+  }
+
   private heat(dt: number): void {
     // Radiant heat falls off with height; the pot also cools into the air.
-    const q = 680 / (1 + (this.height / 0.03) ** 2);
+    const q = (680 * this.fire) / (1 + (this.height / 0.03) ** 2);
     const tau = 6;
     let dT = (q - (this.temperature - 18)) / tau;
     if (this.temperature >= 100 && dT > 0) {
@@ -350,6 +395,9 @@ export class Brew {
   private reset(): void {
     this.volume = 1;
     this.temperature = 30;
+    this.fireGoal = 1;
+    this.firePhase = 0;
+    this.fireIn = 6;
     this.potency = 0;
     this.spoiled = 0;
     this.herbs.clear();
@@ -482,16 +530,16 @@ export class Brew {
 
   private render(dt: number): void {
     const f = this.floor;
-    const coal = 900 + 60 * Math.sin(this.time * 1.3);
+    const coal = (900 + 60 * Math.sin(this.time * 1.3)) * (0.82 + 0.18 * this.fire);
     const bright = glow(coal, this.glowColor);
     this.coalMaterial.emissive.copy(this.glowColor);
     this.coalMaterial.emissiveIntensity = bright * 2;
-    this.light.intensity = 0.12 + Math.random() * 0.03;
+    this.light.intensity = (0.12 + Math.random() * 0.03) * this.fire;
     this.flames.forEach((s, i) => {
       const flicker = 0.7 + 0.3 * Math.sin(this.time * 13 + i * 2.1) + Math.random() * 0.1;
       // Flames lick up to the pot's base and spread under it.
       const reach = Math.min(0.05, this.height - 0.004);
-      s.scale.set(0.022, Math.max(0.01, reach) * flicker, 1);
+      s.scale.set(0.022 * (0.7 + 0.3 * this.fire), Math.max(0.01, reach) * flicker * this.fire, 1);
     });
     this.crackleIn -= dt;
     if (this.crackleIn <= 0) {

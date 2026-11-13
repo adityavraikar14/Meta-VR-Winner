@@ -312,7 +312,7 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [x] Arena: rivals have about twice the health (Vance 130, Mako 190, Kai 140…); enraged they run, and fire an **ultimate fan** of seven shots every 12–17 s
 - [x] Arena: **you have 8 hearts**; at none you are knocked down and the round restarts; a volley costs one heart; **healing herbs** float within reach while you are hurt (touch one: two hearts)
 - [ ] On Quest: tune duel and Arena difficulty by feel (target: a first win against a rival takes 2–4 minutes)
-- [ ] Story levels: make the tasks more interactive, medium difficulty (not too easy), with a twist each; not childish
+- [x] Story levels: make the tasks more interactive, medium difficulty (not too easy), with a twist each; not childish (ink thorns in the spark levels; a twist in every machine level, below)
 - [ ] Super move for the Arena too (the Arsenal already has seven weapons)
 
 ### Nov 13, fourth pass: buttons, levels from the start (Aditya: "buttons look plain and odd; entering VR drops me mid-story; I want levels from the start and to move freely")
@@ -320,7 +320,13 @@ We compete in the **Gaming track** as a casual puzzle game (seated, hands only);
 - [x] Chapters steps through every level of the story one by one (Prev / Next cross chapters and the world changes with them); Play starts exactly that level; the card shows its chapter, number, stars and task
 - [x] Home has **New game** once you have progress: push it twice to start the story from Level 1 (stars, Journal and trophies are kept). Continue still resumes where you left off
 - [x] Story levels, first twist: **ink thorns** (black burrs with a red-hot core) beside the spark's path in Long Shadow, The Low Tunnel, Twin Gaps and Two Pieces: touch one and the spark is lost. The level test proves each solution clears every thorn (by 6–10 cm) and still wins
-- [ ] Story levels: a twist for the machine levels too (forge, brewing, sky lantern, lock)
+- [x] Machine twists, each from the real craft:
+  - **The Dragon's Gate: a spool pin.** One driver is waisted like a cotton reel; at the shear line it gives a *false set* (the plug jumps too far and pushes back on the lever). Only a feather touch (light tension, low in the green) lets it rise the last hair and truly set. The binding order is shuffled every play, and the spool is always the third pin to bind
+  - **The Healing / Strong Draught: fickle coals.** Once the herbs are in, a draught through the mine makes the coals flare up, settle, sink low, settle, again and again (flames, glow and heat follow). The pot must be re-hung notch by notch to hold the simmer. Gentle in Healing (about 30 s to brew), fierce in Strong (about 60–85 s, by simulation)
+  - **The Smithy: strike the glowing mark.** A smith draws a bar section by section: a white-hot mark on the bar shows where each of the six blows must land; a blow off the mark only glances (a fifth of a blow). The Journal counts blows on the mark
+  - **The Sky Lantern: crosswinds and crags.** Once it lifts off, gusts push it sideways towards two rock crags flanking its climb (weak gusts drift it 6 cm, strong ones 9–13 cm, and the crags are 8.5 cm away); sweep your free palm past the paper to fan it back while the other hand shelters the flame. A snag tears the paper and it sinks back. Only a palm level with the paper fans, and slow drifts (tracking jitter) are ignored
+  - The bridges already have theirs: the Ore Train doubles the load, so the first bridge's design buckles
+- [ ] On Quest: feel each machine twist (fan strength, feather-touch window, mark size)
 
 ### Notes from building (Nov 12)
 - Pinch precision: a pinch cursor (a ring between thumb and index that closes as you pinch; cyan when a shard is in reach, gold while holding) and a pulsing glow on the shard a pinch would take.

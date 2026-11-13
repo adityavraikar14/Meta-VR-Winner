@@ -572,7 +572,7 @@ const gateLock: Puzzle = {
   world: 4,
   title: 'The Dragon’s Gate',
   story: 'An iron gate bars the last climb to the dragon. Its lock is old and its key long lost: open it the way a locksmith would, by feel.',
-  ask: 'Press the tension lever gently, then lift each pin with your fingertip',
+  ask: 'Press the tension lever gently, lift each pin with your fingertip, and beware the spool pin',
   handsOn: true,
   solved: 'Click, click, click, click: the plug turns and the gate swings open.',
   build(root, kit) {
@@ -638,11 +638,11 @@ const healingDraught: Puzzle = {
   world: 2,
   title: 'The Healing Draught',
   story: 'The dragon’s fire will burn. In the mine hangs an old herbalist’s pot: brew something to heal you.',
-  ask: 'Drop the three herbs into the pot',
+  ask: 'Drop the three herbs in, then keep it simmering as the fire shifts',
   handsOn: true,
   solved: 'Two healing draughts, steeped just right.',
   build(root, kit) {
-    const brew = new Brew(kit.floor);
+    const brew = new Brew(kit.floor, { fickle: 0.3 });
     root.add(brew.group);
     stage.runNotes = () => brew.journal();
     const task = { caption: '', done: false, mistakes: 0 };
@@ -669,11 +669,11 @@ const strongDraught: Puzzle = {
   world: 2,
   title: 'The Strong Draught',
   story: 'The dragon\u2019s fire will be fierce. Only a draught steeped to full strength will do: keep it at a gentle simmer.',
-  ask: 'Brew it stronger: 90 percent, not a degree too hot',
+  ask: 'Brew it stronger: 90 percent, and the coals will not stay steady',
   handsOn: true,
   solved: 'Draughts at full strength. You are ready for the mountain.',
   build(root, kit) {
-    const brew = new Brew(kit.floor, { ready: 0.9 });
+    const brew = new Brew(kit.floor, { ready: 0.9, fickle: 0.4 });
     root.add(brew.group);
     stage.runNotes = () => brew.journal();
     const task = { caption: '', done: false, mistakes: 0 };
@@ -696,7 +696,7 @@ const skyLantern: Puzzle = {
   world: 3,
   title: 'The Sky Lantern',
   story: 'The mountain path starts on a ledge no one can climb. A paper lantern could carry the shards up, if the air inside it is hot enough.',
-  ask: 'Light the lantern, then shelter its flame with a cupped hand',
+  ask: 'Light it, shelter the flame with one hand, and fan it clear of the crags with the other',
   handsOn: true,
   solved: 'Hot air is less dense than cold air: it rose, and the path is open.',
   build(root, kit) {
@@ -723,7 +723,7 @@ const smithy: Puzzle = {
   world: 2,
   title: 'The Smithy',
   story: 'Roots as hard as iron seal the mine. The old forge is cold: you need an axe, and an axe needs steel.',
-  ask: 'Light the forge with the lantern shard',
+  ask: 'Light the forge, heat the bar, and strike each glowing mark',
   handsOn: true,
   solved: 'An axe: quenched hard, with a keen edge.',
   build(root, kit) {

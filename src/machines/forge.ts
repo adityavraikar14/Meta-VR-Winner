@@ -50,6 +50,9 @@ import { ParticlePool } from './particles.js';
  *   thin edge, about the same volume of steel.
  * - Steel hardens only if quenched from above its critical temperature
  *   (~780 °C, cherry red); quenched colder it stays soft.
+ * - The twist: a smith draws the bar section by section, so each blow has a
+ *   place. A glowing mark on the bar shows where the next blow must land; a
+ *   blow off the mark only glances and barely moves the steel.
  */
 
 /** Stage-local layout, heights above the floor. */
@@ -80,6 +83,10 @@ const BAR_T = 0.012;
 /** Hardening: quenched from at least this hot, steel turns hard (martensite). */
 const HARDEN = 780;
 const BLOWS = 6;
+/** Where each of the six blows must land, along the bar from its centre (m). */
+const MARKS = [-0.024, 0.022, -0.006, 0.026, 0.008, -0.018];
+/** How close to the mark the hammer's face must land. */
+const MARK_REACH = 0.014;
 const TONGS = 0.05;
 const GRAB_REACH = 0.04;
 
@@ -138,6 +145,8 @@ export class Forge {
   /** For the Inventor's Journal: the hottest the bar got, blows on it, and the heat it was quenched from. */
   private hottest = 0;
   private blows = 0;
+  private onMark = 0;
+  private readonly mark: Mesh;
   private quenchedFrom = 0;
   private readonly glowColor = new Color();
   private readonly tmp = new Vector3();
@@ -180,6 +189,13 @@ export class Forge {
     this.barMesh.userData.keep = true;
     const barGroup = new Group();
     barGroup.add(this.barMesh);
+    // The glowing mark: where the next blow must land.
+    this.mark = new Mesh(new PlaneGeometry(0.02, 0.02), new MeshBasicMaterial({ map: markTexture(), transparent: true, blending: AdditiveBlending, depthWrite: false, depthTest: false }));
+    this.mark.rotation.x = -Math.PI / 2;
+    this.mark.renderOrder = 12;
+    this.mark.visible = false;
+    this.mark.userData.keep = true;
+    barGroup.add(this.mark);
     barGroup.position.set(RACK.x, f + RACK_Y, RACK.z);
     this.group.add(barGroup);
     this.bar = { group: barGroup, place: 'start', hand: -1, velocity: new Vector3(), grip: new Vector3(-BAR_L / 2, 0, 0) };
@@ -264,14 +280,17 @@ export class Forge {
     } else if (bar === 'anvil') {
       // A smith gets three or four blows in per heat.
       this.hammerFace.copy(this.bar.group.position);
-      for (let i = 0; i < 3 && this.barHeat >= FORGE_MIN && this.shaped < 1; i++) this.blow(true, 1);
+      for (let i = 0; i < 3 && this.barHeat >= FORGE_MIN && this.shaped < 1; i++) {
+        this.hammerFace.x = this.bar.group.position.x + this.markX();
+        this.blow(true, 1);
+      }
     }
   }
 
   /** Your smithing, for the Inventor's Journal. */
   journal(): string[] {
     return [
-      `Hottest the iron got: ${Math.round(this.hottest)} °C · ${this.blows} hammer blows`,
+      `Hottest the iron got: ${Math.round(this.hottest)} °C · ${this.blows} hammer blows, ${this.onMark} on the mark`,
       `Quenched from ${Math.round(this.quenchedFrom)} °C: hard steel`,
       this.mistakes ? `${this.mistakes} slip${this.mistakes > 1 ? 's' : ''}: a blow too hot or too cold` : 'Not one blow wasted',
     ];
@@ -368,7 +387,7 @@ export class Forge {
         else if (bar !== 'anvil') text = 'Lay the hot bar on the anvil';
         else if (this.barHeat < WORKABLE) text = `${cap(name)} (${t} °C): too cold to work. Back in the fire!`;
         else if (this.hammer.place !== 'held') text = `Pick up the hammer with your other hand and strike · ${blows}/${BLOWS}`;
-        else text = `Strike! ${cap(name)} · ${t} °C · blows ${blows}/${BLOWS}`;
+        else text = `Strike the glowing mark! ${cap(name)} · ${t} °C · blows ${blows}/${BLOWS}`;
         if (this.shaped >= 1) this.setStep('quench');
         break;
       }
@@ -605,7 +624,16 @@ export class Forge {
       this.say('Burning! It was white hot: sparks of steel fly off. Do not let it sit in a roaring fire');
       return;
     }
+    if (t >= FORGE_MIN && Math.abs(at.x - this.bar.group.position.x - this.markX()) > MARK_REACH) {
+      // Off the mark: a glancing blow that barely moves the steel.
+      playClang(0.6, 0.04);
+      this.shaped = Math.min(0.999, this.shaped + 1 / (BLOWS * 5));
+      for (let i = 0; i < 5; i++) this.sparkAt(at, 0.25, hot);
+      this.say('Off the mark: it glanced. Strike where the bar glows white', 1.6);
+      return;
+    }
     if (t >= FORGE_MIN) {
+      this.onMark++;
       playClang(1, 0.05 + speed * 0.02);
       // Six sixths can sum to 0.999…; the last blow finishes it.
       this.shaped = this.shaped + 1 / BLOWS > 0.999 ? 1 : this.shaped + 1 / BLOWS;
@@ -622,6 +650,16 @@ export class Forge {
     playTink();
     this.mistakes++;
     this.say('Too cold! Cold iron just rings, and may crack. Back in the fire');
+  }
+
+  /** Which of the six marks the next good blow must land on. */
+  private markIndex(): number {
+    return Math.min(BLOWS - 1, Math.floor(this.shaped * BLOWS + 1e-6));
+  }
+
+  /** The next mark along the bar, which draws shorter as it is worked. */
+  private markX(): number {
+    return MARKS[this.markIndex()] * (1 - 0.24 * this.shaped);
   }
 
   private sparkAt(at: Vector3, speed: number, color: number): void {
@@ -713,6 +751,13 @@ export class Forge {
       this.barMaterial.color.setHex(0x6f747b);
       this.barMaterial.metalness = 0.85;
       this.barMaterial.roughness = 0.35;
+    }
+
+    // The mark glows on the bar while it lies on the anvil, waiting for a blow.
+    this.mark.visible = this.step === 'forge' && this.bar.place === 'anvil' && this.shaped < 1;
+    if (this.mark.visible) {
+      this.mark.position.set(this.markX(), 0.0085, 0);
+      this.mark.scale.setScalar(1 + 0.18 * Math.sin(performance.now() * 0.008));
     }
 
     // The chart's pointer rides along to the bar's heat.
@@ -1003,6 +1048,27 @@ function barGeometry(): BufferGeometry {
   g.morphAttributes.position = [shaped.attributes.position];
   g.morphAttributes.normal = [shaped.attributes.normal];
   return g;
+}
+
+/** A white-hot ring with a bright centre: strike here. */
+function markTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d')!;
+  const halo = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  halo.addColorStop(0, 'rgba(255, 255, 240, 1)');
+  halo.addColorStop(0.25, 'rgba(255, 230, 160, 0.8)');
+  halo.addColorStop(1, 'rgba(255, 150, 60, 0)');
+  g.fillStyle = halo;
+  g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.arc(32, 32, 22, 0, Math.PI * 2);
+  g.stroke();
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 }
 
 function smooth(a: number, b: number, x: number): number {

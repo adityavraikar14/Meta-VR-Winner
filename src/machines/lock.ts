@@ -11,9 +11,11 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  LatheGeometry,
   PlaneGeometry,
   SRGBColorSpace,
   TubeGeometry,
+  Vector2,
   Vector3,
   CatmullRomCurve3,
 } from '@iwsdk/core';
@@ -39,6 +41,12 @@ import { brass, hardwood, iron } from './parts.js';
  * stiff. Lift it slowly to the shear line and hold: it sets with a click,
  * the plug turns a hair, and the next pin binds. Push it past and it
  * oversets: ease off the lever and everything drops back to start again.
+ *
+ * The twist, straight from real locks: one driver is a spool pin, waisted
+ * like a cotton reel. When it reaches the shear line its narrow waist lets
+ * the plug jump too far, a false set, and the plug then pushes back on your
+ * lever. Only a feather touch (light tension) lets that pin rise the last
+ * hair and truly set. The binding order changes every time you play.
  */
 
 const AT = new Vector3(0, 0, 0.1);
@@ -72,6 +80,10 @@ const PAD = new Vector3(-0.19, PLUG_Y - 0.01, 0.02);
 const RESET_AFTER = 0.35;
 /** Seconds of no progress before the binding pin glows to help. */
 const HINT_AFTER = 25;
+/** A false-set spool pin only rises again under a feather touch: tension at or below this. */
+const SPOOL_LIGHT = 0.45;
+/** After a false set the spool pin must go this much higher to truly set. */
+const SPOOL_EXTRA = 0.003;
 /** Low-pass time constant for fingertip heights: steadies tracking jitter. */
 const SMOOTH = 0.05;
 
@@ -88,6 +100,10 @@ interface Stack {
   state: PinState;
   /** Seconds the gap has sat in the set window. */
   inWindow: number;
+  /** A waisted spool driver, and whether it has given its false set (and at what lift). */
+  spool: boolean;
+  falseSet: boolean;
+  spoolLift: number;
 }
 
 export class PinLock {
@@ -124,7 +140,14 @@ export class PinLock {
   constructor(private readonly floor: number) {
     this.group.name = 'PinLock';
     const f = floor;
-    this.order = [2, 0, 3, 1];
+    // The lock's small faults set the binding order: a different lock every time.
+    this.order = [0, 1, 2, 3];
+    for (let i = 3; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.order[i], this.order[j]] = [this.order[j], this.order[i]];
+    }
+    // The third pin to bind is the spool, once you have the feel of the others.
+    const spoolAt = this.order[2];
 
     // A wooden stand and two cheeks holding the lock up where both hands reach.
     const base = new Mesh(new BoxGeometry(0.34, 0.02, 0.1), hardwood());
@@ -184,7 +207,7 @@ export class PinLock {
       tip.position.y = -KEY_L[i] / 2 - 0.002;
       key.add(tip);
       const driverMaterial = steel();
-      const driver = new Mesh(new CylinderGeometry(PIN_R, PIN_R, DRIVER_L, 16), driverMaterial);
+      const driver = new Mesh(i === spoolAt ? spoolGeometry() : new CylinderGeometry(PIN_R, PIN_R, DRIVER_L, 16), driverMaterial);
       const spring = new Mesh(helix(PIN_R * 0.85, 1, 9), new MeshStandardMaterial({ color: 0x9aa2ae, metalness: 0.8, roughness: 0.35 }));
       for (const m of [key, driver, spring]) {
         m.position.x = AT.x + x;
@@ -192,7 +215,7 @@ export class PinLock {
         m.userData.keep = true;
         this.group.add(m);
       }
-      this.stacks.push({ key, driver, spring, keyMaterial, driverMaterial, lift: 0, state: 'free', inWindow: 0 });
+      this.stacks.push({ key, driver, spring, keyMaterial, driverMaterial, lift: 0, state: 'free', inWindow: 0, spool: i === spoolAt, falseSet: false, spoolLift: 0 });
     });
 
     // The tension lever: an L of steel from the keyway's end, a round pad to press.
@@ -256,7 +279,8 @@ export class PinLock {
   }
 
   get state(): string {
-    return `tension=${this.tension.toFixed(2)} set=${this.setCount}/4 binding=${this.binding() + 1} pins=${this.stacks.map((s) => `${s.state[0]}${(s.lift * 1000).toFixed(0)}`).join(',')} oversets=${this.oversets} open=${this.openTime >= 0}`;
+    const spool = this.stacks.findIndex((s) => s.spool);
+    return `tension=${this.tension.toFixed(2)} set=${this.setCount}/4 binding=${this.binding() + 1} spool=${spool + 1}${this.stacks[spool].falseSet ? '(false set)' : ''} pins=${this.stacks.map((s) => `${s.state[0]}${(s.lift * 1000).toFixed(0)}`).join(',')} oversets=${this.oversets} open=${this.openTime >= 0}`;
   }
 
   /** Your lockpicking, for the Inventor's Journal. */
@@ -264,6 +288,7 @@ export class PinLock {
     const sweet = this.tensionTime > 0 ? Math.round((this.sweetTime / this.tensionTime) * 100) : 0;
     return [
       `The pins bound in the order ${this.order.map((i) => i + 1).join(' → ')}`,
+      `Pin ${this.stacks.findIndex((s) => s.spool) + 1} was a spool pin: a false set, then a feather touch`,
       `Your tension sat in the sweet spot ${sweet}% of the time`,
       this.oversets ? `${this.oversets} overset${this.oversets > 1 ? 's' : ''}: lifted past the shear line` : 'Not one overset: a locksmith’s touch',
     ];
@@ -352,9 +377,14 @@ export class PinLock {
       }
       if (i === binding && bound) {
         if (this.tension > TENSION_JAM) return;
+        // A false-set spool is caught at its waist: the plug pushes back, and only a feather touch frees it.
+        if (s.falseSet && this.tension > SPOOL_LIGHT) {
+          s.lift = Math.max(s.lift, s.spoolLift);
+          return;
+        }
         // Pinched at the shear line: stiff going up, slow to fall.
         const step = target > s.lift ? Math.min(target - s.lift, BIND_SPEED * dt) : Math.max(target - s.lift, -0.08 * dt);
-        s.lift += step;
+        s.lift = Math.max(s.falseSet ? s.spoolLift : 0, s.lift + step);
         if (step > 0.0001) {
           this.creakIn -= dt;
           if (this.creakIn <= 0) {
@@ -363,7 +393,8 @@ export class PinLock {
           }
         }
         const gap = REST_Y + KEY_L[i] + s.lift;
-        if (gap > SHEAR + OVERSET_ABOVE) {
+        const extra = s.falseSet ? SPOOL_EXTRA : 0;
+        if (gap > SHEAR + OVERSET_ABOVE + extra) {
           s.state = 'overset';
           this.oversets++;
           this.mistakes++;
@@ -371,7 +402,17 @@ export class PinLock {
           this.flash('Overset! The key pin went past the shear line. Ease off the lever to start again', 3);
           return;
         }
-        s.inWindow = gap >= SHEAR - SET_BELOW ? s.inWindow + dt : 0;
+        s.inWindow = gap >= SHEAR - SET_BELOW + extra ? s.inWindow + dt : 0;
+        if (s.inWindow >= SET_HOLD && s.spool && !s.falseSet) {
+          // The spool's waist reaches the shear line: the plug jumps too far.
+          s.falseSet = true;
+          s.spoolLift = s.lift;
+          s.inWindow = 0;
+          progress = true;
+          playClunk(0.05);
+          this.flash(`A false set! The plug jumped too far: pin ${i + 1} is a spool pin. Ease the lever to a feather touch, then lift it a hair higher`, 4.5);
+          return;
+        }
         if (s.inWindow >= SET_HOLD) {
           s.state = 'set';
           this.setCount++;
@@ -394,6 +435,8 @@ export class PinLock {
       s.state = 'free';
       s.lift = 0;
       s.inWindow = 0;
+      s.falseSet = false;
+      s.spoolLift = 0;
     }
     this.setCount = 0;
     this.devTension = -1;
@@ -421,7 +464,8 @@ export class PinLock {
       s.keyMaterial.emissive.setRGB(s.state === 'overset' ? 0.6 : amber * 0.6, s.state === 'overset' ? 0.05 : amber * 0.35, 0);
     });
     // The plug turns a hair with each set pin; the lever dips with your tension.
-    this.plug.rotation.x = -this.setCount * 0.025;
+    // A false set turns the plug visibly further: the tell a locksmith feels.
+    this.plug.rotation.x = -this.setCount * 0.025 - (this.stacks.some((s) => s.falseSet && s.state !== 'set') ? 0.07 : 0);
     this.lever.rotation.z = Math.min(1.2, this.tension) * 0.14;
     this.needle.rotation.z = Math.PI * 0.75 - Math.min(1.3, this.tension) / 1.3 * Math.PI * 1.5;
   }
@@ -451,6 +495,11 @@ export class PinLock {
       return this.setCount > 0 ? 'Keep a little pressure on the lever, or the set pins will drop!' : 'Press the round lever pad down gently with your left fingertip';
     }
     if (this.tension > TENSION_JAM) return 'Too hard! The binding pin is jammed solid. Ease off the lever a little';
+    if (binding >= 0 && this.stacks[binding].falseSet) {
+      return this.tension > SPOOL_LIGHT
+        ? `False set: spool pin ${binding + 1} is caught at its waist. Ease the lever to a feather touch, low in the green`
+        : `Feather touch… now lift pin ${binding + 1} a hair above the red line and hold`;
+    }
     const lifting = this.stacks.some((s) => s.lift > 0.003);
     const stiff = binding >= 0 && this.stacks[binding].lift > 0.003;
     if (stiff) return `Pin ${binding + 1} is binding: it is stiff. Lift it slowly to the red shear line and hold`;
@@ -474,6 +523,14 @@ export class PinLock {
     this.tension = 0.5;
     const s = this.stacks[i];
     s.lift = SHEAR - REST_Y - KEY_L[i];
+    if (s.spool && !s.falseSet) {
+      s.falseSet = true;
+      s.spoolLift = s.lift;
+      playClunk(0.05);
+      this.flash(`A false set! Pin ${i + 1} is a spool pin: feather touch, then a hair higher`, 3);
+      return;
+    }
+    if (s.falseSet) s.lift += SPOOL_EXTRA;
     s.inWindow = SET_HOLD;
     s.state = 'set';
     this.setCount++;
@@ -491,6 +548,17 @@ export class PinLock {
     this.mistakes++;
     playClang(0.25, 0.05);
   }
+}
+
+/** A spool driver: full width at both ends, a narrow waist between, like a cotton reel. */
+function spoolGeometry(): LatheGeometry {
+  const h = DRIVER_L / 2;
+  const w = PIN_R * 0.55;
+  const profile = [
+    [0, -h], [PIN_R, -h], [PIN_R, -h + 0.004], [w, -h + 0.0065],
+    [w, h - 0.0065], [PIN_R, h - 0.004], [PIN_R, h], [0, h],
+  ].map(([x, y]) => new Vector2(x, y));
+  return new LatheGeometry(profile, 16);
 }
 
 /** A coil spring one unit tall (scaled to its gap), as a thin steel tube. */

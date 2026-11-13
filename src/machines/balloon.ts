@@ -31,6 +31,12 @@ import { ParticlePool } from './particles.js';
  * the burner to shelter the flame and it burns hotter; take it away and the
  * air cools towards the room. Too hot and the paper scorches. A tether rope
  * pays out as it climbs; at the ledge's height the stone is delivered.
+ *
+ * The twist: once it lifts off, gusts of crosswind push it sideways towards
+ * the rock crags either side of its climb. Fan the air with your free hand
+ * (the air your palm pushes pushes the paper) to keep it on its line while
+ * the other hand keeps the flame sheltered. Snag a crag and it tears and
+ * sinks back down.
  */
 
 const AT = new Vector3(0.05, 0, -0.05);
@@ -47,6 +53,10 @@ const T_SCORCH = 440;
 const T_FLAME = 470;
 const CUP_REACH = 0.07;
 const RISE = 0.3;
+/** Sideways, across the line of the climb: the crags stand this far either side. */
+const CRAG = 0.085;
+/** A fanning palm pushes the paper from this close. */
+const FAN_REACH = 0.13;
 
 export class SkyLantern {
   readonly group = new Group();
@@ -78,6 +88,16 @@ export class SkyLantern {
   private readonly tether = new RopeSpan(0.0012);
   private readonly smoke = new ParticlePool({ count: 60, additive: false, soft: true });
   private readonly v = new Vector3();
+  /** Crosswind: the lantern's sideways drift (m) and speed, the gust blowing now, and the next. */
+  private drift = 0;
+  private driftSpeed = 0;
+  private gust = 0;
+  private gustLeft = 0;
+  private gustIn = 1.2;
+  private snags = 0;
+  private devFan = 0;
+  private readonly lastPalm = [new Vector3(), new Vector3()];
+  private readonly side = new Vector3();
 
   constructor(private readonly floor: number) {
     this.group.name = 'SkyLantern';
@@ -94,6 +114,22 @@ export class SkyLantern {
     marker.rotation.x = Math.PI / 2;
     marker.position.set(LEDGE.x, f + LEDGE.y + 0.018, LEDGE.z);
     this.group.add(marker);
+
+    // Two rock crags flank the climb: the wind must not push the lantern into them.
+    this.side.set(LEDGE.z - AT.z, 0, -(LEDGE.x - AT.x)).normalize();
+    const rock = new MeshStandardMaterial({ color: 0x6e665c, roughness: 1, flatShading: true });
+    for (const s of [-1, 1]) {
+      const at = this.pathPoint(0.55, 0);
+      const crag = new Group();
+      for (let i = 0; i < 3; i++) {
+        const spire = new Mesh(new CylinderGeometry(0.004 + i * 0.003, 0.03 - i * 0.005, 0.26 - i * 0.07, 6), rock);
+        spire.position.set((i - 1) * 0.018 * s, (0.26 - i * 0.07) / 2, i * 0.012);
+        spire.rotation.z = (i - 1) * 0.12 * s;
+        crag.add(spire);
+      }
+      crag.position.set(at.x + this.side.x * (CRAG + 0.03) * s, f, at.z + this.side.z * (CRAG + 0.03) * s);
+      this.group.add(crag);
+    }
 
     // The lantern: a ribbed paper envelope, a bamboo ring, a wire burner basket.
     const profile: Vector2[] = [];
@@ -148,11 +184,18 @@ export class SkyLantern {
     devActions[']'] = () => {
       this.devCup = !this.devCup;
     };
+    // Dev: ; sends a gust now, / fans it back towards the middle.
+    devActions[';'] = () => {
+      this.gustIn = 0;
+    };
+    devActions['/'] = () => {
+      this.devFan = 0.5;
+    };
     this.lit = false;
   }
 
   get state(): string {
-    return `cup=${this.cupped > 0} T=${Math.round(this.tIn)}K lift=${(this.liftRatio() * 100).toFixed(0)}% h=${this.height.toFixed(3)} lit=${this.lit} scorch=${this.scorch.toFixed(2)} done=${this.done}`;
+    return `drift=${(this.drift * 100).toFixed(1)}cm gust=${this.gustLeft > 0 ? this.gust.toFixed(2) : 0} snags=${this.snags} cup=${this.cupped > 0} T=${Math.round(this.tIn)}K lift=${(this.liftRatio() * 100).toFixed(0)}% h=${this.height.toFixed(3)} lit=${this.lit} scorch=${this.scorch.toFixed(2)} done=${this.done}`;
   }
 
   /** Your lantern's flight, for the Inventor's Journal. */
@@ -162,6 +205,7 @@ export class SkyLantern {
       `Air inside: ${Math.round(this.hottest)} K (${Math.round(this.hottest - 273)} °C) · outside ${T_ROOM} K`,
       `Lift: ${Math.round(lift * 100)}% of its weight · ${Math.round((1 - T_ROOM / this.hottest) * 100)}% of the air's weight gone`,
       this.scorch > 0.05 ? `Paper scorched ${Math.round(this.scorch * 100)}%: a little too hot` : 'No scorch marks: well judged',
+      this.snags ? `Snagged on the crags ${this.snags} time${this.snags > 1 ? 's' : ''}` : 'Fanned clear of the crags every gust',
     ];
   }
 
@@ -189,6 +233,21 @@ export class SkyLantern {
 
     // A pinch at the burner lights it; a cupped hand just below shelters the flame.
     let cupping = false;
+    let fan = this.devFan > 0 ? -Math.sign(this.drift) * 0.5 : 0;
+    this.devFan -= dt;
+    hands.forEach((hand, h) => {
+      if (!hand.tracked) return;
+      // A palm sweeping past the paper pushes air at it: its sideways speed, across the climb.
+      const paper = this.group.localToWorld(this.v.copy(this.balloon.position).setY(this.balloon.position.y + 0.07));
+      const moved = this.lastPalm[h];
+      // Only a palm level with the paper fans it (the sheltering hand below does not), and only a real sweep, not tracking jitter.
+      if (dt > 0 && moved.lengthSq() > 0 && hand.palm.y > burner.y + 0.015 && hand.palm.distanceTo(paper) < FAN_REACH) {
+        const along = ((hand.palm.x - moved.x) * this.side.x + (hand.palm.z - moved.z) * this.side.z) / dt;
+        const push = Math.sign(along) * Math.max(0, Math.abs(along) - 0.2);
+        if (Math.abs(push) > Math.abs(fan)) fan = push;
+      }
+      moved.copy(hand.palm);
+    });
     for (const hand of hands) {
       if (!hand.tracked) continue;
       if (!this.lit && hand.pinchStarted && hand.pinch.distanceTo(burner) < 0.05) this.light();
@@ -217,15 +276,56 @@ export class SkyLantern {
       this.scorch = Math.max(0, this.scorch - dt * 0.1);
     }
 
+    // Crosswind: gusts once it is off the ground, the tether pulling it gently back, your fanning against them.
+    if (!this.delivered && this.height > 0.025) {
+      this.gustIn -= dt;
+      if (this.gustIn <= 0 && this.gustLeft <= 0) {
+        this.gust = (Math.random() < 0.5 ? -1 : 1) * (0.07 + Math.random() * 0.04);
+        this.gustLeft = 2 + Math.random() * 0.8;
+        this.gustIn = 2.2 + Math.random() * 1.4;
+        playWhoosh(0.7);
+        this.say(`A gust from the ${this.gust > 0 ? 'right' : 'left'}! Fan it back with your free hand`, 1.8);
+      }
+    }
+    if (this.gustLeft > 0) {
+      this.gustLeft -= dt;
+      if (Math.random() < dt * 25) {
+        const p = this.v.copy(this.balloon.position).addScaledVector(this.side, -Math.sign(this.gust) * 0.12);
+        p.y += 0.04 + Math.random() * 0.08;
+        this.smoke.emit(p, this.side.clone().multiplyScalar(Math.sign(this.gust) * 0.25), { life: 0.6, gravity: 0, size: [0.006, 0.02], from: 0xf4f0e8, alpha: 0.25 });
+      }
+    }
+    const blow = (this.gustLeft > 0 ? this.gust : 0) + Math.max(-0.6, Math.min(0.6, fan)) * 0.9;
+    this.driftSpeed += (blow - this.driftSpeed * 1.6 - this.drift * 0.5) * dt;
+    this.drift += this.driftSpeed * dt;
+    if (this.height <= 0.002) {
+      this.drift *= 1 - Math.min(1, dt * 3);
+      this.driftSpeed = 0;
+    }
+    if (!this.delivered && Math.abs(this.drift) > CRAG && this.height > 0.06) {
+      // Snagged on the rock: the paper tears and the lantern sinks back.
+      this.snags++;
+      this.mistakes++;
+      this.drift = Math.sign(this.drift) * (CRAG - 0.02);
+      this.driftSpeed = -this.driftSpeed * 0.3;
+      this.height *= 0.35;
+      this.velocity = 0;
+      this.scorch = Math.min(0.9, this.scorch + 0.3);
+      playCrackle(0.05);
+      this.say('Snagged on the crag! The paper tore and it sank. Fan against the gusts to keep it on its line', 3);
+    }
+
     // Motion: buoyancy minus weight, with air drag; the ground and the ledge stop it.
     if (!this.delivered) {
-      // Toy-scale: the same balance of forces, slowed so you can watch it climb.
-      const net = (this.liftRatio() - 1) * G * 0.15;
+      // Toy-scale: the same balance of forces, slowed so you can watch it climb (and the wind can find it).
+      const net = (this.liftRatio() - 1) * G * 0.09;
       this.velocity += (net - this.velocity * 2.2) * dt;
       this.height = Math.max(0, Math.min(RISE, this.height + this.velocity * dt));
       if (this.height === 0 && this.velocity < 0) this.velocity = 0;
       const k = this.height / RISE;
-      this.balloon.position.set(AT.x + (LEDGE.x - AT.x) * k * k, f + 0.02 + this.height + 0.02 * Math.sin(this.time * 1.3) * k, AT.z + (LEDGE.z - AT.z) * k * k);
+      this.pathPoint(k, this.drift, this.balloon.position);
+      this.balloon.position.y = f + 0.02 + this.height + 0.02 * Math.sin(this.time * 1.3) * k;
+      this.balloon.rotation.z = -this.driftSpeed * 1.5;
       if (this.height >= RISE - 0.002) this.deliver();
     }
     this.balloon.rotation.y += dt * 0.25;
@@ -257,12 +357,20 @@ export class SkyLantern {
     this.caption = this.noteTime > 0 ? this.note : this.prompt();
   }
 
+  /** Along the climb (k from 0 at the peg to 1 at the ledge), pushed sideways by the wind. */
+  private pathPoint(k: number, drift: number, out = new Vector3()): Vector3 {
+    // Near the ledge the wind has less hold: the drift fades as it arrives.
+    const d = drift * (1 - k * k);
+    return out.set(AT.x + (LEDGE.x - AT.x) * k * k + this.side.x * d, 0, AT.z + (LEDGE.z - AT.z) * k * k + this.side.z * d);
+  }
+
   private prompt(): string {
     const lift = Math.round(this.liftRatio() * 100);
     if (this.delivered) return 'The lantern shards reached the ledge. The mountain path is open.';
     if (!this.lit) return 'Pinch the little burner under the paper lantern to light it';
     if (this.liftRatio() < 1) return `Hot air is lighter: cup your palm under the flame to shelter it · lift ${lift}% of its weight`;
-    return `Rising! Lift ${lift}% of its weight · keep it warm, but not too hot`;
+    if (Math.abs(this.drift) > CRAG * 0.6) return `Drifting towards the crag! Sweep your free palm past the paper to fan it back · lift ${lift}%`;
+    return `Rising! Lift ${lift}% of its weight · keep it warm, and watch the wind`;
   }
 
   private say(text: string, seconds: number): void {
