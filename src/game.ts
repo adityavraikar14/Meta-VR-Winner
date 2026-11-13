@@ -1,5 +1,5 @@
 import { fitFont, font, FONT, roundRect as themeRoundRect, UI } from './ui-theme.js';
-import { narrate, narrating, stopNarration } from './narrator.js';
+import { narrating, stopNarration } from './narrator.js';
 import {
   CanvasTexture,
   Color,
@@ -645,12 +645,12 @@ export class ShadowGameSystem extends createSystem({
     this.shadowWorld.update(dt);
 
     stage.playing = this.phase === 'matching' && !stage.menuOpen;
-    stage.fight = this.puzzle?.id === 'shadow-dragon' || this.puzzle?.id === 'duel';
+    stage.fight = !!this.puzzle?.fight || this.puzzle?.id === 'duel';
     stage.titleMenu = this.phase === 'title';
     // Music only in the headset; the Arena keeps Yash's own soundscape.
     const inHeadset = this.visibilityState.peek() === VisibilityState.Visible;
     // The menu has its theme, each world its own, the duel a lively one; scenes can ask for battle music.
-    const worldMusic = this.puzzle?.id === 'duel' ? 'duel' : WORLDS[this.puzzle?.world ?? 0]?.music ?? 'explore';
+    const worldMusic = this.puzzle?.id === 'duel' || this.puzzle?.id.startsWith('fight-') ? 'duel' : WORLDS[this.puzzle?.world ?? 0]?.music ?? 'explore';
     const menuMusic = this.phase === 'title' || this.phase === 'table' || this.phase === 'growing' || this.phase === 'intro';
     setMusic(!inHeadset || stage.arena ? null : stage.music ?? (menuMusic ? 'menu' : worldMusic));
     tickMusic(dt);
@@ -939,6 +939,7 @@ export class ShadowGameSystem extends createSystem({
     play.puzzleIndex = this.puzzle ? index : -1;
     play.puzzleVersion++;
     play.outcome = null;
+    stage.journalPage = null;
 
     const puzzle = this.puzzle;
     if (!puzzle) {
@@ -984,8 +985,6 @@ export class ShadowGameSystem extends createSystem({
           : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].name}`;
       this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].name, puzzle.title, puzzle.story, `Your move: ${puzzle.ask}`);
       this.setCaption(puzzle.ask);
-      // The storyteller reads the card: what is happening, and exactly what to do.
-      narrate(`level-${puzzle.id}`, `${puzzle.title}. ${puzzle.story} Your move: ${puzzle.ask}.`);
     } else {
       this.drawBanner(
         'The ink is gone',

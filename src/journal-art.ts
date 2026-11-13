@@ -160,6 +160,35 @@ const DRAW: Record<Diagram, (g: CanvasRenderingContext2D) => void> = {
     label(g, 'the face is the muscle’s cross-section', 265, 95, 17);
   },
 
+  blade(g) {
+    // A wrist turns a blade through one angle: the hand moves a little, the tip a lot.
+    const cx = 120;
+    const cy = 330;
+    const swing = 0.55;
+    const len = 300;
+    for (const a of [-1.2 - swing, -1.2]) {
+      const tx = cx + Math.cos(a) * len;
+      const ty = cy + Math.sin(a) * len;
+      g.globalAlpha *= a === -1.2 ? 1 : 0.4;
+      pen(g, [[cx, cy], [tx, ty]], 5);
+      pen(g, [[cx + Math.cos(a + 1.57) * 18, cy + Math.sin(a + 1.57) * 18], [cx - Math.cos(a + 1.57) * 18, cy - Math.sin(a + 1.57) * 18]], 3);
+      g.globalAlpha /= a === -1.2 ? 1 : 0.4;
+    }
+    ring(g, cx, cy, 10, 2.6);
+    label(g, 'wrist', cx, cy + 36, 17);
+    ring(g, cx, cy, 70, 1.6, 'rgba(31, 63, 134, 0.6)', -1.2 - swing, -1.2);
+    ring(g, cx, cy, len, 1.6, 'rgba(31, 63, 134, 0.6)', -1.2 - swing, -1.2);
+    const hx = cx + Math.cos(-1.2) * 70;
+    const hy = cy + Math.sin(-1.2) * 70;
+    arrow(g, hx, hy, hx + 26, hy + 9, RED, 3);
+    label(g, 'hand: slow', hx + 34, hy + 30, 17, RED, 'left');
+    const tx = cx + Math.cos(-1.2) * len;
+    const ty = cy + Math.sin(-1.2) * len;
+    arrow(g, tx, ty, tx + 110, ty + 38, RED, 3);
+    label(g, 'tip: fast', tx + 60, ty + 70, 19, RED, 'left');
+    label(g, 'same angle ω, bigger r → bigger v', 300, 420, 18, BLUE);
+  },
+
   pendulum(g) {
     const leg = (x: number, len: number, swing: number, tag: string) => {
       const top = 110;

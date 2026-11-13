@@ -91,7 +91,7 @@ export const RIVALS: RivalSpec[] = [
   {
     id: 'vance',
     name: 'Sgt. Vance',
-    title: 'the Marksman',
+    title: 'the Musketeer',
     url: 'gltf/rival-vance.glb',
     height: 0.5,
     girth: 0.065,
@@ -124,7 +124,7 @@ export const RIVALS: RivalSpec[] = [
   {
     id: 'rook',
     name: 'Captain Rook',
-    title: 'the Knife Pirate',
+    title: 'the Corsair',
     url: 'gltf/rival-rook.glb',
     height: 0.46,
     girth: 0.075,
@@ -224,7 +224,7 @@ export const RIVALS: RivalSpec[] = [
   {
     id: 'kai',
     name: 'Kai',
-    title: 'the Duelist',
+    title: 'the Ronin',
     url: 'gltf/rival-kai.glb',
     height: 0.5,
     girth: 0.065,

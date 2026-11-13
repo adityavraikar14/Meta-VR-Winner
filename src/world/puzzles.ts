@@ -1,5 +1,6 @@
 import { Group, type MeshStandardMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 import { ShadowSlingshot } from '../machines/slingshot.js';
+import { SwordTraining } from '../machines/sword.js';
 import type { TaskStep } from '../creatures/creature.js';
 import type { Effects } from '../creatures/fx.js';
 import type { WalkLevel } from '../shadow-world.js';
@@ -12,8 +13,8 @@ import { dailyLevel, dateKey, noteDaily } from '../run/daily.js';
 import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
 import { workshopLevel } from '../run/workshop.js';
 import { ShadowRun } from '../run/shadow-run.js';
-import { InkDuel } from '../fight/duel.js';
-import { currentRival } from '../fight/rivals.js';
+import { duelWith, InkDuel } from '../fight/duel.js';
+import { currentRival, RIVALS } from '../fight/rivals.js';
 import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
 import { Brew } from '../machines/brew.js';
@@ -85,6 +86,8 @@ export interface Puzzle {
   maxSize?: number;
   /** Done with your own hands, not a friend: the scene reports progress in `stage.task`. */
   handsOn?: boolean;
+  /** A fight (the dragon, a captain, Morwen): friends stay back and the music turns to battle. */
+  fight?: boolean;
   /** Caption once solved. */
   solved: string;
   build(root: Group, kit: Kit): PuzzleScene;
@@ -630,7 +633,8 @@ const shadowDragon: Puzzle = {
   story: 'At the summit the bewitched dragon guards Morwen’s tower. Break its trance, and the witch is next.',
   ask: 'Choose your powers: Light or the Arsenal',
   handsOn: true,
-  solved: 'The shadow breaks into light. The Great Lantern burns again.',
+  fight: true,
+  solved: 'The trance breaks, and the dragon is itself again. High in her tower, Morwen screams.',
   build(root, kit) {
     // First the choice of powers: the story's Light, or Yash's Arsenal of seven weapons.
     const choice = new PowerChoice(kit.floor);
@@ -724,7 +728,7 @@ const skyLantern: Puzzle = {
   id: 'sky-lantern',
   world: 3,
   title: 'The Sky Lantern',
-  story: 'Kai the Ronin guards the mountain pass, and no one gets past his sword. Go over him instead: a paper lantern could carry the shards up the cliff, if the air inside it is hot enough.',
+  story: 'Kai the Ronin waits at the top of the pass, and the path up the cliff is gone. A paper lantern could carry the shards up to him, if the air inside it is hot enough.',
   ask: 'Light it, shelter the flame with one hand, and fan it clear of the crags with the other',
   handsOn: true,
   solved: 'Hot air is less dense than cold air: it rose, and the path is open.',
@@ -773,6 +777,126 @@ const smithy: Puzzle = {
     };
   },
 };
+
+/** Sword-defence training: your hand's shadow becomes a blade. */
+const swordTraining: Puzzle = {
+  id: 'sword-training',
+  world: 3,
+  title: 'The Shadow Blade',
+  story: 'Below Kai’s pass stands the old shrine where the dragon’s keepers trained. The Lantern’s sparks can turn your hand’s shadow into a blade, and the shrine’s ink spirit will test it before you face the Ronin.',
+  ask: 'Hold your hand flat and edge-on until it becomes a sword; then block every strike, swing hard into the heavy ones, and slash the ink knots',
+  handsOn: true,
+  solved: 'You learned the Shadow Blade: block, parry, and the Dawn Cut.',
+  build(root, kit) {
+    const sword = new SwordTraining(kit.floor);
+    root.add(sword.group);
+    stage.runNotes = () => sword.journal();
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
+      update: (dt, hands, head) => {
+        sword.update(dt, hands, head);
+        task.caption = sword.caption;
+        task.done = sword.done;
+        task.mistakes = sword.mistakes;
+      },
+    };
+  },
+};
+
+/**
+ * A captain (or Morwen herself) steps out of the screen: the Ink Duel against
+ * them, the end of their chapter. Lose, and they come again after a breath;
+ * only a win moves the story on.
+ */
+function storyFight(o: { id: string; rival: string; world: number; title: string; story: string; solved: string }): Puzzle {
+  const spec = RIVALS.find((r) => r.id === o.rival)!;
+  return {
+    id: o.id,
+    world: o.world,
+    title: o.title,
+    story: o.story,
+    ask: 'Pinch and draw in the air: throw your ink at them, or draw a closed shape and it comes alive to fight beside you',
+    handsOn: true,
+    fight: true,
+    solved: o.solved,
+    build(root, kit) {
+      let duel = duelWith(spec, () => new InkDuel(root, kit.floor));
+      root.add(duel.group);
+      // The fight fills the Ink Duel's Journal page.
+      stage.journalPage = 'duel';
+      stage.runNotes = () => duel.journal();
+      const task = { caption: '', done: false, mistakes: 0 };
+      stage.task = task;
+      let losses = 0;
+      let again = -1;
+      return {
+        start: new Vector3(0, kit.floor, 0.12),
+        attempt: () => ({ solved: false, steps: [], line: 'This one is yours to fight.' }),
+        update: (dt, hands, head) => {
+          if (again > 0) {
+            again -= dt;
+            task.caption = `${spec.name} won this round. Get ready: again in ${Math.ceil(again)}…`;
+            if (again <= 0) {
+              root.remove(duel.group);
+              duel = duelWith(spec, () => new InkDuel(root, kit.floor));
+              root.add(duel.group);
+            }
+            return;
+          }
+          duel.update(dt, hands, head);
+          // Lost: no menu rematch in the story; they simply come again.
+          task.caption = duel.over && !duel.won ? `Splat! ${spec.name} wins this round, but it is not over. Get ready…` : duel.caption;
+          task.mistakes = losses + duel.mistakes;
+          if (!duel.done) return;
+          if (duel.won) task.done = true;
+          else {
+            losses++;
+            again = 4;
+          }
+        },
+      };
+    },
+  };
+}
+
+const fightRook = storyFight({
+  id: 'fight-rook',
+  rival: 'rook',
+  world: 1,
+  title: 'Captain Rook',
+  story: 'The cart is over the river, and Captain Rook the Corsair will not let it go. He steps out of the screen, knife twirling, to take the shards back.',
+  solved: 'Rook melts back into the ink he came from. The river is yours.',
+});
+
+const fightVance = storyFight({
+  id: 'fight-vance',
+  rival: 'vance',
+  world: 2,
+  title: 'Sergeant Vance',
+  story: 'The mine is open, and Sergeant Vance the Musketeer waits in the dark with his fast ink shot. Keep a drawing hanging in front of you: it takes the shots for you.',
+  solved: 'Vance’s ink runs dry. The mine’s shards are free.',
+});
+
+const fightKai = storyFight({
+  id: 'fight-kai',
+  rival: 'kai',
+  world: 3,
+  title: 'Kai the Ronin',
+  story: 'At the top of the pass Kai draws his blade. He can cut your ink straight back at you: throw while he is attacking, or two at once.',
+  solved: 'Kai lowers his sword and fades. The way to the dragon is open.',
+});
+
+const fightMorwen = storyFight({
+  id: 'fight-morwen',
+  rival: 'morwen',
+  world: 4,
+  title: 'Morwen, the Ink Witch',
+  story: 'Her captains are gone and her dragon is free. Morwen steps out of her tower to fight you herself. When her rune ward glows, wait; throw the moment it fades.',
+  solved: 'Morwen’s ink dries to dust, and the witch is gone with it.',
+});
 
 /** The Ink Duel lives outside the story, at this index. */
 export const DUEL_INDEX = 1000;
@@ -908,10 +1032,15 @@ export const PUZZLES: Puzzle[] = [
   shadowSlingshot,
   brokenBridge,
   oreTrain,
+  fightRook,
   smithy,
   healingDraught,
   strongDraught,
+  fightVance,
+  swordTraining,
   skyLantern,
+  fightKai,
   gateLock,
   shadowDragon,
+  fightMorwen,
 ];

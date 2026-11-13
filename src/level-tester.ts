@@ -108,6 +108,7 @@ const KEYS: Record<string, string> = {
   'ore-train': 'L lay the basic truss (it will buckle!) · W lay an X-braced one (it holds) · T test · U undo',
   'sky-lantern': '[ light the burner · ] cup a hand under the flame (press again to take it away: too hot scorches the paper) · ; a gust now · / fan it back',
   'shadow-slingshot': '[ the slingshot comes alive (as if you held a V) · ] a perfect shot at the next target',
+  'sword-training': '[ the blade comes alive (as if you held a flat hand) · ] a perfect block, parry or cut of the next strike',
   'gate-lock': '[ hold gentle tension (press again to let go) · ] set the binding pin · ; overset it · ’ release the lever (resets)',
   'shadow-dragon': 'First choose: [ Light · ] the Arsenal. Light: [ gather light · ] throw it. Either: ; dragon breathes · ’ dragon dives',
   duel: '[ draw ink · ] throw it · \' a drawing comes alive · ; rival throws · / rival special · + next phase · ` your super · - a herb · . win · , lose'
@@ -117,7 +118,7 @@ export function levelKeys(id: string, kind: string): string {
   if (id.startsWith('run-')) {
     return 'Shift+M: the mouse moves your hand (wheel: nearer/farther = bigger/smaller shadow) · [ drop the spark now · ] toggle a test shadow that solves the level';
   }
-  return KEYS[id] ?? KEYS[kind] ?? 'N to skip';
+  return KEYS[id] ?? (id.startsWith('fight-') ? KEYS.duel : undefined) ?? KEYS[kind] ?? 'N to skip';
 }
 
 export function installLevelTester(api: TesterApi): void {

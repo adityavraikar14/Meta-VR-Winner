@@ -27,7 +27,8 @@ export type Diagram =
   | 'energy'
   | 'bounce'
   | 'triangles'
-  | 'timing';
+  | 'timing'
+  | 'blade';
 
 export interface JournalPage {
   /** The level's id. */
@@ -149,6 +150,13 @@ export const JOURNAL: JournalPage[] = [
     formula: 'steep Ea/R = 4 000 K   spoil Ea/R = 15 000 K',
     body: 'Spoiling has the bigger activation energy, so heat speeds it up far more: near the boil, 10 °C more makes steeping 1.3× faster but spoiling 3× faster. Simmer just below and steeping wins; boil, and spoiling wins. Cooks and chemists live by this.',
     diagram: 'arrhenius',
+  },
+  {
+    id: 'sword-training',
+    topic: 'The Tip Outruns the Hand',
+    formula: 'v = ω·r',
+    body: 'Turn a blade and every point on it turns through the same angle, but the far points travel further. So speed grows with distance from your wrist: a 40 cm blade’s tip moves several times faster than your hand. A parry works because the fast tip carries the momentum to turn a heavy strike around.',
+    diagram: 'blade',
   },
   {
     id: 'sky-lantern',

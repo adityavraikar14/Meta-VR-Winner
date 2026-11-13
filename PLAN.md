@@ -22,7 +22,7 @@ Found on the Quest 2:
 - [x] P0 Accuracy: generous grab reach (5–14 cm for plants, 4.5 cm outside a pet's body, 6 cm in the Smithy), a highlight on whatever a pinch would take, things never fall through a surface or out of reach (they land on the table or floor and can be picked up again).
 
 ### 0.2 The story (the main thing)
-- [x] P0 **A proper opening, with voice-over** (eight shadow-puppet scenes with the four villains, src/intro.ts; spoken by src/narrator.ts with the device's voice; every level card is read aloud and waits for the line; recorded neural voice pending: Piper install needs Aditya's OK), the first time a player ever enters: who the villains are, what happened to the dragon, why shadows, what you must do. Every later level opens with a spoken one-line instruction of exactly what to do.
+- [x] P0 **A proper opening, with voice-over** (eight shadow-puppet scenes with the four villains, src/intro.ts; spoken by src/narrator.ts as an old male storyteller: the device's voice, a man's voice picked, slower and lower; Nov 13: Aditya asked for voice in the prologue only, so level cards are no longer read aloud, their captions carry the instructions; recorded neural voice pending: Piper install needs Aditya's OK), the first time a player ever enters: who the villains are, what happened to the dragon, why shadows, what you must do. Every later level opens with a spoken one-line instruction of exactly what to do.
 - The story (proposed; Aditya to confirm):
   - The **Shadow Dragon** guarded the Great Lantern, the light that keeps ink in its pages.
   - **Four villains** captured it: **Morwen, the Ink Witch** (their leader), and three warlords she pulled out of old history books in ink: **Captain Rook, the Corsair** (a golden-age pirate), **Sergeant Vance, the Musketeer** (a redcoat marksman), and **Kai, the Ronin** (a masterless samurai).
@@ -31,12 +31,12 @@ Found on the Quest 2:
   - **Escape through shadow**: every level is a step of the escape: carry the spark over the ink (shadow bridges), build with shadow, make shadow things come alive and use them.
   - Each chapter ends with one of the captains; then the **hypnotised dragon** (break the trance: fight it without killing it); then **Morwen** herself.
 - [x] P0 **Shadow things that come alive** (The Shadow Slingshot, chapter 2, src/machines/slingshot.ts): make a shadow of a **slingshot** with your hand; it becomes a real slingshot; pull and let go to fire a stone and knock something down (a cage, a key, a bridge rope). Tasks built around it.
-- [ ] P1 **Sword training in the shadows**: your hand's shadow becomes a sword; learn to block and parry ink strikes (left, right, high, low) before the captains. A special power is earned by training.
-- [ ] P1 Chapter bosses: Rook, Vance and Kai as the chapter finales (reuse the Arena bosses), then the hypnotised dragon, then Morwen.
+- [x] P1 **Sword training in the shadows** (The Shadow Blade, chapter 4, src/machines/sword.ts: hold a flat hand edge-on and a shadow sword comes alive in it; the shrine's ink spirit strikes at four guards marked by rings; four slow blocks, six fast ones, three heavy strikes parried back by swinging faster than 1.2 m/s at the tip, then the Dawn Cut through three ink knots; Journal page "The Tip Outruns the Hand", v = ω·r; tested in the emulator with dev keys, not yet with real hands): your hand's shadow becomes a sword; learn to block and parry ink strikes (left, right, high, low) before the captains. A special power is earned by training.
+- [x] P1 Chapter bosses (the Ink Duel against a fixed rival, storyFight in src/world/puzzles.ts; lose and they come again, only a win moves on; the rivals renamed the Corsair, the Musketeer, the Ronin): Captain Rook ends chapter 2, Sergeant Vance chapter 3, Kai chapter 4 (after the sword training and the sky lantern), then the hypnotised dragon, then Morwen as the very last level.
 - Side games stay: **Ink Duel** (draw and fight) and the **Arena**.
 - [x] Every level's story rewritten for the villains (Rook floods the river, Vance holds the mine, Kai guards the pass, Morwen's gate and tower); the ending too
-- [ ] Recorded narration (Piper, voice "Cori", public domain) once installing it is allowed; drop the files in public/audio/voice/ and list them in RECORDED (src/narrator.ts)
-- [ ] Test the pets and the slingshot with real hands on the Quest
+- [ ] Recorded narration (Piper, a male voice to match "old storyteller": check the voice's licence first) once installing it is allowed; drop the files in public/audio/voice/ and list them in RECORDED (src/narrator.ts)
+- [ ] Test the pets, the slingshot, the sword (the flat-hand pose, block reach, parry speed) and the captain fights with real hands on the Quest
 
 ---
 

@@ -158,6 +158,19 @@ const SHAPES: Array<Array<[number, number]>> = [
   [[-0.02, 0], [0.0, 0.03], [0.03, 0.01], [0.01, -0.02], [-0.03, -0.01], [-0.01, 0.025], [0.025, 0.0]],
 ];
 
+/** Set while a story fight builds its duel: that captain, not the roster's pick. */
+let storyRival: RivalSpec | null = null;
+
+/** Builds a duel against this rival (the story's captain fights). */
+export function duelWith<T>(spec: RivalSpec, make: () => T): T {
+  storyRival = spec;
+  try {
+    return make();
+  } finally {
+    storyRival = null;
+  }
+}
+
 export class InkDuel {
   readonly group = new Group();
   caption = '';
@@ -165,8 +178,8 @@ export class InkDuel {
   won = false;
   mistakes = 0;
 
-  /** Who you are fighting (picked on the roster). */
-  readonly spec: RivalSpec = currentRival();
+  /** Who you are fighting: the story's captain, or the one picked on the roster. */
+  readonly spec: RivalSpec = storyRival ?? currentRival();
   private mode: Mode = 'ready';
   private modeTime = 0;
   private time = 0;
@@ -357,6 +370,11 @@ export class InkDuel {
     devActions['='] = () => {
       this.god = !this.god;
     };
+  }
+
+  /** The fight is decided (won or lost), though its last moments may still be playing. */
+  get over(): boolean {
+    return this.mode === 'won' || this.mode === 'lost';
   }
 
   get state(): string {
