@@ -38,7 +38,13 @@ export class PanelSystem extends createSystem({}) {
     if (!this.world.xrEnabled) {
       if (levels) levels.hidden = true;
       button.textContent = 'Open on Meta Quest';
-      if (note) note.textContent = 'This browser cannot open VR. Visit this page in the Meta Quest browser.';
+      button.disabled = false;
+      const say = () => {
+        if (note) note.textContent = 'This browser cannot open VR. Open this same link in the Meta Quest browser.';
+        note?.classList.add('warn');
+      };
+      say();
+      button.addEventListener('click', say);
       return;
     }
 
@@ -48,11 +54,50 @@ export class PanelSystem extends createSystem({}) {
     button.textContent = returning ? 'Continue in VR' : 'Play in VR';
     if (returning && note) note.textContent = `${totalStars()} ★ collected so far  ·  ${trophiesEarned()} of ${TROPHIES.length} 🏆 trophies`;
 
+    const label = button.textContent ?? 'Play in VR';
+    const tell = (text: string, warn: boolean) => {
+      if (!note) return;
+      note.textContent = text;
+      note.classList.toggle('warn', warn);
+    };
+    // Does this device do VR at all? (A laptop browser does not; the Quest does.)
+    let canVR: boolean | null = null;
+    const checking = navigator.xr?.isSessionSupported?.('immersive-ar').catch(() => false) ?? Promise.resolve(false);
+    void checking.then((ok) => {
+      canVR = ok;
+      if (!ok) {
+        button.textContent = 'Open on Meta Quest';
+        tell('VR does not run in this browser. Open this same link in the Meta Quest browser and push Play there.', true);
+      }
+    });
+    let starting = false;
+    // Every push answers at once: VR starts, or it says plainly why not.
     const launch = () => {
+      if (starting) return;
+      if (canVR === false) {
+        tell('VR does not run in this browser. Put on your Meta Quest, open this same link in its browser, and push Play there.', true);
+        note?.animate?.([{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 350 });
+        return;
+      }
       // The Arsenal's sounds (bosses, weapons) and the recorded animal calls start on this click too.
       sfx.unlock();
       preloadCalls();
+      starting = true;
+      button.textContent = 'Starting VR…';
+      tell('Starting VR… if the headset asks, allow it', false);
       this.world.launchXR();
+      // Watch the request: in VR, or refused (no device, a denied prompt), then say so and allow another try.
+      const began = performance.now();
+      const watch = window.setInterval(() => {
+        const inVR = this.world.session != null || this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+        const settled = !this.world.sessionRequestPending && performance.now() - began > 300;
+        if (!inVR && !settled && performance.now() - began < 20000) return;
+        window.clearInterval(watch);
+        starting = false;
+        button.textContent = label;
+        if (inVR) tell('Best on Meta Quest with hand tracking on.', false);
+        else tell('VR did not start. Check hand tracking is on (Settings → Movement tracking), allow the VR prompt, then push Play again.', true);
+      }, 150);
     };
     button.addEventListener('click', launch);
     const toArena = () => {
