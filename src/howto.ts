@@ -97,7 +97,7 @@ export const HOW_TO: Record<string, string[]> = {
     'Push Test',
   ],
   smithy: [
-    'Pinch the lantern shard and drop it into the hearth',
+    'Pinch the glowing orange lantern shard (on the little stone in front of you, under the yellow sign) and drop it into the hearth',
     'Pump the bellows: push the top board down, again and again',
     'Pinch the tongs’ brown handles (clamped on the iron bar, on the bench) and lay the bar in the coals until it glows orange',
     'Lay it on the anvil, pick up the hammer and strike the glowing marks, then cool it in the water',

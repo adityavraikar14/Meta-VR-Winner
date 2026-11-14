@@ -157,12 +157,27 @@ export class Forge {
   private readonly fwd = new Vector3();
   private readonly up = new Vector3();
   private readonly quat = new Quaternion();
+  /** A floating sign with an arrow over whatever you need to use next. */
+  private readonly sign: Sprite;
+  private readonly signCanvas = document.createElement('canvas');
+  private readonly signTexture: CanvasTexture;
+  private signText = '';
+  private signTime = 0;
 
   constructor(private readonly floor: number) {
     this.group.name = 'Forge';
     const f = floor;
 
     this.buildHearth(f);
+    this.signCanvas.width = 512;
+    this.signCanvas.height = 200;
+    this.signTexture = new CanvasTexture(this.signCanvas);
+    this.signTexture.colorSpace = SRGBColorSpace;
+    this.sign = new Sprite(new SpriteMaterial({ map: this.signTexture, transparent: true, depthWrite: false, depthTest: false }));
+    this.sign.scale.set(0.18, 0.0703, 1);
+    this.sign.renderOrder = 14;
+    this.sign.visible = false;
+    this.group.add(this.sign);
     this.bellows = new Bellows();
     this.bellows.group.position.set(BELLOWS_AT.x, f + BELLOWS_AT.y, BELLOWS_AT.z);
     this.group.add(this.bellows.group);
@@ -353,6 +368,7 @@ export class Forge {
     this.touchHot(hands, dt);
     this.render(dt);
     this.advance();
+    this.pointAt(dt);
     this.sparks.update(dt);
     this.steam.update(dt);
   }
@@ -364,6 +380,77 @@ export class Forge {
     this.stepTime = 0;
   }
 
+  /** Points the sign at the next thing to use: the shard, the hearth, the bellows, the tongs, the anvil, the hammer, the water. */
+  private pointAt(dt: number): void {
+    this.signTime += dt;
+    const f = this.floor;
+    const bar = this.bar.place;
+    let text = '';
+    const at = this.tmp2;
+    if (this.step === 'light') {
+      if (this.stoneItem.place === 'held') {
+        text = 'Drop it in the hearth';
+        at.set(HEARTH.x, f + COAL_TOP + 0.03, HEARTH.z);
+      } else {
+        text = 'Lantern shard';
+        at.copy(this.stoneItem.group.position).setY(this.stoneItem.group.position.y + 0.035);
+      }
+    } else if (this.step === 'bellows' || ((this.step === 'heating' || this.step === 'forge') && bar === 'fire' && this.coal < 950)) {
+      text = 'Bellows: push down';
+      at.set(BELLOWS_AT.x, f + BELLOWS_AT.y + 0.06, BELLOWS_AT.z);
+    } else if (this.step === 'heat') {
+      if (bar === 'held') {
+        text = 'Lay it in the coals';
+        at.set(HEARTH.x, f + COAL_TOP + 0.03, HEARTH.z);
+      } else {
+        text = 'Tongs';
+        at.set(-TONGS - 0.008, 0, 0).applyQuaternion(this.tongs.quaternion).add(this.tongs.position);
+        at.y += 0.03;
+      }
+    } else if ((this.step === 'heating' || this.step === 'forge') && bar !== 'anvil' && bar !== 'fire' && this.barHeat >= FORGE_MIN) {
+      text = 'Anvil';
+      at.set(ANVIL.x, f + FACE_Y + 0.035, ANVIL.z);
+    } else if (this.step === 'forge' && bar === 'anvil' && this.hammer.place !== 'held' && this.barHeat >= WORKABLE) {
+      text = 'Hammer';
+      at.copy(this.hammer.group.position).setY(this.hammer.group.position.y + 0.04);
+    } else if (this.step === 'quench' && this.barHeat >= HARDEN && bar !== 'water') {
+      text = 'Water';
+      at.set(TROUGH.x, f + TROUGH_SIZE.y + 0.035, TROUGH.z);
+    }
+    this.sign.visible = text !== '' && stage.playing;
+    if (!this.sign.visible) return;
+    if (text !== this.signText) {
+      this.signText = text;
+      const g = this.signCanvas.getContext('2d')!;
+      g.clearRect(0, 0, 512, 200);
+      g.font = `800 54px ${FONT}`;
+      const w = Math.min(500, g.measureText(text).width + 70);
+      g.fillStyle = 'rgba(20, 33, 61, 0.94)';
+      g.beginPath();
+      g.roundRect(256 - w / 2, 8, w, 100, 50);
+      g.fill();
+      g.strokeStyle = '#ffc94a';
+      g.lineWidth = 7;
+      g.stroke();
+      // The arrow down to the thing.
+      g.fillStyle = '#ffc94a';
+      g.beginPath();
+      g.moveTo(256 - 34, 118);
+      g.lineTo(256 + 34, 118);
+      g.lineTo(256, 192);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#ffffff';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(text, 256, 60, 470);
+      this.signTexture.needsUpdate = true;
+    }
+    // The arrow's tip sits just above the thing, bobbing gently.
+    this.sign.position.copy(at);
+    this.sign.position.y += 0.04 + 0.006 * Math.sin(this.signTime * 4);
+  }
+
   /** Move the job along and say what to do next. */
   private advance(): void {
     const bar = this.bar.place;
@@ -372,7 +459,7 @@ export class Forge {
     let text = '';
     switch (this.step) {
       case 'light':
-        text = 'The forge is cold. Pinch the lantern shard and drop it into the hearth';
+        text = 'The forge is cold. Pinch the glowing orange lantern shard on the little stone in front of you, and drop it into the hearth';
         if (this.lit) this.setStep('bellows');
         break;
       case 'bellows':
