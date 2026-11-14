@@ -1,5 +1,5 @@
-import { FONT } from './ui-theme.js';
-import { count, items, RECIPES, RESOURCE_ORDER, RESOURCES, type Resource } from './bag.js';
+import { FONT, layout, lines } from './ui-theme.js';
+import { canCraft, count, items, RECIPES, RESOURCE_ORDER, RESOURCES, type Resource } from './bag.js';
 import { play } from './progress.js';
 
 /**
@@ -223,11 +223,9 @@ function countLabel(g: CanvasRenderingContext2D, text: string, x: number, y: num
   g.fillText(text, x, y);
 }
 
-/** Paint the whole inventory onto a 1024 × 512 canvas. */
+/** Paint the whole inventory onto a 2048 × 1024 canvas (laid out at 1024 × 512). */
 export function drawInventory(canvas: HTMLCanvasElement, message: string): void {
-  const g = canvas.getContext('2d')!;
-  const w = canvas.width;
-  const h = canvas.height;
+  const { g, w, h } = layout(canvas);
   g.clearRect(0, 0, w, h);
   // The panel: deep navy with a bright yellow rim, like the rest of the interface.
   const panel = g.createLinearGradient(0, 0, 0, h);
@@ -235,7 +233,7 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
   panel.addColorStop(1, '#14213d');
   g.fillStyle = panel;
   g.beginPath();
-  g.roundRect(10, 10, w - 20, h - 20, 30);
+  g.roundRect(8, 8, w - 16, h - 16, 30);
   g.fill();
   g.lineWidth = 8;
   g.strokeStyle = '#ffc928';
@@ -244,80 +242,125 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   g.fillStyle = '#ffc928';
-  g.font = `700 40px ${FONT}`;
-  g.fillText('Your Bag', 46, 58);
-  g.fillStyle = '#e8eef8';
-  g.font = `600 26px ${FONT}`;
+  g.font = `800 40px ${FONT}`;
+  g.fillText('Your Bag', 40, 50);
+  g.fillStyle = message ? '#7dffb0' : '#e8eef8';
+  g.font = `700 25px ${FONT}`;
   g.textAlign = 'right';
-  g.fillText(message || 'Gather in the worlds · craft with the buttons below', w - 46, 58, 600);
+  g.fillText(message || 'Mix things that help you win the boss fights', w - 40, 50, 680);
 
-  // Gathered resources: two rows of three big slots.
+  // How it works, in three steps.
+  const steps: Array<[string, string, string]> = [
+    ['1  GATHER', 'Touch the glowing herbs, stones and crystals beside each level'],
+    ['2  MIX', 'Push a recipe’s button below when it says READY'],
+    ['3  USE', 'In a fight, turn a palm to your face and push Drink. Wards and shards work by themselves'],
+  ].map(([a, b]) => [a, b, ''] as [string, string, string]);
+  steps.forEach(([head, text], i) => {
+    const x = 32 + i * 324;
+    g.fillStyle = 'rgba(255, 201, 40, 0.13)';
+    g.beginPath();
+    g.roundRect(x, 84, 312, 84, 14);
+    g.fill();
+    g.fillStyle = '#ffc928';
+    g.font = `900 21px ${FONT}`;
+    g.textAlign = 'left';
+    g.fillText(head, x + 14, 104);
+    g.fillStyle = '#ffffff';
+    g.font = `600 17px ${FONT}`;
+    lines(g, text, 286).slice(0, 2).forEach((line, j) => g.fillText(line, x + 14, 130 + j * 21));
+    if (i < 2) {
+      g.fillStyle = '#ffc928';
+      g.font = `900 26px ${FONT}`;
+      g.textAlign = 'center';
+      g.fillText('›', x + 318, 126);
+    }
+  });
+
+  // Gathered resources: two rows of three slots.
   g.textAlign = 'left';
   g.fillStyle = '#9fb3d9';
-  g.font = `600 22px ${FONT}`;
-  g.fillText('GATHERED', 46, 104);
-  const S = 112;
+  g.font = `800 20px ${FONT}`;
+  g.fillText('GATHERED', 36, 192);
+  const S = 92;
   RESOURCE_ORDER.forEach((r, i) => {
-    const x = 46 + (i % 3) * (S + 14);
-    const y = 120 + Math.floor(i / 3) * (S + 14);
+    const x = 34 + (i % 3) * (S + 10);
+    const y = 208 + Math.floor(i / 3) * (S + 10);
     const n = count(r);
     slot(g, x, y, S, n > 0);
     g.globalAlpha = n > 0 ? 1 : 0.35;
-    drawIcon(g, r, x + S / 2, y + S / 2 - 6, S * 0.34);
+    drawIcon(g, r, x + S / 2, y + S / 2 + 2, S * 0.3);
     g.globalAlpha = 1;
-    countLabel(g, `${n}`, x + S - 12, y + S - 12);
+    countLabel(g, `${n}`, x + S - 10, y + S - 8);
     g.fillStyle = '#e8eef8';
-    g.font = `600 18px ${FONT}`;
+    g.font = `700 17px ${FONT}`;
     g.textAlign = 'left';
-    g.fillText(RESOURCES[r].plural, x + 10, y + 18);
+    g.fillText(RESOURCES[r].plural, x + 9, y + 16);
   });
 
   // Crafted things you carry.
-  const cx0 = 470;
   g.fillStyle = '#9fb3d9';
-  g.font = `600 22px ${FONT}`;
-  g.fillText('CARRYING', cx0, 104);
+  g.font = `800 20px ${FONT}`;
+  g.fillText('CARRYING', 36, 420);
   const carried: Array<[Icon, number, string]> = [
     ['potion', items('potion'), 'Draught'],
     ['ward', items('ward'), 'Ward'],
-    ['shard', items('shard'), 'Sun Shard'],
-    ['axe', play.items.includes('axe') ? 1 : 0, 'Axe'],
+    ['shard', items('shard'), 'Shard'],
   ];
-  carried.forEach(([icon, n, name], i) => {
-    const x = cx0 + i * (S + 10);
-    const y = 120;
-    slot(g, x, y, S, n > 0);
+  carried.forEach(([icon, n], i) => {
+    const x = 34 + i * 102;
+    const y = 434;
+    slot(g, x, y, 56, n > 0);
     g.globalAlpha = n > 0 ? 1 : 0.3;
-    drawIcon(g, icon, x + S / 2, y + S / 2 - 6, S * 0.34);
+    drawIcon(g, icon, x + 28, y + 28, 18);
     g.globalAlpha = 1;
-    countLabel(g, `${n}`, x + S - 12, y + S - 12);
-    g.fillStyle = '#e8eef8';
-    g.font = `600 18px ${FONT}`;
+    g.fillStyle = '#ffffff';
+    g.font = `900 26px ${FONT}`;
     g.textAlign = 'left';
-    g.fillText(name, x + 10, y + 18);
+    g.fillText(`×${n}`, x + 62, y + 30);
   });
 
-  // Recipes: ingredients → result.
-  g.fillStyle = '#9fb3d9';
-  g.font = `600 22px ${FONT}`;
-  g.fillText('CRAFTING', cx0, 262);
+  // Recipes: big cards, ingredients → item, and READY or what is missing.
+  const rx = 362;
+  const rw = w - rx - 32;
   RECIPES.forEach((recipe, i) => {
-    const y = 300 + i * 52;
-    let x = cx0;
+    const y = 184 + i * 104;
+    const ready = canCraft(recipe);
+    g.fillStyle = ready ? 'rgba(31, 179, 90, 0.2)' : 'rgba(255, 255, 255, 0.06)';
+    g.beginPath();
+    g.roundRect(rx, y, rw, 94, 16);
+    g.fill();
+    g.lineWidth = 3;
+    g.strokeStyle = ready ? '#1fb35a' : 'rgba(255, 255, 255, 0.18)';
+    g.stroke();
+    let x = rx + 18;
     for (const [r, n] of Object.entries(recipe.needs)) {
-      drawIcon(g, r as Resource, x + 20, y, 18);
-      g.fillStyle = count(r as Resource) >= (n ?? 0) ? '#e8f0e0' : '#e07a6a';
-      g.font = '700 24px "Trebuchet MS", Arial, sans-serif';
+      drawIcon(g, r as Resource, x + 22, y + 36, 20);
+      g.fillStyle = count(r as Resource) >= (n ?? 0) ? '#ffffff' : '#ff8a7a';
+      g.font = `900 26px ${FONT}`;
       g.textAlign = 'left';
-      g.fillText(`×${n}`, x + 42, y + 2);
-      x += 96;
+      g.fillText(`×${n}`, x + 46, y + 38);
+      x += 100;
     }
     g.fillStyle = '#ffc928';
-    g.font = `700 30px ${FONT}`;
-    g.fillText('→', x + 4, y);
-    drawIcon(g, recipe.item, x + 64, y, 20);
+    g.font = `900 34px ${FONT}`;
+    g.fillText('→', x, y + 36);
+    drawIcon(g, recipe.item, x + 64, y + 36, 24);
+    // Missing ingredients, said plainly; or READY.
+    const missing = Object.entries(recipe.needs)
+      .filter(([r, n]) => count(r as Resource) < (n ?? 0))
+      .map(([r, n]) => `${(n ?? 0) - count(r as Resource)} ${RESOURCES[r as Resource].plural.toLowerCase()}`);
+    const status = ready ? 'READY: push ' + recipe.label.toUpperCase() : 'need ' + missing.join(' + ');
+    g.textAlign = 'right';
+    g.font = `900 20px ${FONT}`;
+    g.fillStyle = ready ? '#7dffb0' : '#ff9a8a';
+    g.fillText(status, rx + rw - 18, y + 28, 230);
+    const statusW = Math.min(230, g.measureText(status).width);
+    g.textAlign = 'left';
     g.fillStyle = '#ffffff';
-    g.font = `600 22px ${FONT}`;
-    g.fillText(`${recipe.name}: ${recipe.does}`, x + 94, y + 1, w - x - 140);
+    g.font = `800 25px ${FONT}`;
+    g.fillText(recipe.name, x + 100, y + 28, rx + rw - 30 - statusW - (x + 100));
+    g.fillStyle = '#d4def4';
+    g.font = `600 20px ${FONT}`;
+    g.fillText(recipe.does.charAt(0).toUpperCase() + recipe.does.slice(1), x + 100, y + 64, rx + rw - 18 - (x + 100));
   });
 }

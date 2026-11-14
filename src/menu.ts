@@ -494,7 +494,7 @@ const ARENA: Array<{ id: string; name: string; title: string; style: string }> =
 /** Who made what (full list with links in CREDITS.md). */
 const CREDITS: Array<[string, string]> = [
   ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
-  ['The Duel Rivals', 'Sgt. Vance, Captain Rook, Vex, Mako and Kai: animated characters by Quaternius (CC0), via Poly Pizza'],
+  ['The Duel Rivals', 'Captain Rook, Vex, Mako and Sable: animated characters by Quaternius (CC0); Thorne: Animated Wizard by Quaternius (CC-BY); via Poly Pizza'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
   ['Animal sounds', 'Horse neigh: Hü, Wikimedia Commons (public domain) · Horse whinny: Briefer, Maigrot, Mandel, Freymond, Bachmann & Hillmann 2015, Scientific Reports (CC BY 4.0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],

@@ -87,3 +87,33 @@ export function fitFont(ctx: CanvasRenderingContext2D, text: string, weight: num
   }
   return px;
 }
+
+/** Panels are drawn at twice their layout size, so text stays sharp in the headset. */
+export const HIDPI = 2;
+
+/**
+ * A 2D context for a hi-DPI panel canvas, scaled so drawing code works in
+ * its layout size (the canvas's real size ÷ HIDPI). Returns the context and
+ * the layout width and height.
+ */
+export function layout(canvas: HTMLCanvasElement): { g: CanvasRenderingContext2D; w: number; h: number } {
+  const g = canvas.getContext('2d')!;
+  const k = canvas.width >= 1536 ? HIDPI : 1;
+  g.setTransform(k, 0, 0, k, 0, 0);
+  return { g, w: canvas.width / k, h: canvas.height / k };
+}
+
+/** Breaks text into lines no wider than `width` at the context's current font. */
+export function lines(ctx: CanvasRenderingContext2D, text: string, width: number): string[] {
+  const out: string[] = [];
+  let line = '';
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > width) {
+      out.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) out.push(line);
+  return out;
+}

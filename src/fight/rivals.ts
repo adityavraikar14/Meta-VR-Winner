@@ -4,11 +4,11 @@
  * one special ability that changes how you have to play:
  *
  *   ward    Morwen raises a circle of runes that stops your throws.
- *   burst   Vance fires three fast pellets in a row, and rolls aside.
+ *   burst   Thorne hurls a volley of three embers from his staff, and rolls aside.
  *   duck    Rook ducks under high throws: aim at his chest.
  *   tumble  Vex never stands still, and her ink curves in the air.
  *   armor   Mako's hide shrugs off soft throws: only real energy (½mv²) hurts.
- *   parry   Kai slashes your ink straight back at you.
+ *   parry   Sable slashes your ink straight back at you.
  */
 
 export type RivalMove = 'idle' | 'walk' | 'run' | 'throw' | 'attack' | 'skill' | 'dodge' | 'hit' | 'death' | 'taunt';
@@ -90,35 +90,35 @@ export const RIVALS: RivalSpec[] = [
   },
   {
     id: 'vance',
-    name: 'Sgt. Vance',
-    title: 'the Musketeer',
-    url: 'gltf/rival-vance.glb',
+    name: 'Thorne',
+    title: 'the Ember Mage',
+    url: 'gltf/rival-thorne.glb',
     height: 0.5,
     girth: 0.065,
     health: 100,
     ability: 'burst',
-    style: 'Fires flat, fast ink pellets from his fingertips, then a burst of three. Rolls out of the way of your throws.',
-    tip: 'Keep a drawing hanging in front of you: the burst hits it, not you.',
-    entrance: 'Sgt. Vance steps out of the screen, finger guns ready!',
+    style: 'An old fire mage. Flings fast embers from his staff, then a volley of three. Rolls out of the way of your throws.',
+    tip: 'Keep a drawing hanging in front of you: the volley hits it, not you.',
+    entrance: 'Thorne the Ember Mage steps out of the screen, his staff ablaze!',
     clips: {
-      idle: ['Idle_Gun', 'Idle'],
+      idle: ['Idle_Weapon', 'Idle'],
       walk: ['Walk'],
-      run: ['Run'],
-      throw: ['Gun_Shoot'],
-      attack: ['Idle_Gun_Shoot', 'Gun_Shoot'],
-      skill: ['Gun_Shoot'],
+      run: ['Run_Weapon', 'Run'],
+      throw: ['Spell1'],
+      attack: ['Staff_Attack'],
+      skill: ['Spell2'],
       dodge: ['Roll'],
-      hit: ['HitRecieve'],
+      hit: ['RecieveHit'],
       death: ['Death'],
-      taunt: ['Idle_Gun_Pointing', 'Wave'],
+      taunt: ['Idle_Attacking'],
     },
     head: QUATERNIUS_HEAD,
-    chest: QUATERNIUS_CHEST,
-    hands: QUATERNIUS_HANDS,
+    chest: ['Torso'],
+    hands: [['FistR', 'LowerArmR'], ['FistL', 'LowerArmL']],
     shots: { throw: 'bolt', attack: 'pellet' },
-    ink: 0x07222c,
-    glow: 0x18b0d8,
-    accent: '#2ec4e6',
+    ink: 0x2a0a04,
+    glow: 0xff5a1a,
+    accent: '#ff5a2a',
     pace: [3.5, 2.5],
   },
   {
@@ -223,16 +223,16 @@ export const RIVALS: RivalSpec[] = [
   },
   {
     id: 'kai',
-    name: 'Kai',
-    title: 'the Ronin',
-    url: 'gltf/rival-kai.glb',
+    name: 'Sable',
+    title: 'the Hooded Blade',
+    url: 'gltf/rival-sable.glb',
     height: 0.5,
     girth: 0.065,
     health: 110,
     ability: 'parry',
-    style: 'A swordsman. When your ink comes at him he can slash it straight back at you.',
-    tip: 'Throw while he is mid-attack, or two at once: he can only parry one.',
-    entrance: 'Kai steps out of the screen and draws his blade.',
+    style: 'A hooded swordswoman. When your ink comes at her she can slash it straight back at you.',
+    tip: 'Throw while she is mid-attack, or two at once: she can only parry one.',
+    entrance: 'Sable steps out of the screen and draws her blade.',
     clips: {
       idle: ['Idle_Sword', 'Idle'],
       walk: ['Walk'],
@@ -259,7 +259,7 @@ export const RIVALS: RivalSpec[] = [
 /** What each ability is called on the roster card. */
 export const ABILITY_NAME: Record<Ability, string> = {
   ward: 'Rune Ward',
-  burst: 'Triple Burst',
+  burst: 'Ember Volley',
   duck: 'Duck & Weave',
   tumble: 'Tumble',
   armor: 'Thick Hide',

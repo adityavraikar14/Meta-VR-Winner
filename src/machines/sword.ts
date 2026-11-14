@@ -27,7 +27,7 @@ import { stage } from '../stage-state.js';
 import { ParticlePool } from './particles.js';
 
 /**
- * The Shadow Blade: sword-defence training at the old shrine below Kai's pass.
+ * The Shadow Blade: sword-defence training at the old shrine below Sable's pass.
  *
  * Hold your hand flat and edge-on, like a karate chop: on the screen its
  * shadow is a blade. Hold it still and the blade comes alive in your hand, a
@@ -670,7 +670,7 @@ export class SwordTraining {
   }
 
   private prompt(): string {
-    if (this.phase === 'won') return 'You learned the Shadow Blade. Kai is waiting at the top of the pass.';
+    if (this.phase === 'won') return 'You learned the Shadow Blade. Sable is waiting at the top of the pass.';
     if (this.phase === 'shape') {
       return this.shapeTime > 0.1
         ? 'Hold it still… the blade is coming alive'

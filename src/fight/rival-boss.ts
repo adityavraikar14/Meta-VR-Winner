@@ -1,17 +1,17 @@
 /**
- * The duel's rivals as Arena bosses: Sgt. Vance, Captain Rook, Vex, Mako and
- * Kai at life size, fought with the Arsenal's seven weapons.
+ * The duel's rivals as Arena bosses: Thorne, Captain Rook, Vex, Mako and
+ * Sable at life size, fought with the Arsenal's seven weapons.
  *
  * They do not stand still. Each roams an arc in front of you, walking (or
  * rolling) from spot to spot between attacks, turns to face you to throw,
  * and reacts when something is coming at them. Each keeps the trick they
  * have in the Ink Duel, turned into an Arena power:
  *
- *   Vance  Triple Burst: three fast shots in a row; rolls aside when threatened.
+ *   Thorne Ember Volley: three fast embers in a row; rolls aside when threatened.
  *   Rook   Fan of Knives: three arcs that land one after another; ducks under high attacks.
  *   Vex    Tumble: never where you last aimed; two lobs at once, then she is gone.
  *   Mako   Thick Hide: the sword and the blaster bounce off. Charges in and slams.
- *   Kai    Parry: strike while his blade is up and your blow comes straight back.
+ *   Sable  Parry: strike while her blade is up and your blow comes straight back.
  *
  * Below half health they are enraged: less rest, and they close in.
  * All their shots are stopped by the same defences as every other boss's.
@@ -209,7 +209,7 @@ export class RivalBoss implements Boss {
   damage(amount: number, at: Vector3): void {
     const model = this.model;
     if (!this.alive || !model) return;
-    // Kai's blade is up: the blow comes straight back.
+    // Sable's blade is up: the blow comes straight back.
     if (model.parrying) {
       this.bursts.spawn(at, this.spec.glow, 0.35);
       sfx.block();
@@ -240,7 +240,7 @@ export class RivalBoss implements Boss {
       sfx.telegraph();
       this.bursts.spawn(model.chestAt(this.tmp), this.spec.glow, 0.6);
     } else if (this.spec.ability === 'parry' && !model.busy && Math.random() < 0.35) {
-      // Stung, Kai brings his guard up at once.
+      // Stung, Sable brings her guard up at once.
       this.mood = 'move';
       model.play('skill');
     }

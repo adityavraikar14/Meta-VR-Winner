@@ -28,7 +28,7 @@ export function recordArenaWin(boss: string, title: string, seconds: number, blo
   record.best = newBest ? seconds : record.best;
   record.wins++;
   play.arena[boss] = record;
-  const names: Record<string, string> = { sentinel: 'Sentinel', dragon: 'Dragon', witch: 'Morwen', morwen: 'Morwen', vance: 'Vance', rook: 'Rook', vex: 'Vex', mako: 'Mako', kai: 'Kai' };
+  const names: Record<string, string> = { sentinel: 'Sentinel', dragon: 'Dragon', witch: 'Morwen', morwen: 'Morwen', vance: 'Thorne', rook: 'Rook', vex: 'Vex', mako: 'Mako', kai: 'Sable' };
   const tally = ORDER.filter((b) => play.arena[b]).map((b) => `${names[b] ?? b} ×${play.arena[b].wins}`).join(' · ');
   const newPage = noteRun('arsenal', [
     `${title} beaten in ${Math.round(seconds)} s${newBest ? ', your best yet' : ` (best ${Math.round(record.best)} s)`}`,

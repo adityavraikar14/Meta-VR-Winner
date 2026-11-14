@@ -333,82 +333,124 @@ export function corsair(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
   ctx.restore();
 }
 
-/** Sergeant Vance, the Musketeer: a plumed hat, a long musket with a bayonet. */
-export function musketeer(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, aim = 0): void {
+/** Thorne, the Ember Mage: a long robe and hood, a long beard, a tall staff crowned with fire (lit 0–1). */
+export function mage(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, lit = 1, t = 0): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = INK;
-  ctx.fillRect(-20 * s, -70 * s, 15 * s, 70 * s);
-  ctx.fillRect(5 * s, -70 * s, 15 * s, 70 * s);
+  // A heavy robe to the ground, wider at the hem, with hanging sleeves.
   ctx.beginPath();
-  ctx.moveTo(-26 * s, -70 * s);
-  ctx.lineTo(-22 * s, -140 * s);
-  ctx.lineTo(22 * s, -140 * s);
-  ctx.lineTo(26 * s, -70 * s);
+  ctx.moveTo(-40 * s, 0);
+  ctx.lineTo(-24 * s, -138 * s);
+  ctx.lineTo(24 * s, -138 * s);
+  ctx.lineTo(40 * s, 0);
   ctx.closePath();
   ctx.fill();
-  ellipse(ctx, 0, -152 * s, 14 * s, 16 * s);
-  // A broad hat with a sweeping plume.
-  ellipse(ctx, 0, -166 * s, 34 * s, 7 * s);
-  ctx.fillRect(-16 * s, -186 * s, 32 * s, 20 * s);
   ctx.beginPath();
-  ctx.moveTo(10 * s, -184 * s);
-  ctx.quadraticCurveTo(46 * s, -214 * s, 58 * s, -176 * s);
-  ctx.quadraticCurveTo(36 * s, -196 * s, 14 * s, -176 * s);
+  ctx.moveTo(-22 * s, -132 * s);
+  ctx.lineTo(-48 * s, -84 * s);
+  ctx.lineTo(-30 * s, -78 * s);
+  ctx.lineTo(-14 * s, -110 * s);
+  ctx.closePath();
   ctx.fill();
-  // The musket, shouldered (aim 0) or levelled (aim 1).
-  ctx.save();
-  ctx.translate(-10 * s, -118 * s);
-  ctx.rotate(-0.9 + aim * 0.85);
-  ctx.fillRect(-10 * s, -4 * s, 150 * s, 8 * s);
-  ctx.fillRect(-26 * s, -7 * s, 30 * s, 14 * s);
+  // Hooded head and a long, pointed beard.
+  ellipse(ctx, 0, -152 * s, 15 * s, 17 * s);
   ctx.beginPath();
-  ctx.moveTo(140 * s, -3 * s);
-  ctx.lineTo(176 * s, 0);
-  ctx.lineTo(140 * s, 3 * s);
+  ctx.moveTo(-20 * s, -146 * s);
+  ctx.quadraticCurveTo(-18 * s, -182 * s, 6 * s, -196 * s);
+  ctx.quadraticCurveTo(22 * s, -176 * s, 20 * s, -146 * s);
+  ctx.closePath();
   ctx.fill();
-  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(-10 * s, -142 * s);
+  ctx.lineTo(0, -98 * s);
+  ctx.lineTo(10 * s, -142 * s);
+  ctx.closePath();
+  ctx.fill();
+  // The staff, held out to one side.
+  ctx.fillRect(34 * s, -186 * s, 7 * s, 186 * s);
+  ctx.beginPath();
+  ctx.moveTo(22 * s, -126 * s);
+  ctx.lineTo(38 * s, -124 * s);
+  ctx.lineTo(38 * s, -112 * s);
+  ctx.lineTo(18 * s, -114 * s);
+  ctx.closePath();
+  ctx.fill();
+  // Its crown of fire.
+  if (lit > 0) {
+    ctx.save();
+    ctx.globalAlpha *= lit;
+    glow(ctx, 37 * s, -198 * s, 34 * s, 0.9);
+    ctx.fillStyle = '#ff7a2a';
+    ctx.beginPath();
+    const f = Math.sin(t * 9) * 3 * s;
+    ctx.moveTo(27 * s, -188 * s);
+    ctx.quadraticCurveTo(26 * s + f, -208 * s, 37 * s, -226 * s - f);
+    ctx.quadraticCurveTo(48 * s - f, -208 * s, 47 * s, -188 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.restore();
 }
 
-/** Kai, the Ronin: a wide straw kasa, broad hakama, a drawn katana. */
-export function ronin(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, draw = 1): void {
+/** Sable, the Hooded Blade: a deep pointed hood, a cloak caught by the wind, a slim sword drawn up as `draw` goes 0 to 1. */
+export function hooded(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, draw = 1, t = 0): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = INK;
-  // Hakama: wide, pleated trousers.
+  // Legs in a fencer's stance.
   ctx.beginPath();
-  ctx.moveTo(-18 * s, -88 * s);
-  ctx.lineTo(-42 * s, 0);
-  ctx.lineTo(42 * s, 0);
-  ctx.lineTo(18 * s, -88 * s);
+  ctx.moveTo(-28 * s, 0);
+  ctx.lineTo(-10 * s, -72 * s);
+  ctx.lineTo(2 * s, -72 * s);
+  ctx.lineTo(-14 * s, 0);
   ctx.closePath();
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(-30 * s, -88 * s);
-  ctx.lineTo(-24 * s, -146 * s);
-  ctx.lineTo(24 * s, -146 * s);
-  ctx.lineTo(30 * s, -88 * s);
+  ctx.moveTo(26 * s, 0);
+  ctx.lineTo(4 * s, -72 * s);
+  ctx.lineTo(16 * s, -72 * s);
+  ctx.lineTo(38 * s, 0);
   ctx.closePath();
   ctx.fill();
-  ellipse(ctx, 0, -156 * s, 13 * s, 14 * s);
-  // The kasa: a wide, shallow cone.
+  // Body, and a cloak streaming out behind.
   ctx.beginPath();
-  ctx.moveTo(-52 * s, -160 * s);
-  ctx.lineTo(0, -188 * s);
-  ctx.lineTo(52 * s, -160 * s);
+  ctx.moveTo(-18 * s, -70 * s);
+  ctx.lineTo(-16 * s, -136 * s);
+  ctx.lineTo(18 * s, -136 * s);
+  ctx.lineTo(20 * s, -70 * s);
   ctx.closePath();
   ctx.fill();
-  // The katana, held two-handed, drawn up as `draw` goes 0 to 1.
+  const wave = Math.sin(t * 2.4) * 8 * s;
+  ctx.beginPath();
+  ctx.moveTo(-14 * s, -138 * s);
+  ctx.quadraticCurveTo(-60 * s, -110 * s + wave, -76 * s, -46 * s - wave);
+  ctx.lineTo(-48 * s, -56 * s);
+  ctx.quadraticCurveTo(-36 * s, -96 * s, -6 * s, -120 * s);
+  ctx.closePath();
+  ctx.fill();
+  // The hood: a deep point that hides the face.
+  ctx.beginPath();
+  ctx.moveTo(-17 * s, -138 * s);
+  ctx.quadraticCurveTo(-22 * s, -168 * s, -8 * s, -186 * s);
+  ctx.lineTo(-24 * s, -196 * s);
+  ctx.quadraticCurveTo(8 * s, -190 * s, 18 * s, -160 * s);
+  ctx.lineTo(17 * s, -138 * s);
+  ctx.closePath();
+  ctx.fill();
+  // The sword arm and a slim straight blade.
   ctx.save();
-  ctx.translate(18 * s, -112 * s);
-  ctx.rotate(0.9 - draw * 1.9);
-  ctx.fillRect(0, -6 * s, 26 * s, 12 * s);
-  ctx.fillRect(24 * s, -9 * s, 5 * s, 18 * s);
+  ctx.translate(14 * s, -122 * s);
+  ctx.rotate(0.9 - draw * 1.8);
+  ctx.fillRect(0, -5 * s, 34 * s, 10 * s);
+  ctx.fillRect(32 * s, -11 * s, 5 * s, 22 * s);
   ctx.beginPath();
-  ctx.moveTo(29 * s, -4 * s);
-  ctx.quadraticCurveTo(80 * s, -10 * s, 128 * s, -22 * s);
-  ctx.lineTo(29 * s, 4 * s);
+  ctx.moveTo(37 * s, -3 * s);
+  ctx.lineTo(132 * s, -1 * s);
+  ctx.lineTo(140 * s, 0);
+  ctx.lineTo(132 * s, 1 * s);
+  ctx.lineTo(37 * s, 3 * s);
   ctx.closePath();
   ctx.fill();
   ctx.restore();

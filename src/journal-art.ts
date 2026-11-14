@@ -1,4 +1,4 @@
-import { FONT } from './ui-theme.js';
+import { FONT, layout } from './ui-theme.js';
 import { type Diagram, JOURNAL } from './journal.js';
 import { play } from './progress.js';
 import { TROPHIES, trophiesEarned } from './trophies.js';
@@ -726,7 +726,7 @@ function book(g: CanvasRenderingContext2D): void {
 
 /** Paint journal page `index` (of JOURNAL) as an open notebook; one past the last is the Trophy Shelf. */
 export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
-  const g = canvas.getContext('2d')!;
+  const { g } = layout(canvas);
   g.clearRect(0, 0, W, H);
   if (index >= JOURNAL.length) {
     drawShelf(g);
@@ -742,53 +742,59 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
   book(g);
 
   // Left page: the sketch and its caption.
-  label(g, 'INVENTOR’S JOURNAL', 52, 46, 15, '#5b6782', 'left', false);
-  label(g, `${index + 1} / ${JOURNAL.length}`, W / 2 - 44, 46, 15, '#5b6782', 'right', false);
+  label(g, 'INVENTOR’S JOURNAL', 52, 44, 18, '#5b6782', 'left', false);
+  label(g, `${index + 1} / ${JOURNAL.length}`, W / 2 - 44, 44, 18, '#5b6782', 'right', false);
   g.save();
   g.globalAlpha = earned ? 1 : 0.18;
   DRAW[page.diagram](g);
   g.restore();
-  label(g, title, W / 4, 432, 24, SEPIA, 'center', false);
-  label(g, chapter, W / 4, 462, 16, '#5b6782');
+  label(g, title, W / 4, 430, 30, SEPIA, 'center', false);
+  label(g, chapter, W / 4, 464, 19, '#5b6782');
 
   // Right page: the science.
   const rx = W / 2 + 40;
   const rw = W / 2 - 84;
   const stars = play.stars[page.id] ?? 0;
-  if (stars > 0) label(g, '★'.repeat(stars) + '☆'.repeat(3 - stars), W - 48, 46, 22, GOLD, 'right', false);
+  if (stars > 0) label(g, '★'.repeat(stars) + '☆'.repeat(3 - stars), W - 48, 44, 26, GOLD, 'right', false);
   g.fillStyle = SEPIA;
-  g.font = `700 30px ${FONT}`;
+  g.font = `800 34px ${FONT}`;
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText(page.topic, rx, 84, rw);
+  g.fillText(page.topic, rx, 82, rw);
   // The formula, boxed like a fair copy.
-  g.font = `600 24px ${FONT}`;
+  g.font = `700 27px ${FONT}`;
   const fw = Math.min(rw, g.measureText(page.formula).width + 36);
-  g.fillStyle = 'rgba(255, 201, 40, 0.22)';
+  g.fillStyle = 'rgba(255, 201, 40, 0.28)';
   g.beginPath();
-  g.roundRect(rx, 108, fw, 42, 8);
+  g.roundRect(rx, 106, fw, 46, 8);
   g.fill();
-  g.strokeStyle = 'rgba(240, 168, 0, 0.8)';
-  g.lineWidth = 1.5;
+  g.strokeStyle = 'rgba(240, 168, 0, 0.9)';
+  g.lineWidth = 2;
   g.stroke();
-  g.fillStyle = '#1d2b53';
+  g.fillStyle = '#14213d';
   g.fillText(page.formula, rx + 18, 130, rw - 36);
-  // The explanation.
-  g.font = `500 19px ${FONT}`;
-  g.fillStyle = earned ? '#22304f' : 'rgba(34, 48, 79, 0.4)';
-  wrap(g, page.body, rw).slice(0, 6).forEach((line, i) => g.fillText(line, rx, 176 + i * 27));
+  // The explanation: as large as fits in the space above "Your run".
+  let px = 25;
+  let body: string[] = [];
+  for (; px >= 19; px--) {
+    g.font = `500 ${px}px ${FONT}`;
+    body = wrap(g, page.body, rw);
+    if (body.length * px * 1.3 <= 176) break;
+  }
+  g.fillStyle = earned ? '#14213d' : 'rgba(20, 33, 61, 0.45)';
+  body.slice(0, Math.floor(176 / (px * 1.3))).forEach((line, i) => g.fillText(line, rx, 180 + i * px * 1.3));
 
   // Your run, in blue ink; or the wax seal on a page not yet earned.
-  const by = 344;
+  const by = 360;
   if (earned) {
     g.fillStyle = 'rgba(47, 107, 255, 0.08)';
     g.beginPath();
-    g.roundRect(rx - 10, by, rw + 20, 130, 10);
+    g.roundRect(rx - 10, by, rw + 20, 124, 10);
     g.fill();
-    label(g, 'YOUR RUN', rx, by + 20, 15, '#2f6bff', 'left', false);
-    g.font = `600 19px ${FONT}`;
+    label(g, 'YOUR RUN', rx, by + 18, 18, '#2f6bff', 'left', false);
+    g.font = `700 22px ${FONT}`;
     g.fillStyle = BLUE;
-    (lines.length ? lines : ['Cleared: the page is yours']).slice(0, 3).forEach((line, i) => g.fillText(line, rx, by + 50 + i * 27, rw));
+    (lines.length ? lines : ['Cleared: the page is yours']).slice(0, 3).forEach((line, i) => g.fillText(line, rx, by + 46 + i * 28, rw));
   } else {
     const sx = W - 140;
     const sy = by + 60;
@@ -806,9 +812,9 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
     g.fill();
     label(g, '🔒', sx, sy + 4, 38, '#ffffff', 'center', false);
     g.textAlign = 'left';
-    g.font = `600 19px ${FONT}`;
+    g.font = `700 22px ${FONT}`;
     g.fillStyle = '#1d2b53';
-    wrap(g, `Clear ${title} to fill this page with your own numbers.`, rw - 180).forEach((line, i) => g.fillText(line, rx, by + 34 + i * 27));
+    wrap(g, `Clear ${title} to fill this page with your own numbers.`, rw - 170).forEach((line, i) => g.fillText(line, rx, by + 30 + i * 28));
   }
 }
 
@@ -855,15 +861,15 @@ function shelfCell(g: CanvasRenderingContext2D, cx: number, top: number, i: numb
   const t = TROPHIES[i];
   const earned = t.earned();
   medal(g, cx, top + 74, t.icon, earned);
-  g.font = `700 15px ${FONT}`;
+  g.font = `800 19px ${FONT}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = earned ? SEPIA : 'rgba(59, 42, 26, 0.55)';
-  g.fillText(t.title, cx, top + 126, 104);
-  g.font = `600 13px ${FONT}`;
-  g.fillStyle = earned ? '#1d2b53' : 'rgba(90, 52, 24, 0.55)';
+  g.fillStyle = earned ? SEPIA : 'rgba(59, 42, 26, 0.7)';
+  g.fillText(t.title, cx, top + 124, 108);
+  g.font = `600 15px ${FONT}`;
+  g.fillStyle = earned ? '#1d2b53' : 'rgba(60, 40, 24, 0.75)';
   g.textAlign = 'center';
-  wrap(g, t.how, 104).slice(0, 3).forEach((line, j) => g.fillText(line, cx, top + 148 + j * 16));
+  wrap(g, t.how, 108).slice(0, 3).forEach((line, j) => g.fillText(line, cx, top + 146 + j * 18));
 }
 
 /** Every trophy, earned in gold; and how many, with the next one to try. */
@@ -871,8 +877,8 @@ function drawShelf(g: CanvasRenderingContext2D): void {
   seed = 4242;
   book(g);
   const count = trophiesEarned();
-  label(g, 'TROPHY SHELF', 52, 46, 15, '#5b6782', 'left', false);
-  label(g, `${count} / ${TROPHIES.length}`, W / 2 - 44, 46, 15, '#5b6782', 'right', false);
+  label(g, 'TROPHY SHELF', 52, 44, 18, '#5b6782', 'left', false);
+  label(g, `${count} / ${TROPHIES.length}`, W / 2 - 44, 44, 18, '#5b6782', 'right', false);
   // Four to a row: eight on the left page, the rest on the right with the tally.
   const col = (page: number, c: number) => (page === 0 ? 84 : W / 2 + 78) + c * 112;
   for (let i = 0; i < TROPHIES.length; i++) {
@@ -891,11 +897,11 @@ function drawShelf(g: CanvasRenderingContext2D): void {
   g.roundRect(x0, y0, x1 - x0, 172, 12);
   g.fill();
   label(g, `${count} of ${TROPHIES.length}`, (x0 + x1) / 2, y0 + 40, 30, GOLD, 'center', false);
-  label(g, 'trophies earned', (x0 + x1) / 2, y0 + 72, 17, '#5b6782');
+  label(g, 'trophies earned', (x0 + x1) / 2, y0 + 72, 19, '#5b6782');
   const next = TROPHIES.find((t) => !t.earned());
-  g.font = `600 16px ${FONT}`;
+  g.font = `700 18px ${FONT}`;
   g.fillStyle = BLUE;
   g.textAlign = 'center';
   const tip = next ? `Next: ${next.how.charAt(0).toLowerCase()}${next.how.slice(1)}` : 'Every trophy is yours!';
-  wrap(g, tip, x1 - x0 - 24).slice(0, 3).forEach((line, j) => g.fillText(line, (x0 + x1) / 2, y0 + 108 + j * 20));
+  wrap(g, tip, x1 - x0 - 24).slice(0, 3).forEach((line, j) => g.fillText(line, (x0 + x1) / 2, y0 + 108 + j * 22));
 }

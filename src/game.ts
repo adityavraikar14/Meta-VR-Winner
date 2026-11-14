@@ -1,4 +1,4 @@
-import { fitFont, font, FONT, roundRect as themeRoundRect, UI } from './ui-theme.js';
+import { fitFont, font, FONT, layout, lines as wrapLines, roundRect as themeRoundRect, UI } from './ui-theme.js';
 import { narrating, stopNarration } from './narrator.js';
 import {
   CanvasTexture,
@@ -148,6 +148,8 @@ const RING_STEPS = 40;
 const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
 /** The Skip button, off to the right of the paper and clear of the hands-on machines. */
 const SKIP_BUTTON = new Vector3(0.42, 0.02, 0.6);
+/** During the opening film, Skip sits low and to the right, below the film screen. */
+const INTRO_SKIP = new Vector3(0.3, -0.11, 0.66);
 const SKIP_SIZE = 0.75;
 /** Home sits above Skip, on the same side, in paper space (it follows the screen even in the Arena). */
 const HOME_AT = new Vector3(0.42, 0.17, 0.6);
@@ -276,6 +278,7 @@ export class ShadowGameSystem extends createSystem({
   private readonly homeEye = new Vector3();
   private buttonEntity!: Entity;
   private intro!: IntroShow;
+  private captionMesh!: Mesh;
   private table!: TableFinder;
   private menu!: MainMenu;
   /** Index of the menu button the mouse clicked this frame, or -1. */
@@ -363,7 +366,7 @@ export class ShadowGameSystem extends createSystem({
     this.ring.visible = false;
     paper.add(this.ring);
 
-    this.bannerCanvas = makeCanvas(1024, 512);
+    this.bannerCanvas = makeCanvas(2048, 1024);
     this.bannerTexture = makeTexture(this.bannerCanvas);
     this.bannerMaterial = new MeshBasicMaterial({
       map: this.bannerTexture,
@@ -392,17 +395,18 @@ export class ShadowGameSystem extends createSystem({
     this.creature.visible = false;
     paper.add(this.creature);
 
-    this.captionCanvas = makeCanvas(1024, 112);
+    this.captionCanvas = makeCanvas(2048, 300);
     this.captionTexture = makeTexture(this.captionCanvas);
     const captionMesh = new Mesh(
-      new PlaneGeometry(PAPER_WIDTH * 0.9, (PAPER_WIDTH * 0.9 * 112) / 1024),
+      new PlaneGeometry(PAPER_WIDTH * 0.96, (PAPER_WIDTH * 0.96 * 150) / 1024),
       // Drawn over everything: a dragon's wing or a boss in front of the screen never hides what to do.
       new MeshBasicMaterial({ map: this.captionTexture, transparent: true, depthTest: false, depthWrite: false }),
     );
     captionMesh.name = 'Caption';
+    this.captionMesh = captionMesh;
     captionMesh.renderOrder = 20;
     // In front of every world's frame, so no beam or crossbar can cover it.
-    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.115, 0.075);
+    captionMesh.position.set(0, PAPER_HEIGHT / 2 + 0.135, 0.075);
     paper.add(captionMesh);
 
     this.ghost = new GhostHand(paper);
@@ -491,6 +495,12 @@ export class ShadowGameSystem extends createSystem({
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
     // Dev: F9 times each step of loading the dragon.
     devActions.f9 = () => void diagnoseDragon((line) => console.log(`SHADOWPLAY diag ${line}`));
+    // Dev: N jumps the opening film to its next scene.
+    devActions.n = () => this.intro.skipScene();
+    // Dev: I plays the opening film from the title, as the Story button does.
+    devActions.i = () => {
+      if (this.phase === 'title') this.menuAction({ do: 'story' });
+    };
     // Dev: Q opens the Bag; Z fills it with three of everything.
     devActions.q = () => {
       if (this.phase === 'title') this.menu.open('bag');
@@ -648,6 +658,8 @@ export class ShadowGameSystem extends createSystem({
     this.paintTitle();
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
+    // The film carries its own subtitles; the caption bar steps aside while it plays.
+    this.captionMesh.visible = !this.intro.active;
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
     this.shadowWorld.update(dt);
 
@@ -686,6 +698,7 @@ export class ShadowGameSystem extends createSystem({
         if (pressed || this.introLine === null) {
           this.intro.stop();
           this.playButton.show(false);
+          this.placePlayButton(PLAY_BUTTON);
           if (this.introToTitle) {
             this.introToTitle = false;
             this.showTitle();
@@ -796,9 +809,18 @@ export class ShadowGameSystem extends createSystem({
   private startIntro(): void {
     this.bannerShown = false;
     this.playButton.setText('Skip');
+    this.placePlayButton(INTRO_SKIP);
     this.playButton.show(true);
     this.intro.start();
     this.setPhase('intro');
+  }
+
+  private placePlayButton(at: Vector3): void {
+    const paper = this.playButton.root.parent;
+    if (!paper) return;
+    this.playButton.root.position.copy(at);
+    paper.updateMatrixWorld(true);
+    this.playButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
   }
 
   /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
@@ -818,6 +840,7 @@ export class ShadowGameSystem extends createSystem({
     this.fresh = resume === 0 && totalStars() === 0;
     this.intro.stop();
     this.playButton.show(false);
+    this.placePlayButton(PLAY_BUTTON);
     this.menu.open('home');
     this.setCaption(this.fresh ? 'Welcome! Push Play to begin' : 'Welcome back!');
     this.setPhase('title');
@@ -1618,10 +1641,7 @@ export class ShadowGameSystem extends createSystem({
   private drawBanner(kicker: string, title: string, body: string, footer = '', extra?: { lead?: string; meter?: number }): void {
     this.banner.scale.setScalar(1);
     this.banner.position.y = 0.03;
-    const canvas = this.bannerCanvas;
-    const ctx = canvas.getContext('2d')!;
-    const w = canvas.width;
-    const h = canvas.height;
+    const { g: ctx, w, h } = layout(this.bannerCanvas);
     ctx.clearRect(0, 0, w, h);
     // A clean white card: soft shadow, a thick yellow border, a navy kicker pill, bold sans type.
     ctx.save();
@@ -1743,12 +1763,9 @@ export class ShadowGameSystem extends createSystem({
   private paintCaption(text: string): void {
     if (text === this.caption) return;
     this.caption = text;
-    const canvas = this.captionCanvas;
-    const ctx = canvas.getContext('2d')!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // A navy pill with a bright yellow underline and bold white type.
-    const w = canvas.width;
-    const h = canvas.height;
+    const { g: ctx, w, h } = layout(this.captionCanvas);
+    ctx.clearRect(0, 0, w, h);
+    // A navy pill with a bright yellow underline and bold white type: one big line, or two.
     ctx.save();
     ctx.shadowColor = 'rgba(8, 14, 32, 0.35)';
     ctx.shadowBlur = 10;
@@ -1763,8 +1780,21 @@ export class ShadowGameSystem extends createSystem({
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = UI.white;
-    fitFont(ctx, text, 700, 46, w - 90);
-    ctx.fillText(text, w / 2, h / 2 - 1);
+    let px = 50;
+    ctx.font = font(700, px);
+    let rows = [text];
+    if (ctx.measureText(text).width > w - 90) {
+      px = 44;
+      for (;;) {
+        ctx.font = font(700, px);
+        rows = wrapLines(ctx, text, w - 100);
+        if ((rows.length <= 2 && rows.every((r) => ctx.measureText(r).width <= w - 100)) || px <= 30) break;
+        px -= 2;
+      }
+      rows = rows.slice(0, 2);
+    }
+    const step = px * 1.12;
+    rows.forEach((row, i) => ctx.fillText(row, w / 2, h / 2 - 3 - ((rows.length - 1) * step) / 2 + i * step, w - 90));
     this.captionTexture.needsUpdate = true;
   }
 }
@@ -1876,6 +1906,8 @@ function makeCanvas(width: number, height: number): HTMLCanvasElement {
 function makeTexture(canvas: HTMLCanvasElement): CanvasTexture {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
+  // Sharper text seen at an angle.
+  texture.anisotropy = 4;
   return texture;
 }
 

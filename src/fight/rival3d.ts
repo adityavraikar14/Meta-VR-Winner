@@ -319,7 +319,7 @@ export class Rival3D {
     return t > 0.1 && t < 0.85;
   }
 
-  /** Mid-slash with the blade (Kai): ink that arrives now is sent back. */
+  /** Mid-slash with the blade (Sable): ink that arrives now is sent back. */
   get parrying(): boolean {
     if (this.move !== 'skill' || this.spec.ability !== 'parry') return false;
     const t = this.progress;
