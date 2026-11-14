@@ -665,6 +665,8 @@ export class DragonBattle {
   }
 
   private wound(damage: number): void {
+    // The Quick Tour's dragon falls in half the blows.
+    if (stage.tour) damage *= 2;
     // A Sun Shard from your bag makes a full blow of light strike twice as hard.
     if (damage >= 1 && useItem('shard')) {
       damage *= 2;

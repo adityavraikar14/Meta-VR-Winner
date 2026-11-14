@@ -694,10 +694,23 @@ const question: Icon = (g) => {
   g.fill();
 };
 
+/** A five-pointed star: the Quick Tour. */
+const tourStar: Icon = (g) => {
+  g.beginPath();
+  for (let i = 0; i <= 10; i++) {
+    const a = -Math.PI / 2 + (i / 10) * Math.PI * 2;
+    const r = i % 2 ? 11 : 26;
+    g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  g.closePath();
+  g.fill();
+};
+
 const ICONS: Partial<Record<string, Icon>> = {
   home: house,
   hint: question,
   pets: paw,
+  'quick tour': tourStar,
   'leave?': leave,
   play,
   continue: play,

@@ -67,7 +67,11 @@ export class Trainer {
   private redraw = 0;
   private key = '';
 
-  constructor(parent: Group) {
+  /** The lessons this session teaches (all of them, or the Quick Tour's few). */
+  private readonly list: Lesson[];
+
+  constructor(parent: Group, only?: readonly number[]) {
+    this.list = only ? only.map((i) => LESSONS[i]) : LESSONS;
     this.canvas.width = 2048;
     this.canvas.height = 1400;
     this.texture = new CanvasTexture(this.canvas);
@@ -86,7 +90,7 @@ export class Trainer {
   }
 
   get lesson(): Lesson {
-    return LESSONS[this.index];
+    return this.list[this.index];
   }
 
   /** Does this lesson want them to throw at you (to block)? */
@@ -96,7 +100,7 @@ export class Trainer {
 
   /** The line under the screen. */
   get caption(): string {
-    if (this.passed > 0) return this.finished ? 'Training complete! Every weapon learned' : `Well done! Next: ${LESSONS[this.index + 1]?.title ?? 'free practice'}`;
+    if (this.passed > 0) return this.finished ? 'Training complete! Every weapon learned' : `Well done! Next: ${this.list[this.index + 1]?.title ?? 'free practice'}`;
     const l = this.lesson;
     if (!this.formed) return l.shape ? `Make ${SHAPE_LABEL[l.shape].toLowerCase()} and hold it still` : `Pinch and draw ${l.sketch === 'sword' ? 'a long blade' : `a ${l.sketch}`} in the air, then let go`;
     return l.use;
@@ -123,12 +127,12 @@ export class Trainer {
       this.passed = 1.8;
       this.cleared.add(this.index);
       playCollect();
-      if (this.cleared.size >= LESSONS.length) this.finished = true;
+      if (this.cleared.size >= this.list.length) this.finished = true;
     }
   }
 
   private go(index: number): void {
-    this.index = (index + LESSONS.length) % LESSONS.length;
+    this.index = (index + this.list.length) % this.list.length;
     this.made = this.formed = false;
     this.count = 0;
     this.passed = 0;
@@ -176,7 +180,7 @@ export class Trainer {
     g.textAlign = 'left';
     g.fillStyle = '#ffd84a';
     g.font = `900 22px ${FONT}`;
-    g.fillText(`TRAINING · ${this.index + 1} / ${LESSONS.length}`, 28, 40);
+    g.fillText(`TRAINING · ${this.index + 1} / ${this.list.length}`, 28, 40);
     g.fillStyle = '#ffffff';
     g.font = `900 36px ${FONT}`;
     g.fillText(l.title, 28, 84, w - 56);

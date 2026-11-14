@@ -13,6 +13,8 @@ export const MASK_HEIGHT = 56;
  * (levels, matching, creatures). The stage writes it, the game reads it.
  */
 export const stage = {
+  /** On the Quick Tour: fights are shorter and the story's saved place is left alone. */
+  tour: false,
   /** Paper root. Local +Z faces the player, origin is the paper center. */
   paper: null as Group | null,
   /** The paper's entity, for parenting interactive children. */

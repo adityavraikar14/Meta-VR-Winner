@@ -19,7 +19,7 @@ import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'training' } | { do: 'arena'; boss?: string };
+export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'training' } | { do: 'tour' } | { do: 'arena'; boss?: string };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -100,7 +100,7 @@ export class MainMenu {
     let action: MenuAction | null = null;
     if (this.confirmNew > 0) {
       this.confirmNew -= dt;
-      if (this.confirmNew <= 0 && this.page === 'home') this.layout();
+      if (this.confirmNew <= 0 && (this.page === 'home' || this.page === 'settings')) this.layout();
     }
     let pressed = -1;
     const roots = this.roots;
@@ -133,7 +133,9 @@ export class MainMenu {
                 : this.page === 'rivals'
                   ? this.rivals()
                   : this.settings();
-    const xs = LAYOUTS[this.slots.length];
+    // Eight buttons at most: more would have no place on the row (and must never crash the menu).
+    if (this.slots.length > 8) this.slots = this.slots.slice(0, 8);
+    const xs = LAYOUTS[Math.max(3, this.slots.length)] ?? LAYOUTS[8];
     const eye = this.parent.localToWorld(this.viewer.clone());
     this.buttons.forEach((button, i) => {
       const slot = this.slots[i];
@@ -168,26 +170,7 @@ export class MainMenu {
     return [
       { label: 'Chapters', run: () => this.go('chapters') },
       { label: fresh ? 'Play' : next ? 'Continue' : 'Replay', run: () => ({ do: 'play' }), primary: true },
-      ...(fresh
-        ? []
-        : [
-            {
-              label: 'New game',
-              run: (): MenuAction | null => {
-                // Two pushes, so a stray finger cannot throw the story's place away.
-                if (this.confirmNew <= 0) {
-                  this.confirmNew = 4;
-                  playPrompt();
-                  this.draw('New game?', 'Start from Level 1', 'Push New game again to begin the story from the first level. Your stars, Journal pages and trophies are kept.', '');
-                  return null;
-                }
-                this.confirmNew = 0;
-                play.puzzleIndex = 0;
-                saveProgress();
-                return { do: 'chapter', index: 0 };
-              },
-            },
-          ]),
+      { label: 'Quick Tour', run: () => ({ do: 'tour' }) },
       { label: 'Story', run: () => ({ do: 'story' }) },
       { label: 'Journal', run: () => this.go('journal') },
       { label: 'Bag', run: () => this.go('bag') },
@@ -274,6 +257,22 @@ export class MainMenu {
         },
       },
       { label: 'Credits', run: () => this.go('credits') },
+      {
+        label: 'New game',
+        run: (): MenuAction | null => {
+          // Two pushes, so a stray finger cannot throw the story's place away.
+          if (this.confirmNew <= 0) {
+            this.confirmNew = 4;
+            playPrompt();
+            this.draw('New game?', 'Start from Level 1', 'Push New game again to begin the story from the first level. Your stars, Journal pages and trophies are kept.', '');
+            return null;
+          }
+          this.confirmNew = 0;
+          play.puzzleIndex = 0;
+          saveProgress();
+          return { do: 'chapter', index: 0 };
+        },
+      },
       {
         label: 'Recenter',
         run: () => {

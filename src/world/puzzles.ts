@@ -654,7 +654,8 @@ const shadowDragon: Puzzle = {
       attempt: () => ({ solved: false, steps: [], line: 'This one is yours to fight.' }),
       update: (dt, hands, head) => {
         if (!battle) {
-          const power = choice.update(dt, hands, head);
+          // The Quick Tour goes straight to Shadow.
+          const power = stage.tour ? 'light' : choice.update(dt, hands, head);
           task.caption = choice.caption;
           if (!power) return;
           choice.dispose();

@@ -41,6 +41,7 @@ import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.j
 import { ARMS, type ArmShot, planVolley, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
 import { recognise, type Sketch, SKETCH_NAMES } from './sketch.js';
 import { Trainer } from './trainer.js';
+import { TOUR_LESSONS } from '../tour.js';
 
 /**
  * Ink Duel: a fight against a rival of your choice, six of them, who step
@@ -213,7 +214,8 @@ export class InkDuel {
   private modeTime = 0;
   private time = 0;
   private hearts = PLAYER_HEARTS;
-  private readonly maxHealth = this.spec.health * HEALTH_SCALE;
+  /** On the Quick Tour a fight is shorter: 40% of the usual strength (training never falls). */
+  private readonly maxHealth = this.spec.health * HEALTH_SCALE * (stage.tour ? 0.4 : 1);
   private rivalHealth = this.maxHealth;
   /** 1, 2, 3: each third of their health is a phase; each new one powers them up. */
   private phase = 1;
@@ -309,7 +311,7 @@ export class InkDuel {
     this.arms = new ShadowArms(this.group);
     if (this.training) {
       this.god = true;
-      this.trainer = new Trainer(this.group);
+      this.trainer = new Trainer(this.group, stage.tour ? TOUR_LESSONS : undefined);
       this.trainer.root.visible = false;
     }
     this.rival = new FlatRival();

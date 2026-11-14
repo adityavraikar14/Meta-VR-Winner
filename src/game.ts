@@ -69,6 +69,7 @@ import {
 import { IntroShow } from './intro.js';
 import { howTo } from './howto.js';
 import { FpsMeter, TEST_MODE } from './test-mode.js';
+import { TOUR, TourBadge } from './tour.js';
 import { drawArmsChart } from './fight/arms-art.js';
 import { petNow } from './creatures/mood.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
@@ -461,6 +462,7 @@ export class ShadowGameSystem extends createSystem({
     paper.add(this.hintCard);
     // ?test on the link: a frame-rate meter on the screen (removed before submission).
     if (TEST_MODE) this.fps = new FpsMeter(paper);
+    this.tourBadge = new TourBadge(paper);
     // Home lives in the room, not on the screen, so it is still there when the Arena hides the screen.
     this.homeButton = new PushButton(this.scene, 'Home');
     this.homeButton.size = 0.7;
@@ -666,9 +668,65 @@ export class ShadowGameSystem extends createSystem({
   }
 
   private fps: FpsMeter | null = null;
+  /** The Quick Tour: which stop (-1: not touring), seconds at it, and its badge. */
+  private tourStep = -1;
+  private tourTime = 0;
+  private tourBadge!: TourBadge;
+
+  /** The Quick Tour starts: the first stop. */
+  private beginTour(): void {
+    stage.tour = true;
+    this.tourStep = -1;
+    this.menu.close();
+    this.nextTourStop();
+  }
+
+  /** On to the next stop (or the end). */
+  private nextTourStop(): void {
+    this.tourStep++;
+    this.tourTime = 0;
+    const stop = TOUR[this.tourStep];
+    if (!stop) {
+      this.endTour(true);
+      return;
+    }
+    this.bannerShown = false;
+    if (stop.id === 'intro') {
+      this.introToTitle = false;
+      this.startIntro();
+      return;
+    }
+    const index = stop.id === 'pets' ? PETS_INDEX : stop.id === 'training' ? TRAINING_INDEX : PUZZLES.findIndex((p) => p.id === stop.id);
+    if (index < 0) {
+      this.nextTourStop();
+      return;
+    }
+    playAwaken();
+    this.startPuzzle(index);
+  }
+
+  private endTour(finished: boolean): void {
+    const was = this.tourStep >= 0;
+    stage.tour = false;
+    this.tourStep = -1;
+    this.tourBadge.hide();
+    if (!finished || !was) return;
+    this.showTitle();
+    this.setCaption('Quick Tour complete! Push Play for the full story, or try the side games');
+  }
+
+  /** Each frame on the tour: the badge, and moving on when a stop's time is up. */
+  private runTour(dt: number): void {
+    if (this.tourStep < 0) return;
+    const stop = TOUR[this.tourStep];
+    this.tourTime += dt;
+    this.tourBadge.show(this.tourStep, stop.name, stop.limit - this.tourTime, stop.limit);
+    if (this.tourTime > stop.limit && this.phase !== 'cleared') this.nextTourStop();
+  }
 
   update(delta: number): void {
     this.fps?.tick(delta, this.puzzle?.title ?? this.phase);
+    this.runTour(Math.min(delta, 0.1));
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     const dt = Math.min(delta, 0.1);
     this.phaseTime += dt;
@@ -692,7 +750,8 @@ export class ShadowGameSystem extends createSystem({
     const pressed = this.playButton.update(dt, this.liveTips, this.rayClick);
     this.rayClick = false;
     if (pressed) playClick();
-    this.skipButton.show(this.puzzle !== null && SKIPPABLE.has(this.phase) && !stage.menuOpen);
+    // On the Quick Tour, Skip always moves on to the next stop (side games included).
+    this.skipButton.show((this.puzzle !== null || this.tourStep >= 0) && SKIPPABLE.has(this.phase) && !stage.menuOpen);
     const skipX = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
     if (this.skipButton.root.position.x !== skipX) {
       // Moved to the other side: turn its face to the player again.
@@ -703,7 +762,8 @@ export class ShadowGameSystem extends createSystem({
     this.skipClick = false;
     if (skipped) {
       playClick();
-      if (isSideGame(this.puzzleIndex)) this.showTitle();
+      if (this.tourStep >= 0) this.nextTourStop();
+      else if (isSideGame(this.puzzleIndex)) this.showTitle();
       else this.skip();
     }
     this.updateHint(dt);
@@ -752,7 +812,8 @@ export class ShadowGameSystem extends createSystem({
           this.intro.stop();
           this.playButton.show(false);
           this.placePlayButton(PLAY_BUTTON);
-          if (this.introToTitle) {
+          if (this.tourStep >= 0) this.nextTourStop();
+          else if (this.introToTitle) {
             this.introToTitle = false;
             this.showTitle();
           } else this.startPuzzle(this.puzzleIndex);
@@ -785,7 +846,8 @@ export class ShadowGameSystem extends createSystem({
         break;
       case 'cleared':
         if (this.phaseTime >= CLEAR_TIME) {
-          if (isSideGame(this.puzzleIndex)) this.showTitle();
+          if (this.tourStep >= 0) this.nextTourStop();
+          else if (isSideGame(this.puzzleIndex)) this.showTitle();
           else this.startPuzzle(Math.min(this.puzzleIndex + 1, PUZZLES.length));
         }
         break;
@@ -878,6 +940,7 @@ export class ShadowGameSystem extends createSystem({
 
   /** Home: the title on the screen and a row of buttons (chapters, play, settings). */
   private showTitle(): void {
+    if (this.tourStep >= 0 && this.tourStep < TOUR.length) this.endTour(false);
     this.leaveArena();
     stopNarration();
     // Back from a side game: the story's place, not the side game's.
@@ -927,6 +990,8 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'workshop') {
       playAwaken();
       this.startPuzzle(WORKSHOP_INDEX);
+    } else if (action.do === 'tour') {
+      this.beginTour();
     } else if (action.do === 'training') {
       playAwaken();
       this.startPuzzle(TRAINING_INDEX);
@@ -1039,7 +1104,7 @@ export class ShadowGameSystem extends createSystem({
     if (index === WORKSHOP_INDEX) refreshWorkshop();
     this.puzzle = puzzleAt(index);
     // Side games (the duel, the Daily Light) never move the story's saved place.
-    if (!isSideGame(index)) {
+    if (!isSideGame(index) && !stage.tour) {
       play.puzzleIndex = this.puzzle ? index : -1;
       this.storyIndex = play.puzzleIndex;
       saveProgress();
@@ -1296,6 +1361,10 @@ export class ShadowGameSystem extends createSystem({
 
   /** Moves on without stars; the level's friend still joins so later levels stay possible. */
   private skip(): void {
+    if (this.tourStep >= 0) {
+      this.nextTourStop();
+      return;
+    }
     if (this.puzzle?.teach && !play.unlocked.includes(this.puzzle.teach)) {
       play.unlocked.push(this.puzzle.teach);
     }
@@ -1590,7 +1659,7 @@ export class ShadowGameSystem extends createSystem({
     }
     const trophies = trophyLine(awardTrophies());
     // Resume from the next level if the player leaves now (a side game keeps the story's place).
-    play.puzzleIndex = isSideGame(this.puzzleIndex)
+    play.puzzleIndex = isSideGame(this.puzzleIndex) || stage.tour
       ? this.storyIndex
       : this.puzzleIndex + 1 < PUZZLES.length ? this.puzzleIndex + 1 : -1;
     saveProgress();
