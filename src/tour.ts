@@ -37,13 +37,14 @@ export class TourBadge {
   private key = '';
 
   constructor(parent: Object3D) {
-    this.canvas.width = 768;
-    this.canvas.height = 128;
+    this.canvas.width = 1024;
+    this.canvas.height = 144;
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
-    this.mesh = new Mesh(new PlaneGeometry(0.3, 0.05), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
+    this.mesh = new Mesh(new PlaneGeometry(0.56, 0.079), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
     this.mesh.renderOrder = 30;
-    this.mesh.position.set(-0.34, 0.385, 0.03);
+    // Centred just above the screen, under the caption: big enough to read at a glance.
+    this.mesh.position.set(0, 0.395, 0.03);
     this.mesh.visible = false;
     parent.add(this.mesh);
   }
@@ -54,26 +55,29 @@ export class TourBadge {
     if (key === this.key) return;
     this.key = key;
     const g = this.canvas.getContext('2d')!;
-    g.clearRect(0, 0, 768, 128);
-    g.fillStyle = 'rgba(20, 33, 61, 0.92)';
+    g.clearRect(0, 0, 1024, 144);
+    g.fillStyle = 'rgba(20, 33, 61, 0.95)';
     g.beginPath();
-    g.roundRect(4, 4, 760, 120, 22);
+    g.roundRect(4, 4, 1016, 136, 30);
     g.fill();
     g.strokeStyle = '#ffd84a';
-    g.lineWidth = 5;
+    g.lineWidth = 6;
     g.stroke();
     g.textBaseline = 'middle';
+    g.textAlign = 'left';
+    const head = `QUICK TOUR ${step + 1}/${TOUR.length}`;
+    g.font = `900 50px ${FONT}`;
     g.fillStyle = '#ffd84a';
-    g.font = `900 30px ${FONT}`;
-    g.fillText(`QUICK TOUR ${step + 1} / ${TOUR.length}`, 26, 44);
+    g.fillText(head, 34, 62);
+    const after = 34 + g.measureText(head).width + 26;
     g.fillStyle = '#ffffff';
-    g.font = `800 32px ${FONT}`;
-    g.fillText(name, 300, 44, 440);
-    // Time left on this stop, as a bar.
-    g.fillStyle = 'rgba(255,255,255,0.15)';
-    g.fillRect(26, 88, 716, 14);
+    g.font = `800 50px ${FONT}`;
+    g.fillText(name, after, 62, 1024 - after - 30);
+    // Time left on this stop, as a bar along the bottom.
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    g.fillRect(34, 108, 956, 14);
     g.fillStyle = '#49d17d';
-    g.fillRect(26, 88, 716 * Math.max(0, Math.min(1, left / limit)), 14);
+    g.fillRect(34, 108, 956 * Math.max(0, Math.min(1, left / limit)), 14);
     this.texture.needsUpdate = true;
   }
 

@@ -531,6 +531,10 @@ export class ShadowGameSystem extends createSystem({
       if (this.phase === 'title') this.menuAction({ do: 'arena' });
     };
     // Dev: D opens the duel's roster (arrows step through it, Enter fights).
+    // Dev: Insert opens the Arena straight to the dragon.
+    devActions.insert = () => {
+      if (this.phase === 'title') this.menuAction({ do: 'arena', boss: 'dragon' });
+    };
     devActions.d = () => {
       if (this.phase === 'title') this.menu.openRoster('duel');
     };

@@ -12,12 +12,13 @@ import { sfx } from './sfx.js';
 import { Bursts, fireTrails, flickerShot, makeFireball, Trail } from './visuals.js';
 
 /** Nose to tail, metres, and how far ahead of the player it hovers. */
-const LENGTH = 1.6;
-const DISTANCE = 2.6;
+/** Nose to tail, metres: big enough to loom over you, as a dragon should (the witch is 1.6 m tall). */
+const LENGTH = 2.8;
+const DISTANCE = 3.0;
 /** Its feet hang this far below the eyes, which puts its chest about level with them. */
 const HOVER_DROP = 0.9;
 /** The health bar floats this far above its chest, clear of the wings. */
-const BAR_RISE = 0.85;
+const BAR_RISE = 1.45;
 const MAX_HP = 60;
 /** Seconds between attacks, calm and enraged, and how long it draws breath. */
 const REST = 2.4;
@@ -30,7 +31,8 @@ const FIRE_RADIUS = 0.11;
 const TWIN_SPREAD = 0.2;
 /** Every this many attacks it swoops: seconds in, hanging there, and back out. */
 const SWOOP_EVERY = 3;
-const SWOOP_DISTANCE = 1.0;
+/** Where it hovers on a swoop: far enough that its longer neck still stops short of your face. */
+const SWOOP_DISTANCE = 1.6;
 const SWOOP_IN = 1.2;
 const SWOOP_HOLD = 2.2;
 const SWOOP_OUT = 1.2;

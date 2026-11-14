@@ -393,6 +393,9 @@ export class IntroShow {
     const scene = SCENES[this.scene];
     const ctx = this.canvas.getContext('2d')!;
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    // Every frame starts from a clean pen: fully opaque, painting normally.
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
     const k = this.sceneTime / scene.seconds;
     this.backdrop(ctx, scene.tint, k);
     // The scene, inside the picture above the subtitles, with a slow push in.
@@ -490,7 +493,12 @@ export class IntroShow {
 
   /** A thin gold frame and rounded corners around the whole film. */
   private frame(ctx: CanvasRenderingContext2D): void {
+    // Trim to rounded corners. The trim keeps the picture only as opaque as the fill, so the
+    // fill must be solid: left with the fade's nearly clear colour, the whole film went
+    // see-through for a moment at every scene change and the screen behind blinked through.
     ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#000';
     ctx.globalCompositeOperation = 'destination-in';
     ctx.beginPath();
     ctx.roundRect(0, 0, W, H, 22);

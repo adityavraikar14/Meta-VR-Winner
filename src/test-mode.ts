@@ -58,7 +58,12 @@ export class FpsMeter {
     g.fillText(`worst ${Math.round(worst)}`, 280, 44);
     g.font = `700 26px ${FONT}`;
     g.fillStyle = '#c9d4ec';
-    g.fillText(where.slice(0, 32), 22, 96);
+    g.fillText(where.slice(0, 22), 22, 96);
+    // Which build this is (the commit), so a tester knows the headset has the newest one.
+    g.fillStyle = '#9fb3d9';
+    g.textAlign = 'right';
+    g.fillText(`build ${(import.meta.env.VITE_BUILD ?? 'dev').slice(0, 7)}`, 490, 96);
+    g.textAlign = 'left';
     this.texture.needsUpdate = true;
   }
 }
