@@ -14,6 +14,8 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  SphereGeometry,
+  TorusGeometry,
   Quaternion,
   Vector3,
 } from '@iwsdk/core';
@@ -114,6 +116,8 @@ export class Bridge {
   private readonly planks: InstancedMesh;
   private readonly pins: InstancedMesh;
   private readonly ghost: Mesh;
+  /** A glowing gold ring on each anchor, so you can see where timbers start. */
+  private readonly anchorMarks: Array<{ group: Group; ring: MeshBasicMaterial; core: MeshBasicMaterial }> = [];
   private readonly ghostMaterial: MeshBasicMaterial;
   private readonly cart = new Group();
   private readonly wheels: Mesh[] = [];
@@ -147,6 +151,17 @@ export class Bridge {
       for (const y of [DECK_Y, LOW_Y]) this.joints.push({ x: side * SPAN, y, pinned: true });
     }
     for (const j of this.joints) {
+      const mark = new Group();
+      const ring = new MeshBasicMaterial({ color: 0xffc94a, transparent: true, depthTest: false, depthWrite: false });
+      const core = new MeshBasicMaterial({ color: 0xfff1b0, transparent: true, depthTest: false, depthWrite: false });
+      const torus = new Mesh(new TorusGeometry(0.0095, 0.0024, 8, 24), ring);
+      const dot = new Mesh(new SphereGeometry(0.004, 12, 8), core);
+      torus.renderOrder = dot.renderOrder = 8;
+      mark.add(torus, dot);
+      mark.position.set(j.x, j.y, HALF_W + 0.008);
+      mark.userData.keep = true;
+      this.group.add(mark);
+      this.anchorMarks.push({ group: mark, ring, core });
       for (const z of [-HALF_W, HALF_W]) {
         const plate = new Mesh(new BoxGeometry(0.006, 0.018, 0.018), iron());
         plate.position.set(j.x + Math.sign(j.x) * 0.002, j.y, z);
@@ -239,6 +254,7 @@ export class Bridge {
     if (this.buttons.undo.update(dt, this.tips, false)) this.undo();
     if (this.buttons.test.update(dt, this.tips, false)) this.startTest();
 
+    this.glowAnchors(hands, building);
     if (building) this.build(hands);
     else this.test(dt);
     this.fallDebris(dt);
@@ -247,11 +263,29 @@ export class Bridge {
     this.say();
   }
 
+  /** Anchors pulse while you build, and brighten as a pinch comes near. */
+  private glowAnchors(hands: readonly HandState[], building: boolean): void {
+    const t = this.modeTime;
+    this.anchorMarks.forEach((mark, i) => {
+      const j = this.joints[i];
+      let near = 0;
+      for (const hand of hands) {
+        if (!hand.tracked) continue;
+        const p = this.group.worldToLocal(this.v.copy(hand.pinch));
+        near = Math.max(near, 1 - Math.hypot(p.x - j.x, p.y - j.y) / 0.07);
+      }
+      const pulse = 0.5 + 0.5 * Math.sin(t * 4 + i * 1.3);
+      mark.group.scale.setScalar(building ? 1 + 0.18 * pulse + 0.35 * near : 0.7);
+      mark.ring.opacity = building ? 0.65 + 0.35 * Math.max(pulse, near) : 0.25;
+      mark.core.opacity = building ? 0.5 + 0.5 * near : 0.15;
+    });
+  }
+
   private say(): void {
     const used = `Timbers ${this.members.length}/${this.budget}`;
     switch (this.mode) {
       case 'build':
-        if (this.members.length === 0) this.caption = 'Pinch an iron anchor on the bank, pull out a timber, and let go';
+        if (this.members.length === 0) this.caption = 'Pinch a glowing gold anchor on the bank, pull out a timber, and let go';
         else if (!this.roadAcross()) this.caption = `${used} · Build a road of timbers across at bank height, held up by triangles`;
         else this.caption = `${used} · The road is across. Push Test when you think it will hold`;
         if (this.drags.some((d) => d && !d.valid) && this.members.length >= this.budget) this.caption = 'No timbers left: push Undo to take one back';

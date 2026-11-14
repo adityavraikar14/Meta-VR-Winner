@@ -135,6 +135,8 @@ export class Forge {
   private readonly barMesh: Mesh;
   private readonly barMaterial: MeshStandardMaterial;
   private readonly tongs = new Group();
+  /** The tongs' grip glows when it is time to pick up the bar. */
+  private readonly tongGripMaterial = new MeshStandardMaterial({ color: 0x6b3a1e, roughness: 0.8, emissive: 0xff9a30, emissiveIntensity: 0 });
   private readonly handle = new Group();
 
   private hammerFace = new Vector3();
@@ -198,8 +200,11 @@ export class Forge {
     this.mark.userData.keep = true;
     barGroup.add(this.mark);
     barGroup.position.set(RACK.x, f + RACK_Y, RACK.z);
+    // End to the right, so the tongs clamped on it reach out toward the anvil, clear of the hearth.
+    barGroup.rotation.y = Math.PI;
     this.group.add(barGroup);
-    this.bar = { group: barGroup, place: 'start', hand: -1, velocity: new Vector3(), grip: new Vector3(-BAR_L / 2, 0, 0) };
+    // You hold it by the tongs' handles, which stay clamped on its end.
+    this.bar = { group: barGroup, place: 'start', hand: -1, velocity: new Vector3(), grip: new Vector3(-BAR_L / 2 - TONGS, 0, 0) };
     // A hickory handle, fitted once the head is hardened.
     const shaft = new Mesh(new CylinderGeometry(0.0045, 0.0055, 0.13, 10), hardwood());
     shaft.rotation.x = Math.PI / 2;
@@ -208,16 +213,24 @@ export class Forge {
     this.handle.visible = false;
     barGroup.add(this.handle);
 
-    // ---- Tongs: shown in the hand that holds the bar.
-    const jaw = new BoxGeometry(TONGS + 0.035, 0.0025, 0.003);
+    // ---- Tongs: clamped on the bar's end, handles out, so you can see them and pinch them.
+    const jaw = new BoxGeometry(TONGS + 0.035, 0.004, 0.005);
     jaw.translate(-(TONGS + 0.035) / 2 + 0.012, 0, 0);
     for (const side of [-1, 1]) {
       const arm = new Mesh(jaw, iron());
-      arm.position.y = side * 0.0035;
-      arm.rotation.z = side * 0.05;
+      arm.position.y = side * (BAR_T / 2 + 0.002);
+      arm.rotation.z = side * 0.06;
       this.tongs.add(arm);
     }
-    this.tongs.visible = false;
+    // The rivet where the arms cross, and leather-wrapped grips at the handle ends.
+    const rivet = new Mesh(new CylinderGeometry(0.004, 0.004, 0.012, 10), iron());
+    rivet.rotation.x = Math.PI / 2;
+    rivet.position.x = -0.004;
+    this.tongs.add(rivet);
+    const tongGrip = new Mesh(new CylinderGeometry(0.006, 0.006, 0.03, 10), this.tongGripMaterial);
+    tongGrip.rotation.z = Math.PI / 2;
+    tongGrip.position.x = -TONGS - 0.008;
+    this.tongs.add(tongGrip);
     this.group.add(this.tongs);
 
     // ---- The hammer: hickory handle, square face, cross peen.
@@ -369,7 +382,7 @@ export class Forge {
         if (this.coal > 1000) this.setStep('heat');
         break;
       case 'heat':
-        text = 'Pinch the iron bar with the tongs and lay it in the coals';
+        text = 'Pinch the tongs’ brown handles (on the iron bar) and lay the bar in the coals';
         if (bar === 'fire') this.setStep('heating');
         break;
       case 'heating':
@@ -435,8 +448,11 @@ export class Forge {
       for (const item of this.items()) {
         if (item.place === 'held') continue;
         if (item === this.stoneItem && this.lit) continue;
-        // Tongs reach the bar from a little way off.
-        const d = this.gripPoint(item, this.tmp2).distanceTo(pinch) - (item === this.bar ? 0.02 : 0);
+        // The bar: by the tongs' handles, or pinch the bar's end and the tongs come with it.
+        let d = this.gripPoint(item, this.tmp2).distanceTo(pinch);
+        if (item === this.bar) {
+          d = Math.min(d - 0.01, this.tmp2.set(-BAR_L / 2, 0, 0).applyMatrix4(item.group.matrix).distanceTo(pinch));
+        }
         if (d < bestDistance) {
           best = item;
           bestDistance = d;
@@ -458,7 +474,14 @@ export class Forge {
 
   /** Held things follow the pinch: the bar at the end of the tongs, the hammer by its handle. */
   private moveHeld(hands: readonly HandState[]): void {
-    this.tongs.visible = false;
+    // Not held: the tongs lie clamped on the bar's end (put away once the axe is done).
+    if (this.bar.place !== 'held') {
+      this.tongs.visible = this.step !== 'done';
+      this.bar.group.updateMatrix();
+      this.tongs.position.set(-BAR_L / 2, 0, 0).applyMatrix4(this.bar.group.matrix);
+      this.tongs.quaternion.copy(this.bar.group.quaternion);
+      this.tongGripMaterial.emissiveIntensity = this.step === 'heat' ? 0.5 + 0.4 * Math.sin(this.stepTime * 5) : 0;
+    } else this.tongGripMaterial.emissiveIntensity = 0;
     for (const item of this.items()) {
       if (item.place !== 'held') continue;
       const hand = hands[item.hand];

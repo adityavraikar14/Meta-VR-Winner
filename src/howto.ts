@@ -85,7 +85,7 @@ export const HOW_TO: Record<string, string[]> = {
     'Knock down all three targets',
   ],
   'broken-bridge': [
-    'Pinch an iron anchor on the riverbank',
+    'Pinch a glowing gold anchor ring on the riverbank',
     'Pull out a timber and let go: it joins where you drop it',
     'Join timbers into triangles all the way across',
     'Push Test to roll the cart over',
@@ -99,7 +99,7 @@ export const HOW_TO: Record<string, string[]> = {
   smithy: [
     'Pinch the lantern shard and drop it into the hearth',
     'Pump the bellows: push the top board down, again and again',
-    'Pinch the iron bar with the tongs, lay it in the coals until it glows orange',
+    'Pinch the tongs’ brown handles (clamped on the iron bar, on the bench) and lay the bar in the coals until it glows orange',
     'Lay it on the anvil, pick up the hammer and strike the glowing marks, then cool it in the water',
   ],
   'healing-draught': [
