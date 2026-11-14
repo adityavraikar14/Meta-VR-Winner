@@ -366,6 +366,38 @@ function thornTexture(): CanvasTexture {
   return texture;
 }
 
+/** What holds a thorn: a thorny bramble growing up from the pit, or a vine it hangs from. */
+function stemTexture(bramble: boolean): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 256;
+  const g = canvas.getContext('2d')!;
+  g.strokeStyle = g.fillStyle = bramble ? '#120a10' : '#2f5a2a';
+  g.lineWidth = bramble ? 5 : 4;
+  g.lineCap = 'round';
+  g.beginPath();
+  for (let y = 0; y <= 256; y += 8) g.lineTo(16 + Math.sin(y / 22) * 4, y);
+  g.stroke();
+  for (let y = 18; y < 256; y += 30) {
+    const x = 16 + Math.sin(y / 22) * 4;
+    const side = (y / 30) % 2 < 1 ? 1 : -1;
+    g.beginPath();
+    if (bramble) {
+      // A little hooked spike.
+      g.moveTo(x, y - 4);
+      g.lineTo(x + side * 11, y - 9);
+      g.lineTo(x, y + 3);
+    } else {
+      // A leaf.
+      g.ellipse(x + side * 7, y, 7, 3.5, side * 0.5, 0, Math.PI * 2);
+    }
+    g.fill();
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
 function moteTexture(): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
@@ -545,7 +577,19 @@ export class ShadowRun {
     }
 
     const thorn = thornTexture();
+    const bramble = stemTexture(true);
+    const vine = stemTexture(false);
     for (const [x, y] of level.thorns ?? []) {
+      // Nothing floats: a low thorn grows on a bramble from the pit floor, a high one hangs on a vine.
+      const low = y < 0.05;
+      const from = low ? -PAPER_BOUNDS.hh : y;
+      const to = low ? y : PAPER_BOUNDS.hh;
+      if (to - from > 0.01) {
+        const stem = new Mesh(new PlaneGeometry(0.012, to - from), new MeshBasicMaterial({ map: low ? bramble : vine, transparent: true, depthWrite: false }));
+        stem.position.set(x, (from + to) / 2, Z_GATE - 0.0003);
+        stem.renderOrder = 5;
+        this.paper.add(stem);
+      }
       const sprite = new Sprite(new SpriteMaterial({ map: thorn, transparent: true, depthWrite: false }));
       sprite.position.set(x, y, Z_GATE);
       sprite.scale.setScalar(THORN_RADIUS * 3.4);

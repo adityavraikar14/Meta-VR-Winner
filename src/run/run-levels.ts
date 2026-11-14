@@ -51,7 +51,10 @@ export interface RunLevel {
   bestKey?: string;
   /** The Workshop: the star and ring markers set the start and gate; a success starts the next try. */
   workshop?: boolean;
-  /** Ink thorns: touch one and the spark is lost. Placed beside the path, to punish a careless shadow. */
+  /**
+   * Ink thorns: touch one and the spark is lost. Placed beside the path, to punish a careless shadow.
+   * One low on the course grows on a bramble up out of the pit; one high up hangs on a vine.
+   */
   thorns?: Pt[];
 }
 
@@ -270,8 +273,8 @@ export const RUN_LEVELS: RunLevel[] = [
     build: true,
     title: 'Two Pieces',
     story: 'Two gaps and a pillar between them. One shard will not reach; two will.',
-    ask: 'Place both planks: one shadow over each gap, resting on the pillar, then push Drop',
-    hint: 'Each plank needs about ×2.6: hold them a little nearer your face than the screen',
+    ask: 'Set one plank over each gap and let go (it stays in the air), keep them above the brambles, then push Drop',
+    hint: 'One plank at a time: each stays where you let go. Each needs about ×2.6, so hold it a little nearer your face than the screen',
     terrain: [
       [[-0.5, FLOOR], [-0.3, FLOOR], [-0.3, 0.1], [-0.5, 0.18]],
       [[-0.02, FLOOR], [0.04, FLOOR], [0.04, 0.08], [-0.02, 0.08]],
@@ -280,7 +283,7 @@ export const RUN_LEVELS: RunLevel[] = [
     start: [-0.45, 0.24],
     gate: [0.41, 0.095],
     motes: [[-0.16, 0.1], [0.01, 0.115], [0.18, 0.09]],
-    thorns: [[0.0, -0.03], [0.17, 0.17]],
+    thorns: [[-0.16, 0.03], [0.18, 0.0]],
     par: 15,
     shards: [
       { kind: 'plank', at: [-0.02, -0.2, 0.6] },

@@ -74,9 +74,9 @@ export const HOW_TO: Record<string, string[]> = {
   ],
   'build-pair': [
     'Two gaps, two planks',
-    'Pinch one plank and set its shadow over the left gap, resting on the pillar',
-    'Set the other over the right gap',
-    'Push Drop',
+    'Pinch one plank, set its shadow over the left gap, then open your fingers: it stays there in the air',
+    'Now pinch the other and set it over the right gap. You never hold both at once',
+    'Keep both shadows level and above the thorny brambles in the gaps, then push Drop',
   ],
   'shadow-slingshot': [
     'Make a V with your index and middle fingers, other fingers curled',
