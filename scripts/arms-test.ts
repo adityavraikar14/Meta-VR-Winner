@@ -5,7 +5,7 @@ import { Group, Vector3 } from '@iwsdk/core';
 
 import type { HandState } from '../src/creatures/hand-input.ts';
 import { createExtension, type Extension } from '../src/hand-pose.ts';
-import { type ArmShot, classifyShape, ShadowArms, type ShadowShape } from '../src/fight/shadow-arms.ts';
+import { type ArmShot, classifyShape, planVolley, ShadowArms, type ShadowShape } from '../src/fight/shadow-arms.ts';
 
 const S = 0.95; // straight
 const C = 0.2; // curled
@@ -114,6 +114,16 @@ for (const shape of Object.keys(POSES) as ShadowShape[]) {
   run(arms, 40, () => hand(POSES.fist, still), [], []);
   arms.update(dt, [off, off], foe, () => {}, () => {});
   check(arms.shapeIn(1) === null, 'a hand lost to tracking drops its weapon');
+}
+// Every thrown weapon has a volley: how many projectiles, and they all fly.
+{
+  const want: Partial<Record<ShadowShape, number>> = { fist: 1, blade: 1, point: 1, vee: 2, three: 3, horns: 1, shaka: 1, ell: 1, thumb: 1 };
+  for (const [shape, n] of Object.entries(want) as Array<[ShadowShape, number]>) {
+    const parts = planVolley({ shape, from: still.clone(), swing: new Vector3() }, foe, new Vector3(1, 0, 0));
+    check(parts.length === n && parts.every((p) => p.points.length >= 2 && p.flight > 0), `${shape}: a volley of ${n}`);
+  }
+  const bolt = planVolley({ shape: 'horns', from: still.clone(), swing: new Vector3() }, foe, new Vector3(1, 0, 0))[0];
+  check(bolt.from.y > foe.y + 0.5, 'lightning starts above them');
 }
 console.log(failures ? `${failures} failed` : 'all shadow arms checks passed');
 if (failures) process.exitCode = 1;

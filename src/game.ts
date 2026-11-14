@@ -68,6 +68,7 @@ import {
 } from './matcher.js';
 import { IntroShow } from './intro.js';
 import { howTo } from './howto.js';
+import { drawArmsChart } from './fight/arms-art.js';
 import { petNow } from './creatures/mood.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { currentRival } from './fight/rivals.js';
@@ -83,7 +84,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, lanternPieces, refreshWorkshop, WORKSHOP_INDEX, PETS_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, lanternPieces, refreshWorkshop, WORKSHOP_INDEX, PETS_INDEX, TRAINING_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
@@ -587,6 +588,7 @@ export class ShadowGameSystem extends createSystem({
         { index: DAILY_INDEX, id: 'daily', chapter: 'Side games', title: 'Daily Light', kind: 'hands' },
         { index: WORKSHOP_INDEX, id: 'workshop', chapter: 'Side games', title: 'The Workshop', kind: 'hands' },
         { index: DUEL_INDEX, id: DUEL.id, chapter: 'Side games', title: DUEL.title, kind: 'hands' },
+        { index: TRAINING_INDEX, id: 'training', chapter: 'Side games', title: 'Training Arena', kind: 'hands' },
       ],
       current: () => this.puzzle?.id ?? '',
       go: (index) => {
@@ -919,6 +921,9 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'workshop') {
       playAwaken();
       this.startPuzzle(WORKSHOP_INDEX);
+    } else if (action.do === 'training') {
+      playAwaken();
+      this.startPuzzle(TRAINING_INDEX);
     } else if (action.do === 'pets') {
       playAwaken();
       this.startPuzzle(PETS_INDEX);
@@ -1160,6 +1165,7 @@ export class ShadowGameSystem extends createSystem({
     if (pushed && playing) {
       playClick();
       if (this.hintLeft > 0) this.hintLeft = 0;
+      else if (this.puzzle && (this.puzzle.fight || ['duel', 'training', 'shadow-dragon'].includes(this.puzzle.id))) this.showArmsChart();
       else this.showHowTo(steps!);
     }
     if (!playing) this.hintLeft = 0;
@@ -1191,6 +1197,19 @@ export class ShadowGameSystem extends createSystem({
     if (line === this.petLine) return;
     this.petLine = line;
     this.setCaption(line);
+  }
+
+/** In a fight, Hint shows every shadow weapon: the hand shapes and the drawings. */
+  private showArmsChart(): void {
+    this.hintLeft = HINT_TIME * 2;
+    this.stuckTime = 0;
+    const { g, w, h } = layout(this.hintCanvas);
+    drawArmsChart(g, w, h);
+    g.fillStyle = '#9fb3d9';
+    g.font = font(600, 14);
+    g.textAlign = 'center';
+    g.fillText('Push Hint again to close  ·  Side games → Training teaches each one', w / 2, h - 18);
+    this.hintTexture.needsUpdate = true;
   }
 
   private showHowTo(steps: string[]): void {

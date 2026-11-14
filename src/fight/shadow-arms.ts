@@ -38,6 +38,23 @@ import type { HandState } from '../creatures/hand-input.js';
  */
 export type ShadowShape = 'fist' | 'blade' | 'palm' | 'point' | 'vee' | 'three' | 'horns' | 'shaka' | 'ell' | 'thumb';
 
+/** Every shape, in teaching order. */
+export const SHAPES: ShadowShape[] = ['fist', 'blade', 'palm', 'point', 'vee', 'three', 'horns', 'shaka', 'ell', 'thumb'];
+
+/** Each shape's fingers (thumb, index, middle, ring, pinky): 1 straight, 0 curled. */
+export const POSES: Record<ShadowShape, readonly [number, number, number, number, number]> = {
+  fist: [0, 0, 0, 0, 0],
+  blade: [0, 1, 1, 1, 1],
+  palm: [1, 1, 1, 1, 1],
+  point: [0, 1, 0, 0, 0],
+  vee: [0, 1, 1, 0, 0],
+  three: [0, 1, 1, 1, 0],
+  horns: [0, 1, 0, 0, 1],
+  shaka: [1, 0, 0, 0, 1],
+  ell: [1, 1, 0, 0, 0],
+  thumb: [1, 0, 0, 0, 0],
+};
+
 export interface ArmSpec {
   name: string;
   /** How to make it, in a few words (for the How to play card and captions). */
@@ -95,6 +112,71 @@ export interface ArmShot {
   swing: Vector3;
 }
 
+/** One projectile of a volley: its shape (points about its centre), where it starts, how long to the target. */
+export interface VolleyPart {
+  from: Vector3;
+  points: Vector3[];
+  /** Seconds to reach the target under gravity. */
+  flight: number;
+  /** Sideways push along `side` (m/s²): a curveball. */
+  curve?: number;
+  spin?: number;
+  width?: number;
+}
+
+/**
+ * What each weapon throws: the shapes, where from and how fast. Both the
+ * duel and the dragon fight launch these their own way. `side`: the
+ * fight's sideways axis (curves and claw spread use it).
+ */
+export function planVolley(shot: ArmShot, target: Vector3, side: Vector3): VolleyPart[] {
+  const toFoe = new Vector3().subVectors(target, shot.from).normalize();
+  const ring = (r: number, n = 14) => Array.from({ length: n + 1 }, (_, i) => new Vector3(Math.cos((i / n) * Math.PI * 2) * r, Math.sin((i / n) * Math.PI * 2) * r, 0));
+  const star = (r: number) => Array.from({ length: 11 }, (_, i) => {
+    const a = (i / 10) * Math.PI * 2;
+    const k = i % 2 ? 0.45 : 1;
+    return new Vector3(Math.cos(a) * r * k, Math.sin(a) * r * k, 0);
+  });
+  const line = (length: number) => [toFoe.clone().multiplyScalar(-length / 2), new Vector3(), toFoe.clone().multiplyScalar(length / 2)];
+  const arc = (r: number, spread: number) => Array.from({ length: 9 }, (_, i) => {
+    const a = Math.PI / 2 + (i / 8 - 0.5) * spread;
+    return new Vector3(Math.cos(a) * r, Math.sin(a) * r - r * 0.6, 0);
+  });
+  const from = shot.from;
+  switch (shot.shape) {
+    case 'fist':
+      return [{ from, points: [...ring(0.03), ...ring(0.018)], flight: 0.5, spin: 8, width: 0.01 }];
+    case 'blade':
+      return [{ from, points: arc(0.07, 2.4), flight: 0.38, width: 0.009 }];
+    case 'point':
+      return [{ from, points: line(0.24), flight: 0.28, width: 0.007 }];
+    case 'vee':
+      return [
+        { from, points: star(0.028), flight: 0.8, curve: 3.4, spin: 22 },
+        { from, points: star(0.028), flight: 0.8, curve: -3.4, spin: -22 },
+      ];
+    case 'three':
+      return [-1, 0, 1].map((s) => ({ from: from.clone().addScaledVector(side, s * 0.05), points: arc(0.04, 1.6), flight: 0.42 + Math.abs(s) * 0.05 }));
+    case 'horns': {
+      // The bolt comes down on them from above.
+      const sky = target.clone();
+      sky.y += 0.75;
+      const zig = [new Vector3(0, 0.08, 0), new Vector3(0.02, 0.03, 0), new Vector3(-0.015, 0, 0), new Vector3(0.015, -0.04, 0), new Vector3(0, -0.08, 0)];
+      return [{ from: sky, points: zig, flight: 0.22, width: 0.009 }];
+    }
+    case 'shaka': {
+      const way = Math.random() < 0.5 ? 1 : -1;
+      return [{ from, points: [new Vector3(-0.04, -0.02, 0), new Vector3(0, 0.02, 0), new Vector3(0.04, -0.02, 0)], flight: 0.95, curve: 6 * way, spin: 18 }];
+    }
+    case 'ell':
+      return [{ from, points: line(0.09), flight: 0.2, width: 0.012 }];
+    case 'thumb':
+      return [{ from, points: [new Vector3(0, -0.05, 0), new Vector3(0, 0.03, 0), new Vector3(-0.035, 0.03, 0), new Vector3(0.035, 0.03, 0)], flight: 1.0, spin: 9, width: 0.012 }];
+    default:
+      return [];
+  }
+}
+
 /** Seconds the shape must be held for its weapon to form. */
 const FORM_TIME = 0.35;
 /** A punch: the hand moving towards the foe at least this fast (m/s). */
@@ -127,6 +209,8 @@ export class ShadowArms {
   readonly root = new Group();
   /** What each hand looked like last frame (for testing). */
   readonly seen: Array<ShadowShape | null> = [null, null];
+  /** Shapes this fight handles itself (the dragon fight keeps its own palm mirror). */
+  exclude: ReadonlySet<ShadowShape> = new Set();
   private readonly hands: HandArm[] = [0, 1].map(() => ({
     shape: null, forming: null, formTime: 0, lost: 0, idle: 0, cooldown: 0, model: null, prev: new Vector3(), vel: new Vector3(), seen: false, drawn: false,
   }));
@@ -157,6 +241,11 @@ export class ShadowArms {
     arm.cooldown = 0.3;
     arm.model = model(shape);
     this.root.add(arm.model);
+  }
+
+  /** How far along holding a new shape is (0…1), for either hand: the larger. */
+  formingProgress(): number {
+    return Math.max(...this.hands.map((arm) => (arm.forming && arm.forming !== arm.shape ? Math.min(1, arm.formTime / FORM_TIME) : 0)));
   }
 
   /** This hand is making (or holding) a shadow weapon: no drawing with it. */
@@ -208,6 +297,7 @@ export class ShadowArms {
         const normal = this.space.worldToLocal(new Vector3().copy(hand.palm).add(hand.palmNormal)).sub(palm).normalize();
         if (normal.dot(this.w.subVectors(toward, palm).normalize()) < 0.55) now = null;
       }
+      if (now && this.exclude.has(now)) now = null;
       this.seen[h] = now;
       // Forming: the same shape held for a moment (a drawn weapon is kept until it is used).
       if (now && now !== arm.shape && !arm.drawn) {

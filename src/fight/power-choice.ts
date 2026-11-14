@@ -21,8 +21,8 @@ import { devActions } from '../dev-tools.js';
 /**
  * Before the Shadow Dragon: choose how to fight it. Two stones float over
  * the stage, and you touch and hold one with a fingertip until its ring
- * fills. Light is the story's own magic (signs for an orb of light, a fist
- * for a sword of light, an open palm that mirrors fire back). The Arsenal is
+ * fills. Shadow is the story's own magic (hand shadows and drawings become
+ * weapons; an open palm mirrors fire back). The Arsenal is
  * Yash's: hold an invisible ball to arm, then sign for one of seven weapons.
  */
 
@@ -45,7 +45,7 @@ interface Stone {
 }
 
 const STONES: { power: Power; x: number; color: number; glow: string; title: string; sub: string }[] = [
-  { power: 'light', x: -0.12, color: 0xbfe4ff, glow: 'rgba(170,220,255,0.9)', title: '✨ Light', sub: 'Signs · sword of light · mirror palm' },
+  { power: 'light', x: -0.12, color: 0xbfe4ff, glow: 'rgba(170,220,255,0.9)', title: '🌑 Shadow', sub: 'Hand shadows and drawings become weapons' },
   { power: 'arsenal', x: 0.12, color: 0xffb35a, glow: 'rgba(255,180,90,0.9)', title: '⚔️ The Arsenal', sub: 'Arm, then sign: seven weapons' },
 ];
 

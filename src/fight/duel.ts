@@ -38,8 +38,9 @@ import { disposeHerb, herbSprig } from './herb.js';
 import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
-import { ARMS, type ArmShot, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
+import { ARMS, type ArmShot, planVolley, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
 import { recognise, type Sketch, SKETCH_NAMES } from './sketch.js';
+import { Trainer } from './trainer.js';
 
 /**
  * Ink Duel: a fight against a rival of your choice, six of them, who step
@@ -133,6 +134,8 @@ interface Ink {
   weapon?: string;
   /** Tube thickness, if not the usual. */
   width?: number;
+  /** Which shadow weapon it is. */
+  weaponShape?: ShadowShape;
 }
 
 interface Sample {
@@ -170,6 +173,19 @@ const SHAPES: Array<Array<[number, number]>> = [
 /** Set while a story fight builds its duel: that captain, not the roster's pick. */
 let storyRival: RivalSpec | null = null;
 
+/** Set while the Training Arena builds its duel: a sparring match with lessons. */
+let trainingNext = false;
+
+/** Builds the Training Arena: the duel, against this sparring partner, with the coach. */
+export function trainingDuel<T>(spec: RivalSpec, make: () => T): T {
+  trainingNext = true;
+  try {
+    return duelWith(spec, make);
+  } finally {
+    trainingNext = false;
+  }
+}
+
 /** Builds a duel against this rival (the story's captain fights). */
 export function duelWith<T>(spec: RivalSpec, make: () => T): T {
   storyRival = spec;
@@ -189,6 +205,10 @@ export class InkDuel {
 
   /** Who you are fighting: the story's captain, or the one picked on the roster. */
   readonly spec: RivalSpec = storyRival ?? currentRival();
+  /** The Training Arena: nothing hurts you, they do not fall, and the coach teaches each weapon. */
+  readonly training = trainingNext;
+  private trainer: Trainer | null = null;
+  private trainingClock = 0;
   private mode: Mode = 'ready';
   private modeTime = 0;
   private time = 0;
@@ -287,6 +307,11 @@ export class InkDuel {
     toPaper.decompose(this.paper.position, this.paper.quaternion, this.paper.scale);
     this.group.add(this.paper, this.splashes.points, this.sparks.points, this.comic.group);
     this.arms = new ShadowArms(this.group);
+    if (this.training) {
+      this.god = true;
+      this.trainer = new Trainer(this.group);
+      this.trainer.root.visible = false;
+    }
     this.rival = new FlatRival();
     this.rival.root.visible = false;
     this.paper.add(this.rival.root);
@@ -481,7 +506,7 @@ export class InkDuel {
             : 'Draw in the air to throw ink, or hold a hand shape (a fist, a flat hand…) for a weapon of shadow!';
         if (this.modeTime > (foe ? READY_TIME : 3)) {
           this.setMode('fight');
-          this.comic.pop('FIGHT!', this.front(), '#ff5a3a', 1.5, 1.2);
+          this.comic.pop(this.training ? 'TRAINING!' : 'FIGHT!', this.front(), '#ff5a3a', 1.5, 1.2);
           sfx.armed();
           if (this.spec.id === 'morwen') sfx.witchAttackLaugh(0.3);
         }
@@ -491,12 +516,14 @@ export class InkDuel {
         this.immune = Math.max(0, this.immune - dt);
         this.watchSuper(hands);
         this.useArms(dt, hands);
+        this.coach(dt, hands);
         this.draw(hands);
         this.grab(hands);
         this.tendHerb(dt, hands);
         this.rivalTurn(dt);
         this.rainDown(dt);
         this.say();
+        if (this.trainer && this.noteTime <= 0) this.caption = this.trainer.caption;
         break;
       case 'won':
         this.caption = foe ? `You win the duel! ${this.spec.name} melts back into ink.` : 'You win the duel! Your ink flew true.';
@@ -1043,6 +1070,7 @@ export class InkDuel {
           this.splashAt(ink.pos, this.spec.ink);
           sfx.block();
           this.comic.pop('BLOCKED!', ink.pos, '#7fffc4', 0.7, 0.8);
+          this.trainer?.blocked();
           this.tally.blocked++;
           this.superMeter = Math.min(1, this.superMeter + 0.08);
           this.remove(ink);
@@ -1118,7 +1146,7 @@ export class InkDuel {
    */
   private react(foe: Rival3D, pos: Vector3, vel: Vector3, thing: { seen?: boolean }): void {
     const marked = thing as { seen?: boolean };
-    if (marked.seen) return;
+    if (marked.seen || this.training) return;
     const to = foe.chestAt(this.w).sub(pos);
     if (to.length() > 0.7 || to.dot(vel) <= 0) return;
     marked.seen = true;
@@ -1289,6 +1317,7 @@ export class InkDuel {
    */
   private hurt(damage: number, at: Vector3 | null, fill = true): number {
     if (damage <= 0 || this.mode !== 'fight') return 0;
+    if (this.training) return damage;
     if (this.immune > 0) {
       if (at) this.comic.pop('IMMUNE', at, '#b8c8e0', 0.7, 0.7);
       return 0;
@@ -1434,6 +1463,7 @@ export class InkDuel {
           this.remove(ink);
         }
         const spec = ARMS[shape];
+        this.trainer?.formedShape(shape);
         this.comic.pop(spec.name.toUpperCase(), at.setY(at.y + 0.09), hex(spec.color), 0.75, 1.1);
         playWhoosh(0.35);
         if (!this.armsTold.has(shape)) {
@@ -1447,6 +1477,28 @@ export class InkDuel {
 
   private readonly armsTold = new Set<string>();
 
+  /** The Training Arena's coach: where it stands, what it sees, what it says. */
+  private coach(dt: number, hands: readonly HandState[]): void {
+    const trainer = this.trainer;
+    if (!trainer) return;
+    trainer.root.visible = true;
+    // Beside your sparring partner, on the other side of the screen, a little towards you.
+    const toYou = this.w.copy(this.head).sub(this.rivalSpot).setY(0).normalize();
+    trainer.root.position.copy(this.rivalSpot).addScaledVector(this.side, -Math.sign(this.offset || 1) * 0.27).addScaledVector(toYou, 0.12);
+    trainer.root.position.y = this.head.y - 0.1;
+    const tips = hands.filter((h) => h.tracked).map((h) => h.indexTip);
+    const seen = this.arms.seen.find((s) => s === trainer.lesson.shape) ?? this.arms.seen.find((s) => s !== null) ?? null;
+    trainer.update(dt, tips, seen, this.arms.formingProgress(), this.headWorld);
+    if (trainer.finished && !this.won) {
+      this.won = true;
+      this.trainingClock = 2.5;
+    }
+    if (this.won && !this.done) {
+      this.trainingClock -= dt;
+      if (this.trainingClock <= 0) this.done = true;
+    }
+  }
+
   /** You drew a sword (a star, a ball…): the ink turns to shadow and the weapon is in your hand. */
   private drawnWeapon(ink: Ink, h: number, sketch: Sketch): void {
     const SHAPE: Record<Sketch, ShadowShape> = { sword: 'blade', star: 'vee', triangle: 'point', circle: 'fist', zigzag: 'horns', spiral: 'shaka', box: 'palm' };
@@ -1458,6 +1510,7 @@ export class InkDuel {
     }
     this.remove(ink);
     this.arms.give(h, shape);
+    this.trainer?.drew(sketch);
     this.comic.pop(spec.name.toUpperCase(), this.v.copy(ink.pos).setY(ink.pos.y + 0.1), hex(spec.color), 0.85, 1.2);
     sfx.armed();
     this.flash(`You drew ${SKETCH_NAMES[sketch]}: it is your ${spec.name}! ${shape === 'blade' ? 'Swing it fast to send a slash' : shape === 'palm' ? 'It moves with your hand: hold it up against their ink' : 'Punch towards them to throw it'}`, 2.4);
@@ -1469,13 +1522,13 @@ export class InkDuel {
     if (!foe || this.mode !== 'fight') return;
     const spec = ARMS[shot.shape];
     const target = foe.chestAt(new Vector3());
-    const toFoe = new Vector3().subVectors(target, shot.from).normalize();
     const launch = (from: Vector3, points: Vector3[], T: number, options: { curve?: number; spin?: number; power?: number; width?: number } = {}) => {
       const ink = this.newInk(false, from);
       ink.points = points;
       ink.mass = 0.05;
       ink.power = options.power ?? spec.power;
       ink.weapon = spec.name;
+      ink.weaponShape = shot.shape;
       ink.width = options.width ?? 0.008;
       ink.mesh.material = shadowMaterial(spec.color);
       this.rebuild(ink);
@@ -1489,77 +1542,22 @@ export class InkDuel {
       ink.state = 'flying';
       return ink;
     };
-    const ring = (r: number, n = 14) => Array.from({ length: n + 1 }, (_, i) => new Vector3(Math.cos((i / n) * Math.PI * 2) * r, Math.sin((i / n) * Math.PI * 2) * r, 0));
-    const star = (r: number) => Array.from({ length: 11 }, (_, i) => {
-      const a = (i / 10) * Math.PI * 2;
-      const k = i % 2 ? 0.45 : 1;
-      return new Vector3(Math.cos(a) * r * k, Math.sin(a) * r * k, 0);
-    });
-    const line = (dir: Vector3, length: number) => [dir.clone().multiplyScalar(-length / 2), new Vector3(), dir.clone().multiplyScalar(length / 2)];
-    const arc = (r: number, spread: number) => Array.from({ length: 9 }, (_, i) => {
-      const a = Math.PI / 2 + (i / 8 - 0.5) * spread;
-      return new Vector3(Math.cos(a) * r, Math.sin(a) * r - r * 0.6, 0);
-    });
-    switch (shot.shape) {
-      case 'fist':
-        launch(shot.from, [...ring(0.03), ...ring(0.018)], 0.5, { spin: 8, width: 0.01 });
-        playThrow();
-        break;
-      case 'blade': {
-        // A crescent of shadow, across the way the blade swung.
-        launch(shot.from, arc(0.07, 2.4), 0.38, { width: 0.009 });
-        playWhoosh(0.8);
-        break;
-      }
-      case 'point':
-        launch(shot.from, line(toFoe, 0.24), 0.28, { width: 0.007 });
-        playWhoosh(0.6);
-        break;
-      case 'vee':
-        launch(shot.from, star(0.028), 0.8, { curve: 3.4, spin: 22 });
-        launch(shot.from, star(0.028), 0.8, { curve: -3.4, spin: -22 });
-        playWhoosh(0.5);
-        break;
-      case 'three':
-        for (const s of [-1, 0, 1]) launch(shot.from.clone().addScaledVector(this.side, s * 0.05), arc(0.04, 1.6), 0.42 + Math.abs(s) * 0.05);
-        playWhoosh(0.7);
-        break;
-      case 'horns': {
-        // The bolt comes down on them from above.
-        const sky = target.clone();
-        sky.y += 0.75;
-        const zig = [new Vector3(0, 0.08, 0), new Vector3(0.02, 0.03, 0), new Vector3(-0.015, 0, 0), new Vector3(0.015, -0.04, 0), new Vector3(0, -0.08, 0)];
-        launch(sky, zig, 0.22, { width: 0.009 });
-        this.shock.position.copy(sky);
-        (this.shock.material as MeshBasicMaterial).color.setHex(spec.color);
-        this.shockTime = 0;
-        playBoom(0.08);
-        break;
-      }
-      case 'shaka': {
-        const side = Math.random() < 0.5 ? 1 : -1;
-        const v = [new Vector3(-0.04, -0.02, 0), new Vector3(0, 0.02, 0), new Vector3(0.04, -0.02, 0)];
-        launch(shot.from, v, 0.95, { curve: 6 * side, spin: 18 });
-        playWhoosh(0.6);
-        break;
-      }
-      case 'ell':
-        launch(shot.from, line(toFoe, 0.09), 0.2, { width: 0.012 });
-        sfx.shoot();
-        break;
-      case 'thumb': {
-        const t = [new Vector3(0, -0.05, 0), new Vector3(0, 0.03, 0), new Vector3(-0.035, 0.03, 0), new Vector3(0.035, 0.03, 0)];
-        launch(shot.from, t, 1.0, { spin: 9, width: 0.012 });
-        playThrow();
-        break;
-      }
-      default:
-        break;
+    for (const part of planVolley(shot, target, this.side)) {
+      launch(part.from, part.points, part.flight, { curve: part.curve, spin: part.spin, width: part.width });
     }
+    if (shot.shape === 'horns') {
+      this.shock.position.copy(target).setY(target.y + 0.75);
+      (this.shock.material as MeshBasicMaterial).color.setHex(spec.color);
+      this.shockTime = 0;
+      playBoom(0.08);
+    } else if (shot.shape === 'ell') sfx.shoot();
+    else if (shot.shape === 'fist' || shot.shape === 'thumb') playThrow();
+    else playWhoosh(shot.shape === 'blade' ? 0.8 : 0.6);
   }
 
   /** A bolt of your super lands. */
   private superHit(foe: Rival3D, ink: Ink): 'hit' {
+    if (ink.weaponShape) this.trainer?.hit(ink.weaponShape);
     const damage = this.hurt(ink.power ?? 0, ink.pos, ink.weapon !== undefined);
     if (damage > 0) {
       foe.flinch(ink.weapon === undefined || damage >= 14);
@@ -1700,6 +1698,17 @@ export class InkDuel {
    * moves: she never stays where you last aimed.
    */
   private foeTurn(dt: number, foe: Rival3D): void {
+    if (this.trainer) {
+      // Sparring: a slow throw now and then, only when a lesson wants something to block.
+      this.trainingClock -= dt;
+      if (this.trainer.wantsIncoming && this.trainingClock <= 0 && !foe.busy) {
+        this.trainingClock = 3;
+        foe.play('throw');
+        this.muteRelease = 1.6;
+        this.rain.push({ delay: 0.45, from: foe.chestAt(new Vector3()), kind: 'arc', flight: 1.5 });
+      }
+      return;
+    }
     this.nextRival -= dt;
     this.ultimate -= dt;
     this.muteRelease -= dt;

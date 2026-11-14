@@ -1,4 +1,4 @@
-import { AirSketch } from './air-sketch.js';
+import { AirSketch, type SketchHand } from './air-sketch.js';
 import type { Sketch } from './sketch.js';
 import { Group, type Mesh, type MeshBasicMaterial, Quaternion, Vector3 } from '@iwsdk/core';
 import { type Anchor, Arsenal } from '../yash/arsenal.js';
@@ -61,6 +61,18 @@ const ICON_GAP = 0.15;
 const ICON_ROW_GAP = 0.06;
 const ICONS_PER_ROW = 4;
 
+/** Yash's hands as drawing hands: tracked, thumb–index gap, and the pinch point. */
+function sketchHands(hands: Record<Side, HandState>, out: SketchHand[]): SketchHand[] {
+  (['left', 'right'] as const).forEach((side, i) => {
+    const hand = hands[side];
+    const slot = (out[i] ??= { tracked: false, gap: 1, at: new Vector3() });
+    slot.tracked = hand.tracked;
+    slot.gap = hand.pinch;
+    hand.joint(4, slot.at).add(hand.joint(9, new Vector3())).multiplyScalar(0.5);
+  });
+  return out;
+}
+
 export class ArsenalPlayer implements Foe {
   readonly root = new Group();
   readonly arsenal: Arsenal;
@@ -68,6 +80,7 @@ export class ArsenalPlayer implements Foe {
   readonly hands: Record<Side, HandState> = { left: new HandState('left'), right: new HandState('right') };
   /** Draw a weapon in the air (a sword, a ball, a box…) instead of signing for it. */
   private readonly sketch: AirSketch;
+  private readonly sketchSlots: SketchHand[] = [];
   readonly center = new Vector3();
 
   private bursts: Bursts;
@@ -91,7 +104,7 @@ export class ArsenalPlayer implements Foe {
     parent.add(this.root);
     this.bursts = new Bursts(this.root);
     this.arsenal = new Arsenal(this.root, this.bursts, this, this.anchorOf);
-    this.sketch = new AirSketch(this.root, (sketch, side) => this.arsenal.summon(DRAWN[sketch], side, this.head, this.forward));
+    this.sketch = new AirSketch(this.root, (sketch, i) => this.arsenal.summon(DRAWN[sketch], i === 0 ? 'left' : 'right', this.head, this.forward));
     this.ring = makeRing(0.07, 0x9fe8ff);
     this.ringMaterial = this.ring.material as MeshBasicMaterial;
     this.ring.visible = false;
@@ -143,7 +156,7 @@ export class ArsenalPlayer implements Foe {
     if (anyHand && this.target.fighting) {
       classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
       this.recognizer.update(dt, this.reading, this.events);
-      this.sketch.update(dt, this.hands, () => this.recognizer.phase === 'armed' || this.arsenal.held?.item === 'sling');
+      this.sketch.update(dt, sketchHands(this.hands, this.sketchSlots), () => this.recognizer.phase === 'armed' || this.arsenal.held?.item === 'sling');
     }
     for (const event of this.events) {
       if (event.type === 'armed') {

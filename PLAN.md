@@ -52,6 +52,19 @@ Found on the Quest 2:
 - [x] Shadow Pets side game: make any animal's shadow and play with it; it feels how you treat it (PetMood: trust, fear, cross) and answers in its own voice (src/pet-voices.ts): stroked it purrs, tossed gently it plays, thrown hard it yelps and trembles, poked too much it growls; the caption says how it feels and why
 - [ ] On Quest: listen to the fighters' and pets' voices and tune pitch and loudness by ear
 
+### 0.4 Nov 14–15 brief (Aditya)
+- [x] Drop and the course buttons answer a mouse click too (emulator); buttons draw in front of scenery
+- [x] Releases: things drop where you hold them (smoothed release velocity); the forge catches fast falls; a floating sign points at the next tool
+- [x] Hint opens only when pressed
+- [x] Twenty named moves per fighter (src/fight/movebook.ts), dealt from a shuffled deck
+- [x] Shadow weapons in the story's fights: ten hand shapes (src/fight/shadow-arms.ts), punch to throw; drawn weapons (src/fight/sketch.ts); no signs in story mode
+- [x] Arsenal: draw a weapon in the air to summon it (src/fight/air-sketch.ts)
+- [x] Training Arena (side game): seventeen lessons with Sgt. Vance and a live lesson card (src/fight/trainer.ts)
+- [x] Hint in any fight shows the weapons chart (src/fight/arms-art.ts)
+- [x] Dragon finale: Light became Shadow: shadow weapons and drawings; palm mirror and sword cuts against its fire
+- [ ] On Quest: hand-shape reliability, punch and swing speeds, weapon look in hand, lesson card placement
+- [ ] Final polish pass over every level (look and feel), with Aditya
+
 ---
 
 ## 1. What the competition actually wants (research, Nov 11)

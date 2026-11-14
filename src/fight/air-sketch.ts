@@ -1,6 +1,5 @@
 import { CatmullRomCurve3, Mesh, MeshBasicMaterial, type Object3D, TubeGeometry, Vector3 } from '@iwsdk/core';
 
-import type { HandState, Side } from '../yash/hands.js';
 import { isClosedLoop } from './doodle.js';
 import { recognise, type Sketch } from './sketch.js';
 
@@ -16,6 +15,13 @@ const PINCH_OFF = 0.045;
 const STEP = 0.007;
 const MAX_POINTS = 220;
 
+/** What drawing needs from a hand: is it seen, how far apart thumb and index are, and where the pinch is (in the root's space). */
+export interface SketchHand {
+  tracked: boolean;
+  gap: number;
+  at: Vector3;
+}
+
 interface Stroke {
   points: Vector3[];
   mesh: Mesh;
@@ -26,28 +32,26 @@ interface Stroke {
 
 export class AirSketch {
   private readonly material = new MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.9, depthWrite: false });
-  private readonly drawing: Record<Side, Stroke | null> = { left: null, right: null };
+  private readonly drawing: Array<Stroke | null> = [null, null];
   private readonly fading: Stroke[] = [];
-  private readonly a = new Vector3();
-  private readonly b = new Vector3();
 
   constructor(
     private readonly root: Object3D,
-    private readonly onSketch: (sketch: Sketch, side: Side, at: Vector3) => void,
+    private readonly onSketch: (sketch: Sketch, hand: number, at: Vector3) => void,
   ) {}
 
-  /** `busy(side)`: that hand is doing something else (holding a weapon, signing): no drawing. */
-  update(dt: number, hands: Record<Side, HandState>, busy: (side: Side) => boolean): void {
-    for (const side of ['left', 'right'] as const) {
+  /** `busy(i)`: that hand is doing something else (holding a weapon, signing): no drawing. */
+  update(dt: number, hands: readonly SketchHand[], busy: (hand: number) => boolean): void {
+    for (let side = 0; side < hands.length && side < 2; side++) {
       const hand = hands[side];
       const stroke = this.drawing[side];
       if (!hand.tracked) {
         if (stroke) this.finish(side);
         continue;
       }
-      const at = hand.joint(4, this.a).add(hand.joint(9, this.b)).multiplyScalar(0.5);
+      const at = hand.at;
       if (!stroke) {
-        if (hand.pinch < PINCH_ON && !busy(side)) {
+        if (hand.gap < PINCH_ON && !busy(side)) {
           const mesh = new Mesh(undefined, this.material);
           mesh.userData.keep = true;
           mesh.frustumCulled = false;
@@ -56,7 +60,7 @@ export class AirSketch {
         }
         continue;
       }
-      if (hand.pinch > PINCH_OFF) {
+      if (hand.gap > PINCH_OFF) {
         this.finish(side);
         continue;
       }
@@ -81,7 +85,7 @@ export class AirSketch {
 
   /** Lets go of every line now (the fight ended, the level changed). */
   clear(): void {
-    for (const side of ['left', 'right'] as const) {
+    for (let side = 0; side < 2; side++) {
       const stroke = this.drawing[side];
       if (stroke) {
         stroke.mesh.removeFromParent();
@@ -98,7 +102,7 @@ export class AirSketch {
     stroke.built = stroke.points.length;
   }
 
-  private finish(side: Side): void {
+  private finish(side: number): void {
     const stroke = this.drawing[side];
     this.drawing[side] = null;
     if (!stroke) return;

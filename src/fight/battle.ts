@@ -3,6 +3,8 @@ import {
   AdditiveBlending,
   BoxGeometry,
   CanvasTexture,
+  CatmullRomCurve3,
+  TubeGeometry,
   Group,
   Matrix4,
   Mesh,
@@ -27,6 +29,9 @@ import { play, saveProgress } from '../progress.js';
 import { stage } from '../stage-state.js';
 import { ShadowDragon } from './dragon.js';
 import { Dragon3D, dragonLoad, Phoenix, preloadDragon } from './dragon3d.js';
+import { AirSketch, type SketchHand } from './air-sketch.js';
+import { DRAWN_WEAPON } from './arms-art.js';
+import { ARMS, type ArmShot, planVolley, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
 
 /**
  * The last chapter: the Shadow Dragon guards the Great Lantern.
@@ -152,6 +157,13 @@ export class DragonBattle {
   private nextBreath = 3;
   private readonly shields: Mesh[] = [];
 
+  // Shadow weapons: hand shapes (or drawings) become weapons; punch to throw them.
+  private readonly arms: ShadowArms;
+  private readonly sketch: AirSketch;
+  private readonly sketchSlots: SketchHand[] = [];
+  private readonly shots: Array<{ mesh: Mesh; pos: Vector3; vel: Vector3; accel: Vector3 | null; spin: number; power: number; color: number; age: number }> = [];
+  private readonly side = new Vector3(1, 0, 0);
+
   // HUD on the screen.
   private readonly hud = new Group();
   private readonly hearts: Mesh[] = [];
@@ -197,6 +209,20 @@ export class DragonBattle {
     this.paper.add(this.hud);
     this.buildHud();
     this.newSequence();
+    this.side.applyQuaternion(this.paper.quaternion).setY(0).normalize();
+    // The open palm stays this fight's own mirror shield; every other shape is a shadow weapon.
+    this.arms = new ShadowArms(this.group);
+    this.arms.exclude = new Set<ShadowShape>(['palm']);
+    this.sketch = new AirSketch(this.group, (sketch, h) => {
+      const shape = DRAWN_WEAPON[sketch];
+      if (shape === 'palm') {
+        this.flash('A shield! Here your open palm is your shield: raise it against the fire', 2);
+        return;
+      }
+      this.arms.give(h, shape);
+      sfx.armed();
+      this.flash(`You drew your ${ARMS[shape].name}! ${shape === 'blade' ? 'Swing it to slash, and cut the fire' : 'Punch towards the dragon to throw it'}`, 2.2);
+    });
 
     devInfo.battle = () => this.state;
     devActions['['] = () => {
@@ -210,12 +236,89 @@ export class DragonBattle {
     };
   }
 
+  // ======================================================= Shadow weapons
+
+  private useArms(dt: number, hands: readonly HandState[]): void {
+    const target = this.weakPoints()[0];
+    this.arms.update(
+      dt,
+      hands,
+      target,
+      (_h, shape, at) => {
+        this.burstAt(at, 14, ARMS[shape].color);
+        playCharge();
+      },
+      (shot) => this.fireArm(shot),
+    );
+    // Drawing a weapon in the air (pinch and draw), with any hand not holding one.
+    hands.forEach((hand, i) => {
+      const slot = (this.sketchSlots[i] ??= { tracked: false, gap: 1, at: new Vector3() });
+      slot.tracked = hand.tracked;
+      slot.gap = hand.pinchGap;
+      this.group.worldToLocal(slot.at.copy(hand.pinch));
+    });
+    this.sketch.update(dt, this.sketchSlots, (h) => this.arms.busy(h));
+  }
+
+  /** A shadow weapon leaves your hand for the dragon. */
+  private fireArm(shot: ArmShot): void {
+    const target = this.weakPoints()[0];
+    const spec = ARMS[shot.shape];
+    for (const part of planVolley(shot, target, this.side)) {
+      const mesh = new Mesh(new TubeGeometry(new CatmullRomCurve3(part.points), part.points.length * 3, part.width ?? 0.008, 6, false), shadowMaterial(spec.color));
+      mesh.position.copy(part.from);
+      mesh.lookAt(this.headWorld);
+      this.group.add(mesh);
+      const vel = target.clone().sub(part.from).divideScalar(part.flight);
+      vel.y += 0.5 * 9.8 * part.flight;
+      const accel = part.curve ? this.side.clone().multiplyScalar(part.curve) : null;
+      if (accel) vel.addScaledVector(accel, -0.5 * part.flight);
+      this.shots.push({ mesh, pos: part.from.clone(), vel, accel, spin: part.spin ?? 0, power: spec.power / 14, color: spec.color, age: 0 });
+    }
+    if (shot.shape === 'ell' || shot.shape === 'horns') playBoom(0.06);
+    else playThrow();
+  }
+
+  /** Shadow weapons in flight: gravity, curves, a little homing on the head or heart. */
+  private flyShots(dt: number): void {
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const s = this.shots[i];
+      s.age += dt;
+      s.vel.y -= 9.8 * dt;
+      if (s.accel) s.vel.addScaledVector(s.accel, dt);
+      const aim = this.nearestWeakPoint(s.pos, s.vel, this.v);
+      if (aim && s.age > 0.1) {
+        const want = aim.sub(s.pos).normalize().multiplyScalar(s.vel.length());
+        s.vel.lerp(want, Math.min(1, dt * 2));
+      }
+      s.pos.addScaledVector(s.vel, dt);
+      s.mesh.position.copy(s.pos);
+      s.mesh.rotateZ(s.spin * dt);
+      let gone = s.age > 3 || s.pos.y < -0.6;
+      if (!gone && this.mode === 'fight') {
+        if (this.dragon3d) gone = this.hit3d(s.pos, s.power);
+        else {
+          const onPaper = this.paper.worldToLocal(this.group.localToWorld(this.w.copy(s.pos)));
+          if (onPaper.z <= 0.012) {
+            this.strike(onPaper, s.power, s.color);
+            gone = true;
+          }
+        }
+      }
+      if (gone) {
+        s.mesh.removeFromParent();
+        s.mesh.geometry.dispose();
+        this.shots.splice(i, 1);
+      }
+    }
+  }
+
   /** How you beat the dragon, for the Inventor's Journal. */
   journal(): string[] {
     const t = this.tally;
     return [
       `Won in ${Math.round(this.time)} s with ${this.health} of ${PLAYER_HEALTH} hearts left`,
-      `${t.light} strikes of light · ${t.sword} sword cuts · ${t.fire} hits with its own fire`,
+      `${t.light} strong shadow strikes · ${t.sword} sword cuts · ${t.fire} lighter hits and its own fire`,
       `${t.deflected} fireballs bounced back · ${t.blocked} bites blocked`,
     ];
   }
@@ -271,9 +374,7 @@ export class DragonBattle {
         if (this.modeTime > 3.2) this.setMode('fight');
         break;
       case 'fight':
-        this.signs(dt, hands);
-        this.charge(dt, hands);
-        this.swords(dt, hands);
+        this.useArms(dt, hands);
         this.dive(dt, hands);
         this.dragonTurn(dt);
         this.say();
@@ -302,6 +403,7 @@ export class DragonBattle {
         break;
     }
     this.flyOrb(dt);
+    this.flyShots(dt);
     this.flyFire(dt, hands);
     this.dragon.update(dt);
     this.drawHud(dt);
@@ -315,13 +417,12 @@ export class DragonBattle {
   }
 
   private say(): void {
-    let text: string;
-    if (this.orbHand >= 0) text = this.orbCharge < 1 ? 'Light gathers in your hand…' : 'Throw it! Aim for the head or the ember heart';
-    else if (this.flying) text = 'Fly true…';
-    else {
-      const sign = SIGNS[this.sequence[this.signStep]];
-      text = `Fist: sword · Open palm: shield · Signs for a light orb: ${this.signStep + 1}/3 ${sign.label}`;
-    }
+    const held = this.arms.shapeIn(1) ?? this.arms.shapeIn(0);
+    let text = held
+      ? held === 'blade'
+        ? 'Swing your Shadow Sword: slash the dragon, cut its fire'
+        : `Punch towards the dragon: throw your ${ARMS[held].name}! Aim for the head or the glowing heart`
+      : 'Make a hand shadow for a weapon (fist, flat hand, one finger…) or draw one · Open palm: shield · Hint shows them all';
     if (this.fireballs.some((f) => !f.reflected) && this.time > 0) text = 'Fire! Raise an open palm to shield. Angle it to bounce the fire back';
     if (this.noteTime > 0) text = this.note;
     this.caption = text;
@@ -776,7 +877,15 @@ export class DragonBattle {
           this.burstAt(f.pos, 18, 0xbfe4ff);
           this.flash('Deflected!', 1);
         });
-        if (!f.reflected && f.pos.distanceTo(this.head) < HEAD_RADIUS) {
+        // A Shadow Sword held up cuts the fire out of the air.
+        if (!f.reflected && !gone && this.arms.blocks(f.pos, 0.03)) {
+          gone = true;
+          this.tally.sword++;
+          playClang(0.5, 0.06);
+          this.burstAt(f.pos, 22, 0x6fd3ff);
+          this.flash('Cut! Your sword splits the fire', 1);
+        }
+        if (!gone && !f.reflected && f.pos.distanceTo(this.head) < HEAD_RADIUS) {
           gone = true;
           this.hurtPlayer(f.pos);
         }
@@ -906,7 +1015,8 @@ export class DragonBattle {
     });
     const k = Math.max(0, this.dragonHealth / DRAGON_HEALTH);
     this.bar.scale.x += (Math.max(0.001, k) - this.bar.scale.x) * Math.min(1, dt * 6);
-    const showSigns = this.mode === 'fight' && this.orbHand < 0 && !this.flying;
+    // The old light signs are gone from the story: shadow weapons replace them.
+    const showSigns = false;
     this.signIcons.forEach((icon, i) => {
       icon.mesh.visible = showSigns;
       const current = i === this.signStep;

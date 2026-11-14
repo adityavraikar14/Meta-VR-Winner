@@ -13,7 +13,7 @@ import { dailyLevel, dateKey, noteDaily } from '../run/daily.js';
 import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
 import { workshopLevel } from '../run/workshop.js';
 import { ShadowRun } from '../run/shadow-run.js';
-import { duelWith, InkDuel } from '../fight/duel.js';
+import { duelWith, trainingDuel, InkDuel } from '../fight/duel.js';
 import { currentRival, RIVALS } from '../fight/rivals.js';
 import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
@@ -963,12 +963,41 @@ export function refreshWorkshop(): void {
 /** Shadow Pets: free play with one shadow animal at a time, to stroke, hold, toss and play with. */
 export const PETS_INDEX = 1003;
 
+/** The Training Arena: learn every shadow weapon, one lesson at a time, sparring with Sgt. Vance. */
+export const TRAINING_INDEX = 1004;
+export const TRAINING: Puzzle = {
+  id: 'training',
+  world: 0,
+  title: 'Training Arena',
+  story: 'Sgt. Vance steps out of the screen to spar with you. Learn every shadow weapon, one at a time: make the hand shape (or draw it), let it form, then use it on him. He cannot hurt you here.',
+  ask: 'Follow the lesson card beside Vance',
+  handsOn: true,
+  solved: 'Training complete! You know every shadow weapon. Push Hint in any fight to see them all again.',
+  build(root, kit) {
+    const spec = RIVALS.find((r) => r.id === 'vance')!;
+    const duel = trainingDuel(spec, () => new InkDuel(root, kit.floor));
+    root.add(duel.group);
+    const task = { caption: '', done: false, mistakes: 0 };
+    stage.task = task;
+    return {
+      start: new Vector3(0, kit.floor, 0.12),
+      attempt: () => ({ solved: false, steps: [], line: 'Follow the lesson card.' }),
+      update: (dt, hands, head) => {
+        duel.update(dt, hands, head);
+        task.caption = duel.caption;
+        task.done = duel.done;
+      },
+    };
+  },
+};
+
 export function isSideGame(index: number): boolean {
   return index >= DUEL_INDEX;
 }
 
 export function puzzleAt(index: number): Puzzle | null {
   if (index === DUEL_INDEX) return DUEL;
+  if (index === TRAINING_INDEX) return TRAINING;
   if (index === DAILY_INDEX) return dailyPuzzle();
   if (index === WORKSHOP_INDEX) {
     if (!workshop) refreshWorkshop();

@@ -19,7 +19,7 @@ import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'arena'; boss?: string };
+export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'training' } | { do: 'arena'; boss?: string };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -314,7 +314,7 @@ export class MainMenu {
     this.draw(
       'Side games',
       'Side games',
-      `Pets: bring a shadow animal to life and play with it.  ·  Daily Light: a new course every day.  ·  Workshop: build your own course.  ·  Duel: draw in the air and fight one of ${RIVALS.length} rivals on the table.  ·  Arena: ${ARENA.length} bosses, life-size, seven hand-sign weapons.`,
+      `Training: learn every shadow weapon with Sgt. Vance.  ·  Pets: bring a shadow animal to life and play with it.  ·  Daily Light: a new course every day.  ·  Workshop: build your own course.  ·  Duel: draw in the air and fight one of ${RIVALS.length} rivals on the table.  ·  Arena: ${ARENA.length} bosses, life-size, seven hand-sign weapons.`,
       `Bring draughts, wards and sun shards from your bag${streak}`,
     );
     return [
@@ -322,6 +322,7 @@ export class MainMenu {
       { label: 'Daily', run: () => ({ do: 'daily' }) },
       { label: 'Workshop', run: () => ({ do: 'workshop' }) },
       { label: 'Pets', run: () => ({ do: 'pets' }) },
+      { label: 'Training', run: () => ({ do: 'training' }) },
       { label: 'Duel', run: () => this.roster('duel') },
       { label: 'Arena', run: () => this.roster('arena') },
     ];

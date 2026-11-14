@@ -132,8 +132,9 @@ export const HOW_TO: Record<string, string[]> = {
     'Do all four. A spool pin needs an even lighter touch on the lever',
   ],
   'shadow-dragon': [
-    'Choose your powers: Light (hand shadows) or the Arsenal (hand-sign weapons)',
-    'Watch its breath: when it rears back, block or move aside',
+    'Choose your powers: Shadow (hand shadows and drawings) or the Arsenal (hand-sign weapons)',
+    'Shadow: hold a hand shape (fist, flat hand, one finger…) or draw one, then punch towards the dragon. Hint in the fight shows every weapon',
+    'Its fire: raise an open palm to bounce it back, or cut it with a Shadow Sword (flat hand)',
     'Strike its head or its glowing heart',
     'Hurt? Turn a palm to your face and push Drink',
   ],
@@ -142,6 +143,12 @@ export const HOW_TO: Record<string, string[]> = {
   'fight-kai': DUEL_STEPS,
   'fight-morwen': DUEL_STEPS,
   duel: DUEL_STEPS,
+  training: [
+    'Read the lesson card beside Sgt. Vance: it shows the hand shape to make, and your hand as it is now',
+    'Hold the shape still: the ring fills and the weapon forms in your hand',
+    'Use it on Vance as the card says: punch to throw, swing the sword, hold the shield up',
+    'Each lesson passes by itself; Back and Next pick any lesson. Vance cannot hurt you here',
+  ],
   pets: [
     'Make an animal with your hand’s shadow (a fox, a horse, a bird, a rabbit…): it comes alive on the table',
     'Stroke its back slowly with your fingertips: it loves that, and trusts you more',
