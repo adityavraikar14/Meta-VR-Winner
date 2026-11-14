@@ -158,7 +158,6 @@ const HINT_BUTTON = new Vector3(0.42, -0.13, 0.6);
 /** How long the How to play card stays, and how long in a level before Hint is suggested. */
 const HINT_TIME = 12;
 const STUCK_AFTER = 40;
-const HOWTO_SEEN_KEY = 'shadowplay.howto.seen';
 /** Home sits above Skip, on the same side, in paper space (it follows the screen even in the Arena). */
 const HOME_AT = new Vector3(0.42, 0.17, 0.6);
 /** Seconds the Home button waits for its second push. */
@@ -1194,26 +1193,6 @@ export class ShadowGameSystem extends createSystem({
     this.setCaption(line);
   }
 
-  /** The first time each level is played, its steps show without asking. */
-  private autoHowTo(): void {
-    const id = this.puzzle?.id ?? (this.puzzleIndex === PETS_INDEX ? 'pets' : undefined);
-    const steps = id ? howTo(id) : null;
-    if (!id || !steps) return;
-    let seen: string[] = [];
-    try {
-      seen = JSON.parse(localStorage.getItem(HOWTO_SEEN_KEY) ?? '[]') as string[];
-    } catch {
-      seen = [];
-    }
-    if (seen.includes(id)) return;
-    this.showHowTo(steps);
-    try {
-      localStorage.setItem(HOWTO_SEEN_KEY, JSON.stringify([...seen, id]));
-    } catch {
-      // Shown again next time; no harm.
-    }
-  }
-
   private showHowTo(steps: string[]): void {
     this.hintLeft = HINT_TIME;
     this.stuckTime = 0;
@@ -1306,7 +1285,6 @@ export class ShadowGameSystem extends createSystem({
   private beginMatching(): void {
     stage.cue = 'point';
     this.stuckTime = 0;
-    this.autoHowTo();
     if (this.puzzle && !isSideGame(this.puzzleIndex)) stage.say = adaTip(this.puzzle.world, this.puzzleIndex);
     this.bannerShown = false;
     this.holdTime = 0;

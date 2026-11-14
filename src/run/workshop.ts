@@ -144,8 +144,8 @@ export function workshopLevel(): RunLevel {
   return {
     id: 'workshop',
     title: 'The Workshop',
-    story: 'Build your own course. The star’s shadow is where the spark drops, the ring’s shadow is the gate, and the glass is the ground.',
-    ask: 'Pinch the glass into the light to build a path from the star to the ring, then push Drop',
+    story: 'Design your own level! The START star’s shadow is where the spark drops, the GOAL ring’s is the finish. Push + for pieces and hold them in the light.',
+    ask: 'Hold the glass pieces in the light so their shadows make a path from START to GOAL, then push Drop',
     hint: 'Push Add for more pieces (planks, beams, wedges, pillars, discs, bumps); Undo takes the newest away',
     terrain: [],
     start: [-0.4, 0.25],

@@ -398,6 +398,39 @@ function stemTexture(bramble: boolean): CanvasTexture {
   return texture;
 }
 
+/** A word tag for the Workshop's START star and GOAL ring. */
+function tagSprite(text: string, color: string): Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = 'rgba(20, 33, 61, 0.92)';
+  g.beginPath();
+  g.roundRect(8, 10, 240, 60, 30);
+  g.fill();
+  g.strokeStyle = color;
+  g.lineWidth = 6;
+  g.stroke();
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(112, 72);
+  g.lineTo(144, 72);
+  g.lineTo(128, 92);
+  g.closePath();
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.font = `800 38px ${FONT}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 128, 41);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
+  sprite.scale.set(0.08, 0.03, 1);
+  sprite.renderOrder = 14;
+  return sprite;
+}
+
 function moteTexture(): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
@@ -913,11 +946,24 @@ export class ShadowRun {
   }
 
   /** Workshop: the star's shadow is the start, the ring's shadow the gate. */
+  /** The Workshop's tags over the star and the ring, so you know which is which. */
+  private startTag: Sprite | null = null;
+  private goalTag: Sprite | null = null;
+
   private followMarkers(): void {
     const shards = this.shards?.shards ?? [];
     const star = shards.find((s) => s.kind === 'star');
     const ring = shards.find((s) => s.kind === 'ring');
     if (!star || !ring) return;
+    if (!this.startTag) {
+      this.startTag = tagSprite('START', '#ffc94a');
+      this.goalTag = tagSprite('GOAL', '#49d17d');
+      this.paper.add(this.startTag, this.goalTag!);
+    }
+    const bob = 0.004 * Math.sin(this.time * 3);
+    this.startTag.position.copy(star.position).y += 0.04 + bob;
+    this.goalTag!.position.copy(ring.position).y += 0.04 - bob;
+    this.startTag.visible = this.goalTag!.visible = this.paper.visible;
     const start = star.shadowCentre();
     const gate = ring.shadowCentre();
     this.startOk = onScreen(start);

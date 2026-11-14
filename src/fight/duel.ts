@@ -37,6 +37,7 @@ import { FlatRival } from './flat-rival.js';
 import { disposeHerb, herbSprig } from './herb.js';
 import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
+import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
 
 /**
  * Ink Duel: a fight against a rival of your choice, six of them, who step
@@ -196,6 +197,12 @@ export class InkDuel {
   private readonly rain: Array<{ delay: number; from: Vector3; kind?: Shot; flight?: number; curve?: number }> = [];
   /** After a blink, the very next move is a throw from the new spot. */
   private afterBlink = false;
+  /** Their move book, dealt from a shuffled deck; a move's follow-up attack; their own throws muted while a book move plays. */
+  private deck: Move[] = [];
+  private followUp: { delay: number; move: Move } | null = null;
+  private muteRelease = 0;
+  /** The names of their latest book moves (for testing). */
+  private readonly movesUsed: string[] = [];
   /** Your super meter (0–1), and the two-hand pull that fires it. */
   private superMeter = 0;
   private superReady = false;
@@ -344,11 +351,16 @@ export class InkDuel {
     this.doodleWorld = { ground: (p) => this.groundFast(p), viewer: this.head, target: null, head: null, reach: this.spec.girth + 0.1 };
 
     devInfo.duel = () => this.state;
+    devInfo.moves = () => this.movesUsed.slice(-12);
     devActions['['] = () => this.devDraw();
     devActions[']'] = () => this.devThrow();
     devActions[';'] = () => this.devRival('throw');
     devActions["'"] = () => this.devDoodle();
     devActions['/'] = () => this.devRival('skill');
+    // Dev: > makes the rival do the next move from their book now.
+    devActions['>'] = () => {
+      if (this.foe && this.mode === 'fight') this.nextRival = this.perform(this.foe, this.drawMove());
+    };
     // Dev: \ makes the rival use their signature power now.
     devActions['\\'] = () => {
       if (this.foe && this.mode === 'fight') this.signature(this.foe);
@@ -1461,6 +1473,8 @@ export class InkDuel {
     this.setMode(won ? 'won' : 'lost');
     this.pending.length = 0;
     this.rain.length = 0;
+    this.deck = [];
+    this.followUp = null;
     this.dropHerb();
     for (const ink of [...this.inks]) if (ink.rival) this.remove(ink);
     const foe = this.foe;
@@ -1517,6 +1531,16 @@ export class InkDuel {
   private foeTurn(dt: number, foe: Rival3D): void {
     this.nextRival -= dt;
     this.ultimate -= dt;
+    this.muteRelease -= dt;
+    if (this.followUp) {
+      this.followUp.delay -= dt;
+      if (this.followUp.delay <= 0 && !foe.sliding) {
+        const move = this.followUp.move;
+        this.followUp = null;
+        this.nextRival = this.perform(foe, move, true);
+      }
+      return;
+    }
     if (this.nextRival > 0 || foe.busy || this.immune > 0) return;
     const hurt = this.phase >= 2;
     if (this.afterBlink) {
@@ -1534,6 +1558,12 @@ export class InkDuel {
       this.ultimate = ULTIMATE_EVERY[this.phase >= 3 ? 1 : 0] * (0.85 + Math.random() * 0.3);
       this.castUltimate(foe);
       this.nextRival = 3.4;
+      return;
+    }
+    // Most turns, a move from their book of twenty: more of them as the fight goes on.
+    if (Math.random() < (this.phase >= 3 ? 0.72 : this.phase >= 2 ? 0.62 : 0.5)) {
+      const move = this.drawMove();
+      this.nextRival = this.perform(foe, move) * (this.phase >= 3 ? 0.8 : 1) + pace * 0.35;
       return;
     }
     // Now and then, their signature power: more often as the fight goes on.
@@ -1670,8 +1700,220 @@ export class InkDuel {
     this.nextRival = seconds + 0.15;
   }
 
+  /** The next move from their deck; big ones go back in until they are hurt. */
+  private drawMove(): Move {
+    for (let tries = 0; tries < 2; tries++) {
+      if (this.deck.length === 0) this.deck = shuffledMoves(this.spec.id);
+      const i = this.deck.findIndex((move) => !move.big || this.phase >= 2);
+      if (i >= 0) return this.deck.splice(i, 1)[0];
+      this.deck = [];
+    }
+    return { name: 'Throw', tech: 'shot', shot: 'arc' };
+  }
+
+  /**
+   * Does one move from the book and returns the seconds it keeps them busy.
+   * Attacks are queued as timed shots from around the fighter (or above,
+   * beside or below you); moves take them somewhere new, and most end in an
+   * attack. Each says its name as it starts.
+   */
+  private perform(foe: Rival3D, move: Move, quiet = false): number {
+    const chest = foe.chestAt(new Vector3());
+    const kind: Shot = move.shot ?? 'arc';
+    const more = this.phase >= 3 ? 1.35 : this.phase >= 2 ? 1.15 : 1;
+    const n = Math.max(1, Math.round((move.n ?? 3) * more));
+    const up = new Vector3(0, 1, 0);
+    const toYou = new Vector3().copy(this.head).sub(chest).setY(0).normalize();
+    const rain = (delay: number, from: Vector3, k: Shot = kind, flight?: number, curve?: number) => this.rain.push({ delay, from, kind: k, flight, curve });
+    const say = (scale = 1) => {
+      if (!quiet) this.comic.pop(move.name.toUpperCase(), this.above(0.2).clone(), this.spec.accent, scale, 1.2);
+    };
+    // The body: a throw, an attack or (big) a skill; their own clip's throw stays quiet.
+    const act = (clip: RivalMove) => {
+      this.muteRelease = 1.6;
+      foe.play(foe.has(clip) ? clip : 'attack');
+    };
+    const tech: Technique = move.tech;
+    if (!quiet) this.movesUsed.push(move.name);
+
+    if (MOVEMENT.has(tech)) {
+      say(0.9);
+      const after = (seconds: number) => {
+        if (move.then) this.followUp = { delay: seconds, move: { name: move.name, tech: move.then, shot: move.shot, n: move.n } };
+        return seconds + 0.2;
+      };
+      const across = (far = true) => {
+        const side = -Math.sign(this.offset || 1);
+        this.offset = side * (far ? SIDE_NEAR + 0.08 + Math.random() * (SIDE_FAR - SIDE_NEAR - 0.08) : SIDE_NEAR + Math.random() * 0.08);
+        const spot = new Vector3().copy(this.rivalSpot).addScaledVector(this.side, this.offset);
+        spot.y = this.groundFast(spot);
+        return spot;
+      };
+      switch (tech) {
+        case 'walk':
+        case 'run': {
+          const seconds = foe.walkTo(across(), tech === 'run' ? 0.75 : 0.35);
+          return after(seconds);
+        }
+        case 'dash': {
+          const seconds = foe.walkTo(across(), 1.1);
+          playWhoosh(0.6);
+          return after(seconds);
+        }
+        case 'roll':
+          this.roll(foe, null);
+          return after(0.7);
+        case 'zigzag':
+          this.roll(foe, null);
+          this.followUp = { delay: 0.65, move: { name: move.name, tech: 'roll', shot: move.shot, n: move.n, then: move.then } };
+          return 1.6;
+        case 'blink': {
+          this.splashAt(chest, this.spec.glow);
+          const spot = across();
+          foe.slide(spot, 0.05);
+          foe.root.position.copy(spot);
+          this.splashAt(foe.chestAt(new Vector3()), this.spec.glow);
+          playWhoosh(0.9);
+          return after(0.35);
+        }
+        case 'leap': {
+          const spot = across();
+          act('dodge');
+          foe.slide(spot, 0.75, this.spec.height * 0.35);
+          playWhoosh(0.7);
+          return after(0.8);
+        }
+        case 'feint':
+        default:
+          // A taunt that looks like a pause, then a very fast one.
+          act('taunt');
+          rain(0.55, chest.clone(), kind, 0.5);
+          return 1.2;
+      }
+    }
+
+    // An attack. Big ones warn you first and come a little slower.
+    const start = move.big ? 0.9 : 0.35;
+    if (move.big) {
+      sfx.telegraph();
+      say(1.2);
+    } else say();
+    act(move.big ? 'skill' : Math.random() < 0.5 ? 'throw' : 'attack');
+    switch (tech) {
+      case 'shot':
+        rain(start, chest.clone());
+        return 1.1;
+      case 'double':
+        rain(start, chest.clone());
+        rain(start + 0.28, chest.clone());
+        return 1.4;
+      case 'burst':
+        for (let i = 0; i < n; i++) rain(start + i * 0.15, chest.clone(), 'pellet', 0.6);
+        return 1.2 + n * 0.15;
+      case 'stream':
+        for (let i = 0; i < n; i++) rain(start + i * 0.2, chest.clone(), kind, 0.85);
+        return 1.2 + n * 0.2;
+      case 'fan':
+        for (let i = 0; i < n; i++) rain(start + 0.1, chest.clone().addScaledVector(this.side, (i - (n - 1) / 2) * 0.1), kind, 0.85 + i * 0.12);
+        return 1.6;
+      case 'curves':
+        rain(start, chest.clone(), 'curve', 1.15, 1);
+        rain(start, chest.clone(), 'curve', 1.15, -1);
+        return 1.5;
+      case 'weave':
+        for (let i = 0; i < n; i++) rain(start + i * 0.32, chest.clone(), 'curve', 1.1, i % 2 ? 1 : -1);
+        return 1.3 + n * 0.32;
+      case 'lob':
+        for (let i = 0; i < n; i++) rain(start + i * 0.35, chest.clone().addScaledVector(up, 0.05), kind, 1.55 + Math.random() * 0.3);
+        if (!quiet) this.flash('High lobs! Look up', 1.4);
+        return 1.4 + n * 0.35;
+      case 'sky':
+        for (let i = 0; i < n; i++) {
+          const from = this.head.clone().addScaledVector(this.side, (Math.random() - 0.5) * 0.45);
+          from.y += 0.9;
+          from.addScaledVector(toYou, -0.25);
+          rain(start + i * 0.32, from, kind, 1.1);
+        }
+        this.flash('From above! Hang a drawing over your head', 2);
+        return 1.5 + n * 0.32;
+      case 'wall':
+        for (let i = 0; i < n; i++) {
+          const from = chest.clone().addScaledVector(this.side, (i - (n - 1) / 2) * 0.12);
+          from.y -= 0.08;
+          rain(start + Math.abs(i - (n - 1) / 2) * 0.12, from, kind, 1.25);
+        }
+        this.flash('A wall of ink! Block it, or lean aside', 1.8);
+        return 2.2;
+      case 'snipe':
+        act('taunt');
+        rain(0.85, chest.clone(), 'pellet', 0.42);
+        if (!quiet) this.flash('Taking aim… dodge or block!', 1.3);
+        return 1.6;
+      case 'spiral':
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const from = chest.clone().addScaledVector(this.side, Math.cos(a) * 0.13).addScaledVector(up, Math.sin(a) * 0.13);
+          rain(start + i * 0.14, from, kind, 0.95);
+        }
+        return 1.4 + n * 0.14;
+      case 'pincer':
+        for (const s of [-1, 1]) {
+          const from = this.head.clone().addScaledVector(this.side, s * 0.6).addScaledVector(toYou, -0.45);
+          from.y -= 0.05;
+          rain(start + 0.2, from, kind, 0.95);
+        }
+        if (!quiet) this.flash('From both sides!', 1.3);
+        return 1.7;
+      case 'converge': {
+        // Thrown one by one, timed so they all arrive together.
+        const flights = Array.from({ length: n }, (_, i) => 0.75 + i * 0.16);
+        const last = flights[flights.length - 1];
+        flights.forEach((flight, i) => rain(start + (last - flight), chest.clone().addScaledVector(this.side, (i - (n - 1) / 2) * 0.08), kind, flight));
+        return 2.2;
+      }
+      case 'cross':
+        rain(start, chest.clone(), 'curve', 1.1, 1);
+        rain(start, chest.clone(), 'curve', 1.1, -1);
+        rain(start + 0.25, chest.clone(), 'bolt', 0.85);
+        return 1.6;
+      case 'ring':
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const from = chest.clone().addScaledVector(this.side, Math.cos(a) * 0.17).addScaledVector(up, Math.sin(a) * 0.17);
+          rain(start, from, kind, 0.85 + Math.random() * 0.5);
+        }
+        return 2.3;
+      case 'geyser':
+        for (let i = 0; i < n; i++) {
+          const from = this.head.clone().addScaledVector(this.side, (i % 2 ? 1 : -1) * (0.2 + Math.random() * 0.15)).addScaledVector(toYou, -0.3);
+          from.y -= 0.55;
+          rain(start + 0.3 + i * 0.3, from, kind, 0.7);
+        }
+        if (!quiet) this.flash('From below the table!', 1.4);
+        return 1.6 + n * 0.3;
+      case 'slam': {
+        const feet = foe.root.position.clone();
+        for (let i = 0; i < 30; i++) {
+          const a = (i / 30) * Math.PI * 2;
+          this.w.set(Math.cos(a) * 0.6, 0.3 + Math.random() * 0.4, Math.sin(a) * 0.6);
+          this.splashes.emit(feet, this.w, { life: 0.6, gravity: 3, drag: 1.2, size: [0.014, 0.024], from: this.spec.glow, alpha: 0.8 });
+        }
+        sfx.wallBreak();
+        rain(start, chest.clone(), 'heavy', 1.0);
+        rain(start + 0.3, chest.clone(), 'arc', 1.3);
+        rain(start + 0.6, chest.clone(), 'arc', 1.5);
+        return 2;
+      }
+      default:
+        rain(start, chest.clone());
+        return 1.2;
+    }
+  }
+
   /** A hand let go: what leaves it depends on the move and on who they are. */
   private onRelease(foe: Rival3D, hand: Object3D, by: RivalMove): void {
+    // A move from their book throws its own ink.
+    if (this.muteRelease > 0) return;
     const from = foe.handAt(hand, new Vector3());
     if (by === 'throw' || by === 'attack') {
       this.shoot(from, this.spec.shots[by]);

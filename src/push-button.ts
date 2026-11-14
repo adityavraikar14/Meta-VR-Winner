@@ -205,6 +205,17 @@ export class PushButton {
       new MeshBasicMaterial({ map: this.faceTexture, transparent: true }),
     );
     this.root.add(this.face);
+    // Always in front: a leaf, a flower or a post never hides a button. Drawn after the
+    // scene (back to front), but under the How to play card and the intro (renderOrder 22+).
+    plate.material = plateMetal.clone();
+    bezel.material = bezelMetal.clone();
+    ([[back, 15], [plate, 16], [this.halo, 17], [bezel, 18], [this.cap, 19], [this.face, 20]] as Array<[Mesh, number]>).forEach(([mesh, order]) => {
+      const material = mesh.material as MeshBasicMaterial;
+      material.depthTest = false;
+      material.depthWrite = false;
+      material.transparent = true;
+      mesh.renderOrder = order;
+    });
     this.setText(text);
     this.placeCap();
     parent.add(this.root);

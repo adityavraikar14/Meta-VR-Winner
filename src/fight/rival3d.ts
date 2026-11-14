@@ -110,6 +110,8 @@ export class Rival3D {
   private slideSeconds = 0.8;
   /** A walk moves at a steady pace (feet on the ground); a dodge eases in and out. */
   private slideSteady = false;
+  /** A leap's height at its middle (0: along the ground). */
+  private slideHop = 0;
   /** Set on the frame a throwing hand lets go; read and cleared by the duel. */
   released: Object3D | null = null;
   /** Which move let go (the duel decides what it sends). */
@@ -282,12 +284,13 @@ export class Rival3D {
   }
 
   /** Roll (or step) to a new spot over `seconds`, in the parent's space. */
-  slide(to: Vector3, seconds: number): void {
+  slide(to: Vector3, seconds: number, hop = 0): void {
     this.slideFrom.copy(this.root.position);
     this.slideTo.copy(to);
     this.slideTime = 0;
     this.slideSeconds = Math.max(0.2, seconds);
     this.slideSteady = false;
+    this.slideHop = hop;
   }
 
   /**
@@ -310,6 +313,7 @@ export class Rival3D {
     this.slideTime = 0;
     this.slideSeconds = seconds;
     this.slideSteady = true;
+    this.slideHop = 0;
     return seconds;
   }
 
@@ -423,6 +427,7 @@ export class Rival3D {
       // A walk keeps a steady pace, easing only in its first and last tenth; a dodge eases throughout.
       const k = this.slideSteady ? steady(s) : s * s * (3 - 2 * s);
       this.root.position.lerpVectors(this.slideFrom, this.slideTo, k);
+      if (this.slideHop > 0) this.root.position.y += Math.sin(Math.PI * k) * this.slideHop;
       // Face the way they are going.
       if (this.move === 'dodge' || this.move === 'walk' || this.move === 'run') {
         want = Math.atan2(this.slideTo.x - this.slideFrom.x, this.slideTo.z - this.slideFrom.z);
