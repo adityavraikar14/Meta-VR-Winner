@@ -9,6 +9,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
+  type Raycaster,
   RingGeometry,
   SRGBColorSpace,
   TorusGeometry,
@@ -104,6 +105,25 @@ function metals(): { brass: MeshStandardMaterial; iron: MeshStandardMaterial } {
   return { brass, iron };
 }
 
+/** Every button updated lately, so a mouse or ray click can reach any of them. */
+const LIVE = new Set<PushButton>();
+
+/**
+ * A pointer click (the emulator's mouse, a flat browser): presses every
+ * shown button under the ray, on its next update. Buttons that have not been
+ * updated for a while (left behind by a finished level) are forgotten.
+ */
+export function rayPressButtons(raycaster: Raycaster): void {
+  const now = performance.now();
+  for (const button of LIVE) {
+    if (now - button.lastSeen > 3000) {
+      LIVE.delete(button);
+      continue;
+    }
+    if (button.visible && now - button.lastSeen < 500 && raycaster.intersectObject(button.root, true).length > 0) button.pending = true;
+  }
+}
+
 /**
  * A chunky round button. Push it with a fingertip: the lens follows the
  * finger down, clicks near the bottom of its travel and springs back up,
@@ -134,6 +154,9 @@ export class PushButton {
   private shown = false;
   private time = 0;
   private local = new Vector3();
+  /** A pointer click waiting for the next update, and when it was last updated (ms). */
+  pending = false;
+  lastSeen = 0;
 
   constructor(parent: Object3D, text: string) {
     this.root.name = 'PushButton';
@@ -307,6 +330,10 @@ export class PushButton {
    */
   update(dt: number, tips: readonly Vector3[], rayClick: boolean): boolean {
     this.time += dt;
+    this.lastSeen = performance.now();
+    LIVE.add(this);
+    rayClick ||= this.pending;
+    this.pending = false;
     this.appear += ((this.shown ? 1 : 0) - this.appear) * Math.min(1, dt * 6);
     this.root.visible = this.appear > 0.02;
     if (!this.root.visible) return false;

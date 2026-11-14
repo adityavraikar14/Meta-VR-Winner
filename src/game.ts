@@ -71,7 +71,7 @@ import { howTo } from './howto.js';
 import { petNow } from './creatures/mood.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { currentRival } from './fight/rivals.js';
-import { PushButton } from './push-button.js';
+import { PushButton, rayPressButtons } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
 import { installWebcamPanel } from './webcam.js';
 import { TableFinder } from './table.js';
@@ -954,6 +954,15 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
+      {
+        // Any push button in the scene (a course's Drop, Add, Undo…) takes the click too.
+        const rect = canvas.getBoundingClientRect();
+        if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+          ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+          raycaster.setFromCamera(ndc, this.renderer.xr.isPresenting ? this.renderer.xr.getCamera() : this.camera);
+          rayPressButtons(raycaster);
+        }
+      }
       if (!this.playButton.visible && !this.skipButton.visible && !this.homeButton.visible && !this.hintButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
