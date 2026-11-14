@@ -5,6 +5,8 @@
  * Self-contained on purpose: nothing here imports from, or is imported by,
  * the shadow levels. Everything hangs under one root group under the player.
  */
+import { AirSketch } from '../fight/air-sketch.js';
+import type { Sketch } from '../fight/sketch.js';
 import {
   createSystem,
   Group,
@@ -95,6 +97,9 @@ const HERB_EVERY = 18;
 const HERB_LIFE = 12;
 const HERB_HEAL = 2;
 
+/** A drawing, as the Arsenal weapon it summons. */
+const DRAWN: Record<Sketch, Item> = { sword: 'sword', triangle: 'spear', circle: 'ball', zigzag: 'gun', spiral: 'shield', star: 'sling', box: 'wall' };
+
 export class ArsenalLevelSystem extends createSystem({}) {
   private root!: Group;
   private hands: Record<Side, HandState> = {
@@ -105,6 +110,8 @@ export class ArsenalLevelSystem extends createSystem({}) {
   private controllers: Record<Side, boolean> = { left: false, right: false };
   private poses = new Float32Array(JOINT_COUNT * 16);
   private recognizer = new GestureRecognizer();
+  /** Draw a weapon in the air (a sword, a ball, a box…) instead of signing for it. */
+  private sketch!: AirSketch;
   private reading: Reading = { sign: 'none', hand: null };
   private events: GestureEvent[] = [];
   private bursts!: Bursts;
@@ -175,6 +182,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     });
     this.boss = this.opponent;
     this.arsenal = new Arsenal(this.root, this.bursts, this.opponent, this.anchorOf);
+    this.sketch = new AirSketch(this.root, (sketch, side) => this.arsenal.summon(DRAWN[sketch], side, this.head, this.forward));
     this.bossButton = new PokeButton(NEXT_BOSS_LABEL.sentinel, () => this.nextBoss());
     this.root.add(this.bossButton.root);
     this.arsenal.onEvent = (event) => this.tutorial.notify(event);
@@ -217,6 +225,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     if (anyHand) {
       classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
       this.recognizer.update(dt, this.reading, this.events);
+      this.sketch.update(dt, this.hands, () => this.recognizer.phase === 'armed' || this.arsenal.held?.item === 'sling');
     } else {
       this.reading.sign = 'none';
       this.reading.hand = null;

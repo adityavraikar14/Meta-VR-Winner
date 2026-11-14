@@ -38,6 +38,8 @@ import { disposeHerb, herbSprig } from './herb.js';
 import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
+import { ARMS, type ArmShot, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
+import { recognise, type Sketch, SKETCH_NAMES } from './sketch.js';
 
 /**
  * Ink Duel: a fight against a rival of your choice, six of them, who step
@@ -127,6 +129,10 @@ interface Ink {
   seen: boolean;
   /** A bolt of your super: fixed damage, through any defence. */
   power?: number;
+  /** A shadow weapon's name (it fills your super, unlike the super's own bolts). */
+  weapon?: string;
+  /** Tube thickness, if not the usual. */
+  width?: number;
 }
 
 interface Sample {
@@ -199,6 +205,8 @@ export class InkDuel {
   private afterBlink = false;
   /** Their move book, dealt from a shuffled deck; a move's follow-up attack; their own throws muted while a book move plays. */
   private deck: Move[] = [];
+  /** Weapons of shadow, made with the shape of your hand. */
+  private readonly arms: ShadowArms;
   private followUp: { delay: number; move: Move } | null = null;
   private muteRelease = 0;
   /** The names of their latest book moves (for testing). */
@@ -278,6 +286,7 @@ export class InkDuel {
     const toPaper = new Matrix4().copy(root.matrixWorld).invert().multiply(stage.paper!.matrixWorld);
     toPaper.decompose(this.paper.position, this.paper.quaternion, this.paper.scale);
     this.group.add(this.paper, this.splashes.points, this.sparks.points, this.comic.group);
+    this.arms = new ShadowArms(this.group);
     this.rival = new FlatRival();
     this.rival.root.visible = false;
     this.paper.add(this.rival.root);
@@ -352,6 +361,7 @@ export class InkDuel {
 
     devInfo.duel = () => this.state;
     devInfo.moves = () => this.movesUsed.slice(-12);
+    devInfo.arms = () => ({ seen: this.arms.seen, held: [this.arms.shapeIn(0), this.arms.shapeIn(1)] });
     devActions['['] = () => this.devDraw();
     devActions[']'] = () => this.devThrow();
     devActions[';'] = () => this.devRival('throw');
@@ -468,7 +478,7 @@ export class InkDuel {
         this.caption =
           foe && this.modeTime < WALK_TIME + 0.4
             ? this.spec.entrance
-            : 'Pinch and draw in the air: a line is ink to throw, a closed shape comes alive!';
+            : 'Draw in the air to throw ink, or hold a hand shape (a fist, a flat hand…) for a weapon of shadow!';
         if (this.modeTime > (foe ? READY_TIME : 3)) {
           this.setMode('fight');
           this.comic.pop('FIGHT!', this.front(), '#ff5a3a', 1.5, 1.2);
@@ -480,6 +490,7 @@ export class InkDuel {
       case 'fight':
         this.immune = Math.max(0, this.immune - dt);
         this.watchSuper(hands);
+        this.useArms(dt, hands);
         this.draw(hands);
         this.grab(hands);
         this.tendHerb(dt, hands);
@@ -685,7 +696,7 @@ export class InkDuel {
         return;
       }
       const p = this.group.worldToLocal(this.v.copy(hand.pinch));
-      if (hand.pinchStarted && !current && !this.nearInk(p) && !this.nearDoodle(p)) {
+      if (hand.pinchStarted && !current && !this.arms.busy(h) && !this.nearInk(p) && !this.nearDoodle(p)) {
         const ink = this.newInk(false, p);
         ink.points.push(new Vector3());
         this.drawing[h] = ink;
@@ -717,8 +728,15 @@ export class InkDuel {
     centre.divideScalar(ink.points.length);
     for (const p of ink.points) p.sub(centre);
     ink.pos.add(centre);
+    // A drawing of a weapon becomes that weapon, in the hand that drew it.
+    const closed = isClosedLoop(ink.points);
+    const sketch = this.mode === 'fight' ? recognise(ink.points, closed) : null;
+    if (sketch) {
+      this.drawnWeapon(ink, h, sketch);
+      return;
+    }
     // A closed shape comes alive.
-    if (isClosedLoop(ink.points)) {
+    if (closed) {
       if (this.doodles.length < MAX_DOODLES) {
         this.comeAlive(ink);
         return;
@@ -748,7 +766,7 @@ export class InkDuel {
     if (ink.points.length < 2) return;
     const curve = new CatmullRomCurve3(ink.points);
     ink.mesh.geometry.dispose();
-    ink.mesh.geometry = new TubeGeometry(curve, Math.min(160, ink.points.length * 2), ink.rival ? 0.006 : 0.005, 6, false);
+    ink.mesh.geometry = new TubeGeometry(curve, Math.min(160, ink.points.length * 2), ink.width ?? (ink.rival ? 0.006 : 0.005), 6, false);
     ink.mesh.position.copy(ink.pos);
   }
 
@@ -1020,6 +1038,16 @@ export class InkDuel {
       if (Math.random() < dt * 40) this.sparks.emit(ink.pos, this.v.set(0, 0, 0), { life: 0.3, size: [0.008, 0.002], from: ink.rival ? this.spec.glow : 0xbfe4ff });
 
       if (ink.rival) {
+        // Cut by a shadow sword, or stopped by a shadow shield?
+        if (this.arms.blocks(ink.pos)) {
+          this.splashAt(ink.pos, this.spec.ink);
+          sfx.block();
+          this.comic.pop('BLOCKED!', ink.pos, '#7fffc4', 0.7, 0.8);
+          this.tally.blocked++;
+          this.superMeter = Math.min(1, this.superMeter + 0.08);
+          this.remove(ink);
+          continue;
+        }
         // Blocked by a drawing hanging in the air?
         const shield = this.inks.find((s) => !s.rival && s.state === 'hanging' && s.points.some((q) => this.w.copy(q).add(s.pos).distanceTo(ink.pos) < 0.03));
         if (shield) {
@@ -1391,12 +1419,155 @@ export class InkDuel {
     this.comic.pop('LANTERN BURST', this.v.copy(start).setY(start.y + 0.1), '#ffc928', 1.2, 1.4);
   }
 
+  /** Shadow weapons: shapes become weapons; a punch (or a sword's swing) lets them fly. */
+  private useArms(dt: number, hands: readonly HandState[]): void {
+    const toward = this.foe ? this.foe.chestAt(new Vector3()) : null;
+    this.arms.update(
+      dt,
+      hands,
+      toward,
+      (h, shape, at) => {
+        // A drawing begun while the shape was forming is not wanted.
+        const ink = this.drawing[h];
+        if (ink) {
+          this.drawing[h] = null;
+          this.remove(ink);
+        }
+        const spec = ARMS[shape];
+        this.comic.pop(spec.name.toUpperCase(), at.setY(at.y + 0.09), hex(spec.color), 0.75, 1.1);
+        playWhoosh(0.35);
+        if (!this.armsTold.has(shape)) {
+          this.armsTold.add(shape);
+          this.flash(spec.held ? `${spec.name}! Hold it up: their ink stops on it` : shape === 'blade' ? `${spec.name}! Swing it fast to send a slash; it cuts their ink too` : `${spec.name}! Punch towards ${this.foe ? this.spec.name : 'them'} to throw it`, 2.2);
+        }
+      },
+      (shot) => this.fireArm(shot),
+    );
+  }
+
+  private readonly armsTold = new Set<string>();
+
+  /** You drew a sword (a star, a ball…): the ink turns to shadow and the weapon is in your hand. */
+  private drawnWeapon(ink: Ink, h: number, sketch: Sketch): void {
+    const SHAPE: Record<Sketch, ShadowShape> = { sword: 'blade', star: 'vee', triangle: 'point', circle: 'fist', zigzag: 'horns', spiral: 'shaka', box: 'palm' };
+    const shape = SHAPE[sketch];
+    const spec = ARMS[shape];
+    for (let i = 0; i < 18; i++) {
+      this.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.25);
+      this.sparks.emit(ink.pos, this.v, { life: 0.4, size: [0.01, 0.002], from: spec.color });
+    }
+    this.remove(ink);
+    this.arms.give(h, shape);
+    this.comic.pop(spec.name.toUpperCase(), this.v.copy(ink.pos).setY(ink.pos.y + 0.1), hex(spec.color), 0.85, 1.2);
+    sfx.armed();
+    this.flash(`You drew ${SKETCH_NAMES[sketch]}: it is your ${spec.name}! ${shape === 'blade' ? 'Swing it fast to send a slash' : shape === 'palm' ? 'It moves with your hand: hold it up against their ink' : 'Punch towards them to throw it'}`, 2.4);
+  }
+
+  /** A shadow weapon leaves your hand. */
+  private fireArm(shot: ArmShot): void {
+    const foe = this.foe;
+    if (!foe || this.mode !== 'fight') return;
+    const spec = ARMS[shot.shape];
+    const target = foe.chestAt(new Vector3());
+    const toFoe = new Vector3().subVectors(target, shot.from).normalize();
+    const launch = (from: Vector3, points: Vector3[], T: number, options: { curve?: number; spin?: number; power?: number; width?: number } = {}) => {
+      const ink = this.newInk(false, from);
+      ink.points = points;
+      ink.mass = 0.05;
+      ink.power = options.power ?? spec.power;
+      ink.weapon = spec.name;
+      ink.width = options.width ?? 0.008;
+      ink.mesh.material = shadowMaterial(spec.color);
+      this.rebuild(ink);
+      ink.vel.copy(target).sub(from).divideScalar(T);
+      ink.vel.y += 0.5 * GRAVITY * T;
+      if (options.curve) {
+        ink.accel = this.side.clone().multiplyScalar(options.curve);
+        ink.vel.addScaledVector(ink.accel, -0.5 * T);
+      }
+      ink.spin = options.spin ?? 0;
+      ink.state = 'flying';
+      return ink;
+    };
+    const ring = (r: number, n = 14) => Array.from({ length: n + 1 }, (_, i) => new Vector3(Math.cos((i / n) * Math.PI * 2) * r, Math.sin((i / n) * Math.PI * 2) * r, 0));
+    const star = (r: number) => Array.from({ length: 11 }, (_, i) => {
+      const a = (i / 10) * Math.PI * 2;
+      const k = i % 2 ? 0.45 : 1;
+      return new Vector3(Math.cos(a) * r * k, Math.sin(a) * r * k, 0);
+    });
+    const line = (dir: Vector3, length: number) => [dir.clone().multiplyScalar(-length / 2), new Vector3(), dir.clone().multiplyScalar(length / 2)];
+    const arc = (r: number, spread: number) => Array.from({ length: 9 }, (_, i) => {
+      const a = Math.PI / 2 + (i / 8 - 0.5) * spread;
+      return new Vector3(Math.cos(a) * r, Math.sin(a) * r - r * 0.6, 0);
+    });
+    switch (shot.shape) {
+      case 'fist':
+        launch(shot.from, [...ring(0.03), ...ring(0.018)], 0.5, { spin: 8, width: 0.01 });
+        playThrow();
+        break;
+      case 'blade': {
+        // A crescent of shadow, across the way the blade swung.
+        launch(shot.from, arc(0.07, 2.4), 0.38, { width: 0.009 });
+        playWhoosh(0.8);
+        break;
+      }
+      case 'point':
+        launch(shot.from, line(toFoe, 0.24), 0.28, { width: 0.007 });
+        playWhoosh(0.6);
+        break;
+      case 'vee':
+        launch(shot.from, star(0.028), 0.8, { curve: 3.4, spin: 22 });
+        launch(shot.from, star(0.028), 0.8, { curve: -3.4, spin: -22 });
+        playWhoosh(0.5);
+        break;
+      case 'three':
+        for (const s of [-1, 0, 1]) launch(shot.from.clone().addScaledVector(this.side, s * 0.05), arc(0.04, 1.6), 0.42 + Math.abs(s) * 0.05);
+        playWhoosh(0.7);
+        break;
+      case 'horns': {
+        // The bolt comes down on them from above.
+        const sky = target.clone();
+        sky.y += 0.75;
+        const zig = [new Vector3(0, 0.08, 0), new Vector3(0.02, 0.03, 0), new Vector3(-0.015, 0, 0), new Vector3(0.015, -0.04, 0), new Vector3(0, -0.08, 0)];
+        launch(sky, zig, 0.22, { width: 0.009 });
+        this.shock.position.copy(sky);
+        (this.shock.material as MeshBasicMaterial).color.setHex(spec.color);
+        this.shockTime = 0;
+        playBoom(0.08);
+        break;
+      }
+      case 'shaka': {
+        const side = Math.random() < 0.5 ? 1 : -1;
+        const v = [new Vector3(-0.04, -0.02, 0), new Vector3(0, 0.02, 0), new Vector3(0.04, -0.02, 0)];
+        launch(shot.from, v, 0.95, { curve: 6 * side, spin: 18 });
+        playWhoosh(0.6);
+        break;
+      }
+      case 'ell':
+        launch(shot.from, line(toFoe, 0.09), 0.2, { width: 0.012 });
+        sfx.shoot();
+        break;
+      case 'thumb': {
+        const t = [new Vector3(0, -0.05, 0), new Vector3(0, 0.03, 0), new Vector3(-0.035, 0.03, 0), new Vector3(0.035, 0.03, 0)];
+        launch(shot.from, t, 1.0, { spin: 9, width: 0.012 });
+        playThrow();
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
   /** A bolt of your super lands. */
   private superHit(foe: Rival3D, ink: Ink): 'hit' {
-    const damage = this.hurt(ink.power ?? 0, ink.pos, false);
+    const damage = this.hurt(ink.power ?? 0, ink.pos, ink.weapon !== undefined);
     if (damage > 0) {
-      foe.flinch(true);
-      this.splashAt(ink.pos, 0xffc928);
+      foe.flinch(ink.weapon === undefined || damage >= 14);
+      this.splashAt(ink.pos, ink.weapon ? 0xb88aff : 0xffc928);
+      if (ink.weapon) {
+        this.comic.pop(`${damage}`, this.v.copy(ink.pos).setY(ink.pos.y + 0.08), '#ffffff', 0.8, 0.9);
+        playBoom(0.05 + damage * 0.003);
+      }
       this.tally.hits++;
       if (this.rivalHealth <= 0) this.end(true);
     }

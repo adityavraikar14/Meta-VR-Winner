@@ -5,10 +5,12 @@
  */
 
 const DUEL_STEPS = [
-  'Pinch thumb and finger together and draw a shape in the air',
-  'Open your fingers: the drawing hangs there, solid ink',
-  'Pinch it again and throw it hard at them: faster hits harder',
-  'Leave drawings hanging in front of you: they block ink thrown at you',
+  'Draw: pinch and draw in the air. A line is ink to grab and throw; a closed shape comes alive',
+  'Draw a weapon and it is yours: a long blade = sword, star = twin stars, triangle = spear, circle = ball, zigzag = lightning, spiral = boomerang, box = shield',
+  'Shadow weapons: hold a hand shape for a moment and a weapon of shadow forms in that hand',
+  'Fist: ball · flat hand: sword · open palm: shield · one finger: spear · peace sign: twin stars',
+  'Three fingers: claw · horns: lightning · thumb and pinky: boomerang · L: fire bolt · thumbs-up: hammer',
+  'Punch towards them to throw it (swing the sword). A shield or sword held up stops their ink',
 ];
 
 export const HOW_TO: Record<string, string[]> = {

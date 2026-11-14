@@ -1,3 +1,5 @@
+import { AirSketch } from './air-sketch.js';
+import type { Sketch } from './sketch.js';
 import { Group, type Mesh, type MeshBasicMaterial, Quaternion, Vector3 } from '@iwsdk/core';
 import { type Anchor, Arsenal } from '../yash/arsenal.js';
 import {
@@ -49,6 +51,9 @@ const FIRE_RADIUS = 0.04;
 const BODY_SHARE = 0.5;
 /** A hand briefly lost keeps holding its item this long. */
 const KEEP_THROUGH_LOSS = 0.5;
+/** A drawing, as the Arsenal weapon it summons. */
+const DRAWN: Record<Sketch, Item> = { sword: 'sword', triangle: 'spear', circle: 'ball', zigzag: 'gun', spiral: 'shield', star: 'sling', box: 'wall' };
+
 /** The sign menu floats this far ahead of the eyes and below them. */
 const ICON_DISTANCE = 0.55;
 const ICON_DROP = 0.12;
@@ -61,6 +66,8 @@ export class ArsenalPlayer implements Foe {
   readonly arsenal: Arsenal;
   readonly recognizer = new GestureRecognizer();
   readonly hands: Record<Side, HandState> = { left: new HandState('left'), right: new HandState('right') };
+  /** Draw a weapon in the air (a sword, a ball, a box…) instead of signing for it. */
+  private readonly sketch: AirSketch;
   readonly center = new Vector3();
 
   private bursts: Bursts;
@@ -84,6 +91,7 @@ export class ArsenalPlayer implements Foe {
     parent.add(this.root);
     this.bursts = new Bursts(this.root);
     this.arsenal = new Arsenal(this.root, this.bursts, this, this.anchorOf);
+    this.sketch = new AirSketch(this.root, (sketch, side) => this.arsenal.summon(DRAWN[sketch], side, this.head, this.forward));
     this.ring = makeRing(0.07, 0x9fe8ff);
     this.ringMaterial = this.ring.material as MeshBasicMaterial;
     this.ring.visible = false;
@@ -135,6 +143,7 @@ export class ArsenalPlayer implements Foe {
     if (anyHand && this.target.fighting) {
       classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
       this.recognizer.update(dt, this.reading, this.events);
+      this.sketch.update(dt, this.hands, () => this.recognizer.phase === 'armed' || this.arsenal.held?.item === 'sling');
     }
     for (const event of this.events) {
       if (event.type === 'armed') {
