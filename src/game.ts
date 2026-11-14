@@ -67,6 +67,8 @@ import {
   normalizeMask,
 } from './matcher.js';
 import { IntroShow } from './intro.js';
+import { howTo } from './howto.js';
+import { petNow } from './creatures/mood.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
 import { currentRival } from './fight/rivals.js';
 import { PushButton } from './push-button.js';
@@ -81,7 +83,7 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, lanternPieces, refreshWorkshop, WORKSHOP_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
+import { DAILY_INDEX, DUEL, DUEL_INDEX, friendName, isSideGame, lanternPieces, refreshWorkshop, WORKSHOP_INDEX, PETS_INDEX, type Puzzle, PUZZLES, puzzleAt, WORLDS } from './world/puzzles.js';
 
 type Phase = 'table' | 'growing' | 'title' | 'intro' | 'story' | 'matching' | 'awakening' | 'solving' | 'oops' | 'cleared' | 'arena';
 type Problem =
@@ -151,6 +153,12 @@ const SKIP_BUTTON = new Vector3(0.42, 0.02, 0.6);
 /** During the opening film, Skip sits low and to the right, below the film screen. */
 const INTRO_SKIP = new Vector3(0.3, -0.11, 0.66);
 const SKIP_SIZE = 0.75;
+/** Hint sits below Skip, on the same side. */
+const HINT_BUTTON = new Vector3(0.42, -0.13, 0.6);
+/** How long the How to play card stays, and how long in a level before Hint is suggested. */
+const HINT_TIME = 12;
+const STUCK_AFTER = 40;
+const HOWTO_SEEN_KEY = 'shadowplay.howto.seen';
 /** Home sits above Skip, on the same side, in paper space (it follows the screen even in the Arena). */
 const HOME_AT = new Vector3(0.42, 0.17, 0.6);
 /** Seconds the Home button waits for its second push. */
@@ -266,6 +274,18 @@ export class ShadowGameSystem extends createSystem({
   private skipButton!: PushButton;
   private skipEntity!: Entity;
   private skipClick = false;
+  private hintButton!: PushButton;
+  private hintEntity!: Entity;
+  private hintClick = false;
+  private hintCanvas!: HTMLCanvasElement;
+  private hintTexture!: CanvasTexture;
+  private hintMaterial!: MeshBasicMaterial;
+  private hintCard!: Mesh;
+  /** Seconds the How to play card has left on screen. */
+  private hintLeft = 0;
+  /** Seconds in this level without being shown how: past STUCK_AFTER, the Hint button calls for attention. */
+  private stuckTime = 0;
+  private hintClock = 0;
   /** Always-there Home: in every level, side game and the Arena. Push twice to leave. */
   private homeButton!: PushButton;
   /** The painted meadow behind the title card (the levels bring their own). */
@@ -422,6 +442,22 @@ export class ShadowGameSystem extends createSystem({
     this.skipButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
     this.skipEntity = this.world.createTransformEntity(this.skipButton.root, { parent: stage.paperEntity! });
     this.skipEntity.addComponent(RayInteractable);
+    this.hintButton = new PushButton(paper, 'Hint');
+    this.hintButton.size = SKIP_SIZE;
+    this.hintButton.root.position.copy(HINT_BUTTON);
+    this.hintButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
+    this.hintEntity = this.world.createTransformEntity(this.hintButton.root, { parent: stage.paperEntity! });
+    this.hintEntity.addComponent(RayInteractable);
+    // The How to play card: over the screen and its props, so nothing hides the steps.
+    this.hintCanvas = makeCanvas(2048, 1024);
+    this.hintTexture = makeTexture(this.hintCanvas);
+    this.hintMaterial = new MeshBasicMaterial({ map: this.hintTexture, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
+    this.hintCard = new Mesh(new PlaneGeometry(0.9, 0.45), this.hintMaterial);
+    this.hintCard.name = 'HowToCard';
+    this.hintCard.position.set(0, 0.02, 0.1);
+    this.hintCard.renderOrder = 22;
+    this.hintCard.visible = false;
+    paper.add(this.hintCard);
     // Home lives in the room, not on the screen, so it is still there when the Arena hides the screen.
     this.homeButton = new PushButton(this.scene, 'Home');
     this.homeButton.size = 0.7;
@@ -430,6 +466,7 @@ export class ShadowGameSystem extends createSystem({
     this.queries.rayPressed.subscribe('qualify', (entity) => {
       if (entity === this.buttonEntity) this.rayClick = true;
       if (entity === this.skipEntity) this.skipClick = true;
+      if (entity === this.hintEntity) this.hintClick = true;
       if (entity === this.homeEntity) this.homeClick = true;
     });
     this.addDesktopPress();
@@ -495,6 +532,14 @@ export class ShadowGameSystem extends createSystem({
     devInfo.arena = () => ({ active: stage.arena, phase: this.phase });
     // Dev: F9 times each step of loading the dragon.
     devActions.f9 = () => void diagnoseDragon((line) => console.log(`SHADOWPLAY diag ${line}`));
+    // Dev: P opens Shadow Pets from the title.
+    devActions.p = () => {
+      if (this.phase === 'title') this.menuAction({ do: 'pets' });
+    };
+    devInfo.pet = () => (petNow.mood ? { kind: petNow.mood.kind, feeling: petNow.mood.feeling, trust: Number(petNow.mood.trust.toFixed(2)), fear: Number(petNow.mood.fear.toFixed(2)), last: petNow.mood.last } : null);
+    // Dev: H pushes Hint; devInfo.hint reports the card.
+    devActions.h = () => (this.hintClick = true);
+    devInfo.hint = () => ({ left: Number(this.hintLeft.toFixed(2)), opacity: Number(this.hintMaterial.opacity.toFixed(2)), shown: this.hintButton.visible, stuck: Math.round(this.stuckTime), phase: this.phase });
     // Dev: N jumps the opening film to its next scene.
     devActions.n = () => this.intro.skipScene();
     // Dev: I plays the opening film from the title, as the Story button does.
@@ -654,6 +699,7 @@ export class ShadowGameSystem extends createSystem({
       if (isSideGame(this.puzzleIndex)) this.showTitle();
       else this.skip();
     }
+    this.updateHint(dt);
     this.updateHome(dt);
     this.paintTitle();
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
@@ -874,6 +920,9 @@ export class ShadowGameSystem extends createSystem({
     } else if (action.do === 'workshop') {
       playAwaken();
       this.startPuzzle(WORKSHOP_INDEX);
+    } else if (action.do === 'pets') {
+      playAwaken();
+      this.startPuzzle(PETS_INDEX);
     } else if (action.do === 'daily') {
       playAwaken();
       this.startPuzzle(DAILY_INDEX);
@@ -905,7 +954,7 @@ export class ShadowGameSystem extends createSystem({
     const raycaster = new Raycaster();
     const ndc = new Vector2();
     const onPointer = (event: PointerEvent) => {
-      if (!this.playButton.visible && !this.skipButton.visible && !this.homeButton.visible && this.menu.roots.length === 0) return;
+      if (!this.playButton.visible && !this.skipButton.visible && !this.homeButton.visible && !this.hintButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
@@ -913,6 +962,7 @@ export class ShadowGameSystem extends createSystem({
       raycaster.setFromCamera(ndc, camera);
       if (this.playButton.visible && raycaster.intersectObject(this.playButton.root, true).length > 0) this.rayClick = true;
       if (this.skipButton.visible && raycaster.intersectObject(this.skipButton.root, true).length > 0) this.skipClick = true;
+      if (this.hintButton.visible && raycaster.intersectObject(this.hintButton.root, true).length > 0) this.hintClick = true;
       if (this.homeButton.visible && raycaster.intersectObject(this.homeButton.root, true).length > 0) this.homeClick = true;
       this.menu.roots.forEach((root, i) => {
         if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
@@ -965,6 +1015,8 @@ export class ShadowGameSystem extends createSystem({
     this.table.hide();
     this.menu.close();
     this.puzzleIndex = index;
+    petNow.mood = null;
+    this.petLine = '';
     if (index === WORKSHOP_INDEX) refreshWorkshop();
     this.puzzle = puzzleAt(index);
     // Side games (the duel, the Daily Light) never move the story's saved place.
@@ -1022,6 +1074,14 @@ export class ShadowGameSystem extends createSystem({
           : `Chapter ${puzzle.world + 1} · ${WORLDS[puzzle.world].goal}`;
       this.drawBanner(firstOfWorld || side ? kicker : WORLDS[puzzle.world].goal, puzzle.title, puzzle.story, `Your move: ${puzzle.ask}`);
       this.setCaption(puzzle.ask);
+    } else if (this.puzzleIndex === PETS_INDEX) {
+      this.drawBanner(
+        'Side game · Shadow Pets',
+        'Shadow Pets',
+        'Make an animal with your hand’s shadow and it comes alive. Stroke it, let it climb onto your palm, pick it up, toss it… It feels how you treat it, and tells you so.',
+        'Your move: make any animal’s shadow',
+      );
+      this.setCaption('Make any animal’s shadow with your hand');
     } else {
       this.drawBanner(
         'The ink is gone',
@@ -1043,7 +1103,7 @@ export class ShadowGameSystem extends createSystem({
    */
   private updateHome(dt: number): void {
     const paper = stage.paper;
-    const on = (this.puzzle !== null || stage.arena) && this.phase !== 'title' && this.phase !== 'intro' && !stage.menuOpen;
+    const on = (this.puzzle !== null || stage.arena || this.puzzleIndex === PETS_INDEX) && this.phase !== 'title' && this.phase !== 'intro' && !stage.menuOpen;
     this.homeButton.show(on && !!paper);
     if (paper) {
       HOME_AT.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
@@ -1071,13 +1131,144 @@ export class ShadowGameSystem extends createSystem({
     if (!stage.arena) this.setCaption('Push Home again to leave this level (your stars are kept)');
   }
 
+  /**
+   * Hint: a How to play card with the level's steps. It shows by itself the
+   * first time a level is played, comes up whenever Hint is pushed (push
+   * again to close it), and after a while stuck the caption points to it.
+   */
+  private updateHint(dt: number): void {
+    this.hintClock += dt;
+    const steps = this.puzzle ? howTo(this.puzzle.id) : this.puzzleIndex === PETS_INDEX ? howTo('pets') : null;
+    this.petCaption(dt);
+    const playing = steps !== null && (this.phase === 'matching' || this.phase === 'oops') && !stage.menuOpen && !stage.arena;
+    this.hintButton.show(playing);
+    const x = this.leftHanded ? HINT_BUTTON.x : -HINT_BUTTON.x;
+    if (this.hintButton.root.position.x !== x && stage.paper) {
+      this.hintButton.root.position.x = x;
+      this.hintButton.root.lookAt(stage.paper.localToWorld(VIEWER.clone()));
+    }
+    const pushed = this.hintButton.update(dt, this.liveTips, this.hintClick);
+    this.hintClick = false;
+    if (pushed && playing) {
+      playClick();
+      if (this.hintLeft > 0) this.hintLeft = 0;
+      else this.showHowTo(steps!);
+    }
+    if (!playing) this.hintLeft = 0;
+    this.hintLeft -= dt;
+    if (playing && this.hintLeft <= 0) {
+      this.stuckTime += dt;
+      if (this.stuckTime > STUCK_AFTER && this.stuckTime - dt <= STUCK_AFTER) this.setCaption('Stuck? Push the ? Hint button beside the screen to see how');
+    }
+    // A gentle pulse on the button once you have been at it a while.
+    const pulse = playing && this.stuckTime > STUCK_AFTER ? 1 + 0.08 * Math.sin(this.hintClock * 6) : 1;
+    this.hintButton.root.scale.setScalar(pulse);
+    const target = this.hintLeft > 0 ? 1 : 0;
+    this.hintMaterial.opacity += (target - this.hintMaterial.opacity) * Math.min(1, dt * 6);
+    this.hintCard.visible = this.hintMaterial.opacity > 0.01;
+  }
+
+  private petLine = '';
+  private petWait = 0;
+
+  /** Shadow Pets: the caption says how your pet feels, and why. */
+  private petCaption(dt: number): void {
+    if (this.puzzleIndex !== PETS_INDEX || this.phase !== 'matching' || stage.menuOpen) return;
+    const mood = petNow.mood;
+    this.petWait -= dt;
+    if (!mood || this.petWait > 0) return;
+    this.petWait = 0.4;
+    const name = mood.kind.charAt(0).toUpperCase() + mood.kind.slice(1);
+    const line = `${name}: ${mood.feeling}${mood.last ? ` · ${mood.last}` : ''}`;
+    if (line === this.petLine) return;
+    this.petLine = line;
+    this.setCaption(line);
+  }
+
+  /** The first time each level is played, its steps show without asking. */
+  private autoHowTo(): void {
+    const id = this.puzzle?.id ?? (this.puzzleIndex === PETS_INDEX ? 'pets' : undefined);
+    const steps = id ? howTo(id) : null;
+    if (!id || !steps) return;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(localStorage.getItem(HOWTO_SEEN_KEY) ?? '[]') as string[];
+    } catch {
+      seen = [];
+    }
+    if (seen.includes(id)) return;
+    this.showHowTo(steps);
+    try {
+      localStorage.setItem(HOWTO_SEEN_KEY, JSON.stringify([...seen, id]));
+    } catch {
+      // Shown again next time; no harm.
+    }
+  }
+
+  private showHowTo(steps: string[]): void {
+    this.hintLeft = HINT_TIME;
+    this.stuckTime = 0;
+    const { g, w, h } = layout(this.hintCanvas);
+    g.clearRect(0, 0, w, h);
+    g.save();
+    g.shadowColor = 'rgba(10, 20, 45, 0.4)';
+    g.shadowBlur = 20;
+    g.shadowOffsetY = 6;
+    g.fillStyle = 'rgba(20, 33, 61, 0.96)';
+    themeRoundRect(g, 14, 12, w - 28, h - 30, 36);
+    g.fill();
+    g.restore();
+    g.strokeStyle = UI.yellow;
+    g.lineWidth = 8;
+    themeRoundRect(g, 18, 16, w - 36, h - 38, 33);
+    g.stroke();
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    g.fillStyle = UI.yellow;
+    g.font = font(900, 26);
+    g.fillText('HOW TO PLAY', 54, 62);
+    g.fillStyle = UI.white;
+    g.font = font(800, 34);
+    g.fillText(this.puzzle?.title ?? (this.puzzleIndex === PETS_INDEX ? 'Shadow Pets' : ''), 260, 62, w - 330);
+    // The steps: a numbered circle and the words, as big as fits.
+    const top = 106;
+    const room = h - 60 - top;
+    const each = room / steps.length;
+    let px = 36;
+    for (; px > 20; px -= 1) {
+      g.font = font(700, px);
+      if (steps.every((step) => wrapLines(g, step, w - 190).length * px * 1.2 <= each - 8)) break;
+    }
+    steps.forEach((step, i) => {
+      const cy = top + each * i + each / 2;
+      g.fillStyle = UI.yellow;
+      g.beginPath();
+      g.arc(80, cy, 24, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = UI.navy;
+      g.font = font(900, 28);
+      g.textAlign = 'center';
+      g.fillText(String(i + 1), 80, cy + 1);
+      g.textAlign = 'left';
+      g.fillStyle = UI.white;
+      g.font = font(700, px);
+      const rows = wrapLines(g, step, w - 190);
+      rows.forEach((row, j) => g.fillText(row, 124, cy - ((rows.length - 1) * px * 1.2) / 2 + j * px * 1.2));
+    });
+    g.fillStyle = '#9fb3d9';
+    g.font = font(600, 22);
+    g.textAlign = 'center';
+    g.fillText('Push Hint again to close', w / 2, h - 40);
+    this.hintTexture.needsUpdate = true;
+  }
+
   /** Restart and Skip from the hand menu. */
   private handleCommand(): void {
     const command = stage.command;
-    if (command === 'drink' && this.puzzle?.id !== 'shadow-dragon') {
+    if (command === 'drink' && this.puzzle?.id !== 'shadow-dragon' && !stage.fight) {
       // Outside the dragon's fire there is nothing to heal.
       stage.command = null;
-      this.setCaption('You feel fine: save your draughts for the dragon');
+      this.setCaption('You feel fine: save your draughts for the fights');
       return;
     }
     if (command !== 'restart' && command !== 'skip' && command !== 'menu') return;
@@ -1105,6 +1296,8 @@ export class ShadowGameSystem extends createSystem({
 
   private beginMatching(): void {
     stage.cue = 'point';
+    this.stuckTime = 0;
+    this.autoHowTo();
     if (this.puzzle && !isSideGame(this.puzzleIndex)) stage.say = adaTip(this.puzzle.world, this.puzzleIndex);
     this.bannerShown = false;
     this.holdTime = 0;

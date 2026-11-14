@@ -29,6 +29,8 @@ import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { ParticlePool } from '../machines/particles.js';
 import { stage } from '../stage-state.js';
+import { useItem } from '../bag.js';
+import { play } from '../progress.js';
 import { Comic } from './comic.js';
 import { Doodle, type DoodleWorld, isClosedLoop } from './doodle.js';
 import { FlatRival } from './flat-rival.js';
@@ -191,7 +193,9 @@ export class InkDuel {
   private immune = 0;
   private ultimate = 0;
   /** Their ultimate's falling ink, still to come: when, and from where. */
-  private readonly rain: Array<{ delay: number; from: Vector3 }> = [];
+  private readonly rain: Array<{ delay: number; from: Vector3; kind?: Shot; flight?: number; curve?: number }> = [];
+  /** After a blink, the very next move is a throw from the new spot. */
+  private afterBlink = false;
   /** Your super meter (0–1), and the two-hand pull that fires it. */
   private superMeter = 0;
   private superReady = false;
@@ -345,6 +349,10 @@ export class InkDuel {
     devActions[';'] = () => this.devRival('throw');
     devActions["'"] = () => this.devDoodle();
     devActions['/'] = () => this.devRival('skill');
+    // Dev: \ makes the rival use their signature power now.
+    devActions['\\'] = () => {
+      if (this.foe && this.mode === 'fight') this.signature(this.foe);
+    };
     // Dev: . lands the winning blow, , takes your last heart.
     devActions['.'] = () => {
       this.rivalHealth = 0;
@@ -385,6 +393,23 @@ export class InkDuel {
     return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)}/${this.maxHealth} phase=${this.phase} super=${Math.round(this.superMeter * 100)}%${this.herb ? ' herb' : ''} inks=${this.inks.map((i) => i.state[0]).join('')} doodles=[${doodles}]`;
   }
 
+  /** A Healing Draught from the bag (Drink on the palm menu): one heart back. */
+  private drink(): void {
+    if (this.mode !== 'fight') return;
+    if (this.hearts >= PLAYER_HEARTS) {
+      this.flash('You are at full health: keep your draught', 1.6);
+      return;
+    }
+    if (!useItem('potion')) {
+      this.flash('No draughts left. Brew one in the Bag: 3 herbs', 2);
+      return;
+    }
+    this.hearts++;
+    playCollect(0.08);
+    this.comic.pop('+1 HEART', this.v.copy(this.head).add(this.w.set(0, -0.12, 0)), '#3ee08a', 0.9, 1.1);
+    this.flash('Gulp! One heart back', 1.4);
+  }
+
   // ================================================================ Update
 
   update(dt: number, hands: readonly HandState[], head: Vector3): void {
@@ -394,6 +419,10 @@ export class InkDuel {
     this.grace -= dt;
     this.headWorld.copy(head);
     this.group.worldToLocal(this.head.copy(head));
+    if (stage.command === 'drink') {
+      stage.command = null;
+      this.drink();
+    }
     if (!this.foe && !this.flat) {
       this.foe = Rival3D.create(this.spec);
       if (this.foe) this.place(this.foe);
@@ -1008,6 +1037,13 @@ export class InkDuel {
           // Still wiping the last one off: this one costs nothing.
           if (this.grace > 0 || this.god) continue;
           this.grace = GRACE;
+          // An Iron Ward from the bag takes the blow instead.
+          if (useItem('ward')) {
+            this.comic.pop('WARD!', this.v.copy(this.head).add(this.w.set(0, -0.1, 0)), '#b8c8e0', 0.9, 1);
+            sfx.block();
+            this.flash(`Your Iron Ward takes the blow${play.items.includes('ward') ? '' : ' (that was your last)'}`, 1.8);
+            continue;
+          }
           this.hearts--;
           this.mistakes++;
           this.flash(this.hearts > 1 ? 'Splat! Right in the face' : 'Splat! One heart left');
@@ -1112,9 +1148,12 @@ export class InkDuel {
     const energy = 0.5 * ink.mass * speed * speed;
     const base = Math.min(MAX_HIT, Math.max(5, energy * DAMAGE_PER_JOULE));
     if (ink.power) return this.superHit(foe, ink);
-    const damage = this.hurt(this.throughArmor(Math.round(base * (onHead ? HEAD_BONUS : 1)), ink.pos), ink.pos);
+    // A Sun Shard from the bag doubles a real throw.
+    const shard = base >= 8 && useItem('shard');
+    if (shard) this.comic.pop('SUN SHARD ×2', this.u.copy(ink.pos).setY(ink.pos.y + 0.16), '#ffc928', 0.9, 1.1);
+    const damage = this.hurt(this.throughArmor(Math.round(base * (onHead ? HEAD_BONUS : 1) * (shard ? 2 : 1)), ink.pos), ink.pos);
     this.count(energy, ink.mass, speed, onHead);
-    foe.flinch();
+    foe.flinch(damage >= 22 || onHead);
     this.splashAt(ink.pos, 0x4aa8ff);
     playBoom(0.06 + damage * 0.002);
     this.impact(foe, ink.pos, damage, onHead, 0x9fd8ff);
@@ -1274,7 +1313,7 @@ export class InkDuel {
       drop.delay -= dt;
       if (drop.delay > 0) continue;
       this.rain.splice(i, 1);
-      this.shoot(drop.from, 'arc', { flight: 0.95 + Math.random() * 0.35 });
+      this.shoot(drop.from, drop.kind ?? 'arc', { flight: drop.flight ?? 0.95 + Math.random() * 0.35, curve: drop.curve });
     }
   }
 
@@ -1344,7 +1383,7 @@ export class InkDuel {
   private superHit(foe: Rival3D, ink: Ink): 'hit' {
     const damage = this.hurt(ink.power ?? 0, ink.pos, false);
     if (damage > 0) {
-      foe.flinch();
+      foe.flinch(true);
       this.splashAt(ink.pos, 0xffc928);
       this.tally.hits++;
       if (this.rivalHealth <= 0) this.end(true);
@@ -1480,6 +1519,13 @@ export class InkDuel {
     this.ultimate -= dt;
     if (this.nextRival > 0 || foe.busy || this.immune > 0) return;
     const hurt = this.phase >= 2;
+    if (this.afterBlink) {
+      // Out of the ink, and straight into an attack from the new side.
+      this.afterBlink = false;
+      foe.play(this.spec.id === 'rook' ? 'skill' : 'throw');
+      this.nextRival = this.spec.pace[hurt ? 1 : 0] * (0.8 + Math.random() * 0.4);
+      return;
+    }
     const [fresh, pressed] = this.spec.pace;
     // Each phase is faster; no two waits are the same length.
     const pace = (hurt ? pressed : fresh) * (this.phase >= 3 ? 0.75 : 1) * (0.75 + Math.random() * 0.5);
@@ -1488,6 +1534,12 @@ export class InkDuel {
       this.ultimate = ULTIMATE_EVERY[this.phase >= 3 ? 1 : 0] * (0.85 + Math.random() * 0.3);
       this.castUltimate(foe);
       this.nextRival = 3.4;
+      return;
+    }
+    // Now and then, their signature power: more often as the fight goes on.
+    const signature = this.phase >= 3 ? 0.26 : this.phase >= 2 ? 0.19 : 0.11;
+    if (r > 1 - signature) {
+      this.signature(foe);
       return;
     }
     // Everyone moves: a walk to a new spot beside the screen, never in front of its middle.
@@ -1516,6 +1568,96 @@ export class InkDuel {
       foe.play('throw');
       this.nextRival = pace + Math.random();
     }
+  }
+
+  /**
+   * Each fighter's signature power, on top of their special ability:
+   *   Morwen   Ink Step: sinks into ink and rises on the far side, already throwing.
+   *   Thorne   Meteor Call: three heavy embers fall on you from above.
+   *   Vance    Deadeye: a moment's aim, then one very fast shot.
+   *   Kai      Shadow Dash, as Sable.
+   *   Rook     Smoke Bomb: vanishes in smoke and reappears with a fan of blades.
+   *   Vex      Spin Kick: three curveballs at once, bending in from both sides.
+   *   Mako     Tidal Wave: a low wall of five globs across the whole table.
+   *   Sable    Shadow Dash: blinks beside you and cuts twice, fast.
+   */
+  private signature(foe: Rival3D): void {
+    const chest = foe.chestAt(new Vector3());
+    switch (this.spec.id) {
+      case 'morwen':
+        this.blink(foe, 'INK STEP');
+        this.flash('She steps through the ink! Watch both sides', 1.8);
+        break;
+      case 'thorne': {
+        foe.play('skill');
+        for (let i = 0; i < 3; i++) {
+          const from = this.head.clone().addScaledVector(this.side, (i - 1) * 0.22);
+          from.y += 0.9;
+          from.addScaledVector(this.w.copy(this.paper.position).sub(this.head).setY(0).normalize(), 0.25);
+          this.rain.push({ delay: 0.9 + i * 0.45, from, kind: 'heavy', flight: 1.1 });
+        }
+        this.comic.pop('METEOR CALL', this.above(0.22), this.spec.accent, 1.2, 1.4);
+        this.flash('Embers are falling on you! Hang a drawing above your head', 2.2);
+        sfx.telegraph();
+        break;
+      }
+      case 'rook':
+        this.blink(foe, 'SMOKE BOMB');
+        this.flash('Smoke! He comes out of it throwing', 1.6);
+        break;
+      case 'vex':
+        foe.play('skill');
+        this.rain.push(
+          { delay: 0.35, from: chest.clone(), kind: 'curve', curve: 1, flight: 1.2 },
+          { delay: 0.35, from: chest.clone(), kind: 'curve', curve: -1, flight: 1.2 },
+          { delay: 0.6, from: chest.clone(), kind: 'bolt', flight: 0.9 },
+        );
+        this.comic.pop('SPIN KICK', this.above(0.18), this.spec.accent, 1.1, 1.2);
+        break;
+      case 'mako': {
+        foe.play('skill');
+        for (let i = 0; i < 5; i++) {
+          const from = chest.clone().addScaledVector(this.side, (i - 2) * 0.12);
+          from.y -= 0.08;
+          this.rain.push({ delay: 0.5 + Math.abs(i - 2) * 0.12, from, kind: 'arc', flight: 1.25 });
+        }
+        this.comic.pop('TIDAL WAVE', this.above(0.2), this.spec.accent, 1.3, 1.4);
+        this.flash('A wall of ink! Block it with a drawing, or lean aside', 2);
+        sfx.wallBreak();
+        break;
+      }
+      case 'vance':
+        // Deadeye: a moment's aim, then one shot faster than any other.
+        foe.play('taunt');
+        this.rain.push({ delay: 0.8, from: chest.clone(), kind: 'pellet', flight: 0.45 });
+        this.comic.pop('DEADEYE', this.above(0.2), this.spec.accent, 1.1, 1.2);
+        this.flash('He takes aim… dodge or block!', 1.4);
+        break;
+      case 'kai':
+      case 'sable':
+        this.blink(foe, 'SHADOW DASH', 0.24);
+        this.rain.push({ delay: 0.5, from: chest.clone(), kind: 'bolt', flight: 0.75 }, { delay: 0.75, from: chest.clone(), kind: 'bolt', flight: 0.75 });
+        break;
+      default:
+        foe.play('skill');
+    }
+    this.nextRival = 1.6 + Math.random() * 0.8;
+  }
+
+  /** Gone in a splash of ink, back in another on the far side (or `near` to the middle); then a throw. */
+  private blink(foe: Rival3D, name: string, near = 0): void {
+    const from = foe.chestAt(new Vector3());
+    this.splashAt(from, this.spec.glow);
+    const side = -Math.sign(this.offset || 1);
+    this.offset = side * (near > 0 ? Math.max(SIDE_NEAR, near) : SIDE_NEAR + Math.random() * (SIDE_FAR - SIDE_NEAR));
+    const spot = this.v.copy(this.rivalSpot).addScaledVector(this.side, this.offset);
+    spot.y = this.groundFast(spot);
+    foe.slide(spot, 0.05);
+    foe.root.position.copy(spot);
+    this.splashAt(foe.chestAt(this.w), this.spec.glow);
+    this.comic.pop(name, this.above(0.2), this.spec.accent, 1.1, 1.2);
+    playWhoosh(0.9);
+    this.afterBlink = true;
   }
 
   /** A walk (a run, when hurt) to a new spot on one side or the other. */
@@ -1587,8 +1729,12 @@ export class InkDuel {
       case 'vance':
         sfx.shoot();
         break;
+      case 'thorne':
+        playWhoosh(0.45);
+        break;
       case 'rook':
       case 'kai':
+      case 'sable':
         if (by === 'throw' && this.spec.id === 'rook') sfx.slice();
         else playThrow();
         break;

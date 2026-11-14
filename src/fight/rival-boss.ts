@@ -35,6 +35,8 @@ const SIZE: Record<string, { height: number; girth: number; hp: number }> = {
   vex: { height: 1.68, girth: 0.22, hp: 110 },
   mako: { height: 1.95, girth: 0.36, hp: 190 },
   kai: { height: 1.78, girth: 0.24, hp: 140 },
+  thorne: { height: 1.7, girth: 0.25, hp: 140 },
+  sable: { height: 1.72, girth: 0.22, hp: 135 },
   morwen: { height: 1.6, girth: 0.22, hp: 160 },
 };
 /** The arc they roam: this far either side of straight ahead, between these distances. */
@@ -224,7 +226,7 @@ export class RivalBoss implements Boss {
     }
     const wasEnraged = this.enraged;
     this.hp = Math.max(0, this.hp - amount);
-    model.flinch();
+    model.flinch(amount >= 3);
     this.bursts.spawn(at, 0xffffff, 0.3);
     sfx.hit();
     if (this.hp === 0) {

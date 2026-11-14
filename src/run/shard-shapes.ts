@@ -12,7 +12,7 @@ import type { Pt } from './run-levels.js';
  */
 
 /** Planks, wedges and blocks are ground; the star and ring are the Workshop's start and gate markers. */
-export type ShardKind = 'plank' | 'wedge' | 'block' | 'star' | 'ring';
+export type ShardKind = 'plank' | 'wedge' | 'block' | 'beam' | 'pillar' | 'disc' | 'bump' | 'star' | 'ring';
 
 export const THICKNESS = 0.012;
 
@@ -21,6 +21,11 @@ export const OUTLINES: Record<ShardKind, Pt[]> = {
   // A 22° wedge: steeper ones meet the floor in a corner that eats the spark's speed.
   wedge: [[-0.05, -0.02], [0.05, -0.02], [0.05, 0.02]],
   block: [[-0.025, -0.025], [0.025, -0.025], [0.025, 0.025], [-0.025, 0.025]],
+  // Workshop pieces: a long beam, a tall pillar, a round disc to roll off, a curved bump.
+  beam: [[-0.1, -0.007], [0.1, -0.007], [0.1, 0.007], [-0.1, 0.007]],
+  pillar: [[-0.009, -0.04], [0.009, -0.04], [0.009, 0.04], [-0.009, 0.04]],
+  disc: Array.from({ length: 14 }, (_, i): Pt => [Math.cos((i / 14) * Math.PI * 2) * 0.024, Math.sin((i / 14) * Math.PI * 2) * 0.024]),
+  bump: [[-0.045, -0.012], [0.045, -0.012], ...Array.from({ length: 9 }, (_, i): Pt => [Math.cos(((i + 1) / 10) * Math.PI) * 0.045, -0.012 + Math.sin(((i + 1) / 10) * Math.PI) * 0.03])],
   star: Array.from({ length: 10 }, (_, i): Pt => {
     const a = Math.PI / 2 + (i * Math.PI) / 5;
     const r = i % 2 ? 0.011 : 0.026;

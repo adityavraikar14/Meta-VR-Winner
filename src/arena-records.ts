@@ -18,7 +18,7 @@ export interface ArenaWin {
 }
 
 /** Bosses in the order the Arena offers them, for the Journal line. */
-const ORDER = ['sentinel', 'dragon', 'witch', 'morwen', 'vance', 'rook', 'vex', 'mako', 'kai'];
+const ORDER = ['sentinel', 'dragon', 'witch', 'morwen', 'rook', 'thorne', 'sable', 'vex', 'mako', 'vance', 'kai'];
 
 export function recordArenaWin(boss: string, title: string, seconds: number, blows: number): ArenaWin {
   // The Arsenal page (yash.html) never loaded the save; never overwrite it with an empty one.
@@ -28,7 +28,7 @@ export function recordArenaWin(boss: string, title: string, seconds: number, blo
   record.best = newBest ? seconds : record.best;
   record.wins++;
   play.arena[boss] = record;
-  const names: Record<string, string> = { sentinel: 'Sentinel', dragon: 'Dragon', witch: 'Morwen', morwen: 'Morwen', vance: 'Thorne', rook: 'Rook', vex: 'Vex', mako: 'Mako', kai: 'Sable' };
+  const names: Record<string, string> = { sentinel: 'Sentinel', dragon: 'Dragon', witch: 'Morwen', morwen: 'Morwen', thorne: 'Thorne', sable: 'Sable', vance: 'Vance', rook: 'Rook', vex: 'Vex', mako: 'Mako', kai: 'Kai' };
   const tally = ORDER.filter((b) => play.arena[b]).map((b) => `${names[b] ?? b} ×${play.arena[b].wins}`).join(' · ');
   const newPage = noteRun('arsenal', [
     `${title} beaten in ${Math.round(seconds)} s${newBest ? ', your best yet' : ` (best ${Math.round(record.best)} s)`}`,

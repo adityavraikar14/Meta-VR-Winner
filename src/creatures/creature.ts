@@ -15,6 +15,8 @@ import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
 import type { CreatureRig } from './rig.js';
 
+import { PetMood, petNow } from './mood.js';
+
 export type CreatureState =
   | 'emerging'
   | 'leaping'
@@ -173,11 +175,15 @@ export class Creature {
   private top = new Vector3();
   private center = new Vector3();
 
+  /** How it feels about you, from how you treat it. */
+  readonly feelings: PetMood;
+
   constructor(
     readonly rig: CreatureRig,
     private readonly fx: Effects,
     readonly scale = 1.25,
   ) {
+    this.feelings = new PetMood(rig.kind);
     rig.root.scale.setScalar(scale);
     const nudges = TEMPERAMENT[rig.kind] ?? {};
     for (const [trait, factor] of Object.entries(nudges)) {
@@ -314,6 +320,8 @@ export class Creature {
 
   update(dt: number, time: number, ground: Ground, hands: HandState[]): void {
     this.stateTime += dt;
+    this.feelings.tick(dt);
+    petNow.mood = this.feelings;
     const rig = this.rig;
     const s = this.scale;
     this.center.copy(this.position).addScaledVector(UP, rig.height * 0.35 * s);
@@ -378,6 +386,7 @@ export class Creature {
           // Let go: keep the hand's motion so it can be gently tossed.
           if (hand) this.velocity.copy(hand.pinchVelocity).clampLength(0, 3.5);
           else this.velocity.set(0, 0, 0);
+          this.feelings.released(this.velocity.length());
           this.setState('falling');
           break;
         }
@@ -426,6 +435,13 @@ export class Creature {
       this.react(dt, hands);
     }
     this.animate(dt, time);
+    // Frightened, it trembles.
+    const shake = this.feelings.tremble;
+    if (shake > 0) {
+      rig.root.position.x += (Math.random() - 0.5) * 0.005 * shake;
+      rig.root.position.z += (Math.random() - 0.5) * 0.005 * shake;
+    }
+    if (this.state === 'idle' && this.sinceAttention > 15) this.feelings.lonely();
   }
 
   // ---------------------------------------------------------------- Behaviour
@@ -936,8 +952,9 @@ export class Creature {
     }
     if (this.position.y <= ground.center.y && this.velocity.y < 0) {
       this.position.y = ground.center.y;
-      // A hard landing bounces once before it settles.
+      // A hard landing bounces once before it settles (and hurts).
       if (this.velocity.y < -1.5) {
+        this.feelings.landed(-this.velocity.y);
         this.velocity.y = -this.velocity.y * 0.3;
         this.velocity.x *= 0.5;
         this.velocity.z *= 0.5;
@@ -987,7 +1004,7 @@ export class Creature {
         this.hand = i;
         this.happiness = Math.max(this.happiness, 0.3);
         this.noticed();
-        playGiggle();
+        this.feelings.lifted();
         this.setState('held');
         return;
       }
@@ -1004,10 +1021,10 @@ export class Creature {
           // Shy snail: tuck into the shell for a moment.
           this.hideFor = 2.5;
           playSqueak();
-        } else if (this.rig.extras?.mouth && Math.random() < 0.6) {
+        } else if (this.rig.extras?.mouth && Math.random() < 0.3) {
           this.sneeze();
         } else {
-          this.voice();
+          this.feelings.poke();
         }
       }
       this.wasTouching[i] = touching;
@@ -1047,13 +1064,15 @@ export class Creature {
           this.noticed();
           this.tmp.copy(hand.palm).addScaledVector(hand.palmNormal, 0.012);
           this.leap(this.tmp, 0.45, 0.06, 'onPalm');
-          this.voice();
+          this.feelings.onPalm();
           return;
         }
       }
     }
 
     this.petting = pettingNow;
+    if (pettingNow) this.feelings.stroke(dt);
+    else this.feelings.strokeEnd();
     if (pettingNow) {
       this.noticed();
       this.happiness = Math.min(1, this.happiness + dt * 0.8);

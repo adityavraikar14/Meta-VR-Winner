@@ -79,6 +79,6 @@ gears, ratchet, rope, bucket, well and gauge) is made in code for this project.
 ## Characters
 
 - **Vex, the Acrobat** (`public/gltf/ada.glb`): "Animated Woman" by Quaternius, CC0 1.0 (public domain), via poly.pizza (https://poly.pizza/m/qJ2gsTUBHL).
-- **Captain Rook and Mako** (`public/gltf/rival-rook.glb`, `rival-mako.glb`): animated characters by Quaternius, CC0 1.0 (public domain), downloaded from Poly Pizza (https://poly.pizza/u/Quaternius).
+- **Captain Rook, Mako, Sgt. Vance and Kai** (`public/gltf/rival-rook.glb`, `rival-mako.glb`, `rival-vance.glb`, `rival-kai.glb`): animated characters by Quaternius, CC0 1.0 (public domain), downloaded from Poly Pizza (https://poly.pizza/u/Quaternius).
 - **Sable, the Hooded Blade** (`public/gltf/rival-sable.glb`): "Hooded Adventurer" by Quaternius, CC0 1.0 (public domain), via Poly Pizza (https://poly.pizza/m/y9KWOVG21R).
 - **Thorne, the Ember Mage** (`public/gltf/rival-thorne.glb`): "Animated Wizard" by Quaternius, licensed CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/), via Poly Pizza (https://poly.pizza/m/kttbFvCl2C).

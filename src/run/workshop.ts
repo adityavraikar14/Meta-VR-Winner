@@ -28,7 +28,24 @@ const DEFAULT: ShardSpec[] = [
   { kind: 'block', at: [0.2, -0.2, 0.62] },
 ];
 
-const KINDS: ShardKind[] = ['plank', 'wedge', 'block', 'star', 'ring'];
+const KINDS: ShardKind[] = ['plank', 'wedge', 'block', 'beam', 'pillar', 'disc', 'bump', 'star', 'ring'];
+
+/** What Add brings out, in turn, and the most pieces a design may have. */
+export const ADD_ORDER: Array<{ kind: ShardKind; name: string }> = [
+  { kind: 'plank', name: 'Plank' },
+  { kind: 'beam', name: 'Beam' },
+  { kind: 'wedge', name: 'Wedge' },
+  { kind: 'block', name: 'Block' },
+  { kind: 'pillar', name: 'Pillar' },
+  { kind: 'disc', name: 'Disc' },
+  { kind: 'bump', name: 'Bump' },
+];
+export const MAX_PIECES = 20;
+
+/** Where a new piece appears: on the shelf at chest height, a little further along each time. */
+export function shelfSpot(kind: ShardKind, n: number): ShardSpec {
+  return { kind, at: [-0.18 + (n % 5) * 0.09, -0.08 - Math.floor(n / 5) * 0.045, 0.64], angle: 0 };
+}
 
 /** The lantern in paper space (stage.ts: 12 cm below the paper's centre line minus 22 cm, 1.1 m out). */
 const LANTERN: Lantern = [0, -0.1, 1.1];
@@ -89,7 +106,10 @@ function load(slot = currentSlot()): ShardSpec[] {
     const shards = saved?.shards;
     if (
       Array.isArray(shards) &&
-      shards.length === DEFAULT.length &&
+      shards.length >= 2 &&
+      shards.length <= MAX_PIECES &&
+      shards.some((s) => s.kind === 'star') &&
+      shards.some((s) => s.kind === 'ring') &&
       shards.every((s) => KINDS.includes(s.kind) && Array.isArray(s.at) && s.at.length === 3 && s.at.every(Number.isFinite))
     ) {
       return shards;
@@ -126,7 +146,7 @@ export function workshopLevel(): RunLevel {
     title: 'The Workshop',
     story: 'Build your own course. The star’s shadow is where the spark drops, the ring’s shadow is the gate, and the glass is the ground.',
     ask: 'Pinch the glass into the light to build a path from the star to the ring, then push Drop',
-    hint: 'Bring a piece toward your face to make its shadow bigger; roll your wrist to tilt it',
+    hint: 'Push Add for more pieces (planks, beams, wedges, pillars, discs, bumps); Undo takes the newest away',
     terrain: [],
     start: [-0.4, 0.25],
     gate: [0.35, 0.0],

@@ -27,7 +27,7 @@ import { ShardSet } from './shards.js';
 import { cloudTexture, hashString, sceneryTexture } from './scenery.js';
 import { Comic } from '../fight/comic.js';
 import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
-import { currentSlot, DEMO, nextSlot, resetWorkshop, saveWorkshop } from './workshop.js';
+import { ADD_ORDER, currentSlot, DEMO, MAX_PIECES, nextSlot, resetWorkshop, saveWorkshop, shelfSpot } from './workshop.js';
 import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
 
 /**
@@ -67,6 +67,9 @@ const VIEWER = new Vector3(0, 0.12, 1.0);
 const DROP_AT = new Vector3(0.42, -0.02, 0.6);
 const RESET_AT = new Vector3(0.42, -0.15, 0.6);
 const SLOT_AT = new Vector3(0.42, 0.11, 0.6);
+/** The Workshop's Add and Undo: either end of the shelf of pieces, within easy reach. */
+const ADD_AT = new Vector3(-0.29, -0.2, 0.64);
+const UNDO_AT = new Vector3(0.29, -0.2, 0.64);
 
 /** A marker's shadow counts only where it is on the visible part of the screen. */
 function onScreen([x, y]: [number, number]): boolean {
@@ -459,6 +462,10 @@ export class ShadowRun {
   private reset: PushButton | null = null;
   /** Workshop: switches between the three saved designs. */
   private slot: PushButton | null = null;
+  private add: PushButton | null = null;
+  private undo: PushButton | null = null;
+  private addIndex = 0;
+  private devAdd = false;
   private lastTime = 0;
   private time = 0;
   private bestScale = 0;
@@ -609,6 +616,14 @@ export class ShadowRun {
       this.slot.setColor(0x7b5cff);
       this.slot.size = 0.6;
       this.slot.root.position.copy(SLOT_AT);
+      this.add = new PushButton(this.paper, `+ ${ADD_ORDER[0].name}`);
+      this.add.setColor(0x1fb35a);
+      this.add.size = 0.6;
+      this.add.root.position.copy(ADD_AT);
+      this.undo = new PushButton(this.paper, 'Undo');
+      this.undo.setColor(0xff8a1f);
+      this.undo.size = 0.6;
+      this.undo.root.position.copy(UNDO_AT);
     }
 
     this.buildReadout();
@@ -620,6 +635,8 @@ export class ShadowRun {
       else this.devShadow = !this.devShadow;
     };
     devActions['['] = () => this.release();
+    // Dev: J pushes the Workshop's Add.
+    devActions.j = () => (this.devAdd = true);
     this.place();
   }
 
@@ -674,6 +691,31 @@ export class ShadowRun {
         this.slot.setText(`Slot ${slot}`);
         stage.say = `Design ${slot} of 3. Each one is saved when you push Drop.`;
         this.lastTime = 0;
+      }
+    }
+    if (this.add && this.undo && this.shards) {
+      const shards = this.shards;
+      const ready = this.sim.state === 'ready' && stage.playing;
+      this.add.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
+      this.undo.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
+      this.add.show(ready);
+      this.undo.show(ready);
+      if (this.add.update(dt, this.tips, this.devAdd)) {
+        this.devAdd = false;
+        playClick();
+        if (shards.shards.length >= MAX_PIECES) {
+          stage.say = `That is ${MAX_PIECES} pieces: push Undo to take one away first.`;
+        } else {
+          const next = ADD_ORDER[this.addIndex % ADD_ORDER.length];
+          shards.add(shelfSpot(next.kind, shards.shards.length));
+          stage.say = `A new ${next.name.toLowerCase()} on the shelf: pinch it and hold it in the light.`;
+          this.addIndex++;
+          this.add.setText(`+ ${ADD_ORDER[this.addIndex % ADD_ORDER.length].name}`);
+        }
+      }
+      if (this.undo.update(dt, this.tips, false)) {
+        playClick();
+        if (!shards.removeLast()) stage.say = 'Nothing left to take away.';
       }
     }
     if (this.reset && this.shards) {

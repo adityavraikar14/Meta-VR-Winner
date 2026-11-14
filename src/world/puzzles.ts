@@ -879,7 +879,7 @@ const fightRook = storyFight({
 
 const fightVance = storyFight({
   id: 'fight-vance',
-  rival: 'vance',
+  rival: 'thorne',
   world: 2,
   title: 'Thorne the Ember Mage',
   story: 'The mine is open, and Thorne the Ember Mage waits by the furnace, his staff ablaze. Keep a drawing hanging in front of you: it takes his embers for you.',
@@ -888,7 +888,7 @@ const fightVance = storyFight({
 
 const fightKai = storyFight({
   id: 'fight-kai',
-  rival: 'kai',
+  rival: 'sable',
   world: 3,
   title: 'Sable the Hooded Blade',
   story: 'At the top of the pass Sable draws her blade. She can cut your ink straight back at you: throw while she is attacking, or two at once.',
@@ -960,6 +960,9 @@ export function refreshWorkshop(): void {
 }
 
 /** Side games (the duel, the Daily Light, the Workshop) sit outside the story and never move its saved place. */
+/** Shadow Pets: free play with one shadow animal at a time, to stroke, hold, toss and play with. */
+export const PETS_INDEX = 1003;
+
 export function isSideGame(index: number): boolean {
   return index >= DUEL_INDEX;
 }

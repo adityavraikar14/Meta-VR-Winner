@@ -189,13 +189,7 @@ export class ShardSet {
     specs: readonly ShardSpec[],
     private parent: Group,
   ) {
-    this.shards = specs.map((spec) => {
-      const shard = new Shard(spec.kind, parent);
-      shard.position.set(spec.at[0], spec.at[1], spec.at[2]);
-      shard.angle = ((spec.angle ?? 0) * Math.PI) / 180;
-      shard.place();
-      return shard;
-    });
+    this.shards = specs.map((spec) => this.make(spec));
     parent.add(this.label.sprite);
     for (let h = 0; h < 2; h++) {
       const material = new MeshBasicMaterial({ color: CURSOR_IDLE, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false, side: DoubleSide });
@@ -207,8 +201,47 @@ export class ShardSet {
     }
   }
 
-  /** Puts every piece back where `specs` say (by index), e.g. the Workshop's default layout. */
+  private make(spec: ShardSpec): Shard {
+    const shard = new Shard(spec.kind, this.parent);
+    shard.position.set(spec.at[0], spec.at[1], spec.at[2]);
+    shard.angle = ((spec.angle ?? 0) * Math.PI) / 180;
+    shard.place();
+    return shard;
+  }
+
+  /** A new piece (the Workshop's Add). */
+  add(spec: ShardSpec): Shard {
+    const shard = this.make(spec);
+    this.shards.push(shard);
+    return shard;
+  }
+
+  /** Takes away the newest piece that is not held and not a marker; false if there is none. */
+  removeLast(): boolean {
+    for (let i = this.shards.length - 1; i >= 0; i--) {
+      const shard = this.shards[i];
+      if (shard.held >= 0 || isMarker(shard.kind)) continue;
+      this.drop(i);
+      return true;
+    }
+    return false;
+  }
+
+  private drop(i: number): void {
+    const [shard] = this.shards.splice(i, 1);
+    shard.mesh.removeFromParent();
+    shard.mesh.geometry.dispose();
+    shard.material.dispose();
+  }
+
+  /** Puts every piece back where `specs` say (by index), e.g. the Workshop's default layout; a different set of pieces is rebuilt. */
   restore(specs: readonly ShardSpec[]): void {
+    const same = specs.length === this.shards.length && specs.every((spec, i) => spec.kind === this.shards[i].kind);
+    if (!same && this.shards.every((s) => s.held < 0)) {
+      while (this.shards.length) this.drop(this.shards.length - 1);
+      for (const spec of specs) this.shards.push(this.make(spec));
+      return;
+    }
     specs.forEach((spec, i) => {
       const shard = this.shards[i];
       if (!shard || shard.held >= 0) return;

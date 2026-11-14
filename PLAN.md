@@ -39,6 +39,19 @@ Found on the Quest 2:
 - [ ] Recorded narration (Piper, a male voice to match "old storyteller": check the voice's licence first) once installing it is allowed; drop the files in public/audio/voice/ and list them in RECORDED (src/narrator.ts)
 - [ ] Test the pets, the slingshot, the sword (the flat-hand pose, block reach, parry speed) and the captain fights with real hands on the Quest
 
+### 0.3 Nov 14 brief (Aditya, from Quest screenshots)
+- [x] Text too small: cards, journal, bag, captions and the How-to card drawn at 2× resolution with larger type; the caption wraps to two big lines (ui-theme layout())
+- [x] Intro shown wide: a 1.56 m film screen over the stage, title card, backlit-paper scenes with a slow push-in, the Lantern shattering, a road map past each captain, large subtitles inside the picture
+- [x] Journal readable: larger science text that fills the right page; bigger trophy shelf text
+- [x] Bag understandable: Gather > Mix > Use steps, recipe cards that say READY or exactly what is missing; draughts (palm menu Drink), wards and sun shards now work in the captain fights and the Ink Duel
+- [x] Workshop: + button adds pieces (plank, beam, wedge, block, pillar, disc, bump; up to 20), Undo removes the newest; designs of any size are saved
+- [x] How to play in every level: a Hint (?) button beside Skip opens a numbered How to play card (src/howto.ts, all 26 levels and the side games); it shows by itself the first time; after 40 s the button pulses and the caption points to it
+- [x] Pain voices: every fighter cries out in their own synthesized voice (src/voices.ts) when hit, louder for big hits, shouts on attacks, a long cry when beaten
+- [x] Unpredictable fights: each fighter has a signature power on top of their ability (Ink Step, Meteor Call, Smoke Bomb, Spin Kick, Tidal Wave, Shadow Dash, Deadeye), used more often in later phases
+- [x] Captains that fit the theme: Thorne the Ember Mage (mine) and Sable the Hooded Blade (pass) replace Vance and Kai in the story; Vance and Kai stay in the side-game roster (8 rivals, Prev/Next/Fight/Random)
+- [x] Shadow Pets side game: make any animal's shadow and play with it; it feels how you treat it (PetMood: trust, fear, cross) and answers in its own voice (src/pet-voices.ts): stroked it purrs, tossed gently it plays, thrown hard it yelps and trembles, poked too much it growls; the caption says how it feels and why
+- [ ] On Quest: listen to the fighters' and pets' voices and tune pitch and loudness by ear
+
 ---
 
 ## 1. What the competition actually wants (research, Nov 11)

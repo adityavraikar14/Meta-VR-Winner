@@ -44,7 +44,7 @@ const LABEL_COLORS: Record<string, number> = {
   daily: BUTTON.orange, workshop: BUTTON.blue, duel: BUTTON.purple, arena: BUTTON.red, trophies: BUTTON.orange,
   mute: BUTTON.blue, 'sound on': BUTTON.blue, table: BUTTON.blue, sky: BUTTON.blue, 'room view': BUTTON.blue, around: BUTTON.blue, ink: BUTTON.purple, random: BUTTON.orange, 'new game': BUTTON.navy,
   relaxed: BUTTON.teal, 'full speed': BUTTON.teal, credits: BUTTON.blue, recenter: BUTTON.blue,
-  home: BUTTON.navy, 'leave?': BUTTON.red,
+  home: BUTTON.navy, 'leave?': BUTTON.red, hint: BUTTON.yellow, pets: BUTTON.teal,
 };
 
 export function labelColor(label: string): number {

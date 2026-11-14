@@ -21,6 +21,7 @@ import { playAnimalCall, playHoof, playHorseCall, playNicker, playSnort, playWho
 import type { Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
+import { PetMood, petNow } from './mood.js';
 
 /**
  * A rigged, animated animal friend loaded from glTF (Quaternius, CC0).
@@ -216,6 +217,9 @@ export class Beast {
   private quat = new Quaternion();
   private quat2 = new Quaternion();
 
+  /** How it feels about you, from how you treat it. */
+  readonly feelings = new PetMood('fox');
+
   constructor(
     readonly kind: string,
     private readonly spec: BeastSpec,
@@ -366,6 +370,9 @@ export class Beast {
 
   update(dt: number, time: number, ground: BeastGround, hands: HandState[]): void {
     this.stateTime += dt;
+    this.feelings.kind = this.kind;
+    this.feelings.tick(dt);
+    petNow.mood = this.feelings;
     if (this.oneShot > 0) {
       this.oneShot -= dt;
       // The one-shot is over: settle back into the current mood's loop.
@@ -416,6 +423,12 @@ export class Beast {
     this.mixer.update(dt);
     this.place();
     this.aimHead(dt, time, ground.viewer);
+    // Frightened, it trembles.
+    const shake = this.feelings.tremble;
+    if (shake > 0) {
+      this.root.position.x += (Math.random() - 0.5) * 0.004 * shake;
+      this.root.position.z += (Math.random() - 0.5) * 0.004 * shake;
+    }
   }
 
   // ------------------------------------------------------------ Free life
@@ -555,12 +568,10 @@ export class Beast {
     this.petting = this.strokeTime > 0.35;
     if (this.petting) {
       this.happiness = Math.min(1, this.happiness + dt * 0.4);
-      if (!wasPetting && this.oneShot <= 0) {
-        this.setMood('rest', 4);
-        this.call(0.6);
-      }
+      this.feelings.stroke(dt);
+      if (!wasPetting && this.oneShot <= 0) this.setMood('rest', 4);
       this.moodTime = 0;
-    }
+    } else if (wasPetting) this.feelings.strokeEnd();
 
     // Hover: a hand close by but not touching, and fairly still.
     const handNear = nearest < 0.25 && nearest > radius;
@@ -580,7 +591,7 @@ export class Beast {
     this.strokeTime = 0;
     this.petting = false;
     this.play('Gallop', true, 0.15, 0.55);
-    this.call(0.9);
+    this.feelings.lifted();
     this.happiness = Math.min(1, this.happiness + 0.2);
   }
 
@@ -595,10 +606,8 @@ export class Beast {
       this.holder = -1;
       this.setState('thrown');
       this.play('Idle_HitReact_Right', true, 0.1, 0.7);
-      if (speed > 1.2) {
-        playWhoosh(Math.min(1, speed / 4));
-        this.call(1.1);
-      }
+      if (speed > 1.2) playWhoosh(Math.min(1, speed / 4));
+      this.feelings.released(speed);
       return;
     }
     // Hanging below the pinch, swinging with the hand.
@@ -621,6 +630,7 @@ export class Beast {
     if (this.position.y > surface && this.stateTime < 6) return;
     this.position.y = surface;
     const impact = -this.flight.y;
+    if (this.bounces === 0) this.feelings.landed(impact);
     if (impact > 1 && this.bounces < 2) {
       // A bounce: a thump, a puff of dust.
       this.bounces++;
@@ -638,7 +648,7 @@ export class Beast {
     this.flight.set(0, 0, 0);
     playHoof(0.06);
     this.fx.burst(this.position, 6, 0.12);
-    this.call(0.8);
+    if (this.feelings.fear < 0.3) this.call(0.6);
     if (surface === ground.center.y) {
       this.setState('idle');
       this.playOnce(Math.random() < 0.5 ? 'Idle_HitReact_Left' : 'Idle_HitReact_Right');
@@ -658,6 +668,7 @@ export class Beast {
   }
 
   private poked(at: Vector3, forward: Vector3): void {
+    this.feelings.poke();
     const now = performance.now() / 1000;
     this.pokes = this.pokes.filter((t) => now - t < PATIENCE_TIME);
     this.pokes.push(now);

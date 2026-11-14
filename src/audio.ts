@@ -26,6 +26,11 @@ export function setMuted(value: boolean): void {
   }
 }
 
+/** The shared audio context (null when muted or unavailable), for other sound makers. */
+export function audioContext(): AudioContext | null {
+  return audio();
+}
+
 function audio(): AudioContext | null {
   if (muted) return null;
   if (context === null) {

@@ -23,6 +23,7 @@ import {
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { RivalMove, RivalSpec } from './rivals.js';
+import { cry } from '../voices.js';
 
 /**
  * A duel rival in 3D: any of the roster's rigged, animated models. They walk
@@ -267,6 +268,17 @@ export class Rival3D {
     next.fadeIn(0.15).play();
     if (prev && prev !== next) prev.fadeOut(0.15);
     this.move = move;
+    this.voice(move);
+  }
+
+  /** Their own voice: a shout as they strike (now and then), a cry as they fall. Morwen laughs instead of shouting. */
+  private voice(move: RivalMove): void {
+    const id = this.spec.id;
+    if (move === 'death') cry(id, 'fall');
+    else if (id === 'morwen') return;
+    else if (move === 'skill' && Math.random() < 0.7) cry(id, 'shout', 1.1);
+    else if ((move === 'throw' || move === 'attack') && Math.random() < 0.35) cry(id, 'shout');
+    else if (move === 'taunt') cry(id, 'taunt');
   }
 
   /** Roll (or step) to a new spot over `seconds`, in the parent's space. */
@@ -368,8 +380,10 @@ export class Rival3D {
     return WARD_RADIUS;
   }
 
-  flinch(): void {
+  /** Struck: they flinch and cry out, louder and longer for a big blow. */
+  flinch(big = false): void {
     this.hurt = 0.6;
+    cry(this.spec.id, big ? 'big' : 'hurt');
     // A clear reaction if they were only standing there.
     if (!this.busy && this.has('hit')) this.play('hit');
   }

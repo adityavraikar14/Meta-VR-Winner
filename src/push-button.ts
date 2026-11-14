@@ -633,8 +633,33 @@ const leave: Icon = (g) => {
   g.stroke();
 };
 
+/** A paw print: pets. */
+const paw: Icon = (g) => {
+  g.beginPath();
+  g.ellipse(0, 9, 13, 11, 0, 0, Math.PI * 2);
+  g.fill();
+  for (const [x, y] of [[-16, -6], [-6, -16], [6, -16], [16, -6]]) {
+    g.beginPath();
+    g.ellipse(x, y, 5, 6.5, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+};
+
+/** A question mark: hint. */
+const question: Icon = (g) => {
+  g.beginPath();
+  g.arc(0, -10, 13, Math.PI * 1.05, Math.PI * 2.35);
+  g.quadraticCurveTo(0, 2, 0, 9);
+  g.stroke();
+  g.beginPath();
+  g.arc(0, 21, 3.5, 0, Math.PI * 2);
+  g.fill();
+};
+
 const ICONS: Partial<Record<string, Icon>> = {
   home: house,
+  hint: question,
+  pets: paw,
   'leave?': leave,
   play,
   continue: play,

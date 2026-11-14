@@ -19,7 +19,7 @@ import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'arena'; boss?: string };
+export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'arena'; boss?: string };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -314,13 +314,14 @@ export class MainMenu {
     this.draw(
       'Side games',
       'Side games',
-      `Daily Light: a new course every day.  ·  Workshop: build your own course.  ·  Duel: draw in the air and fight one of ${RIVALS.length} rivals on the table.  ·  Arena: ${ARENA.length} bosses, life-size, seven hand-sign weapons.`,
+      `Pets: bring a shadow animal to life and play with it.  ·  Daily Light: a new course every day.  ·  Workshop: build your own course.  ·  Duel: draw in the air and fight one of ${RIVALS.length} rivals on the table.  ·  Arena: ${ARENA.length} bosses, life-size, seven hand-sign weapons.`,
       `Bring draughts, wards and sun shards from your bag${streak}`,
     );
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },
       { label: 'Daily', run: () => ({ do: 'daily' }) },
       { label: 'Workshop', run: () => ({ do: 'workshop' }) },
+      { label: 'Pets', run: () => ({ do: 'pets' }) },
       { label: 'Duel', run: () => this.roster('duel') },
       { label: 'Arena', run: () => this.roster('arena') },
     ];
@@ -481,6 +482,8 @@ const ARENA_STYLE: Record<string, string> = {
   rook: 'Stalks around you and throws a fan of three knives of ink that land one after another. Ducks under anything aimed high.',
   vex: 'Never where you last aimed: she tumbles across the room, throws two lobs at once and is gone again.',
   mako: 'Huge and slow. The sword and the blaster bounce off his hide: use the spear, the power ball or the slingshot. He charges in and slams the ground.',
+  thorne: 'An old fire mage who keeps his distance, flinging embers from his staff and then a volley of three. Rolls aside when he sees something coming.',
+  sable: 'A hooded swordswoman who circles you. Hit her while her blade is up and your blow comes straight back. Strike when she attacks.',
   kai: 'A swordsman who circles you. Hit him while his blade is up and your blow comes straight back. Strike when he attacks.',
 };
 
@@ -494,7 +497,7 @@ const ARENA: Array<{ id: string; name: string; title: string; style: string }> =
 /** Who made what (full list with links in CREDITS.md). */
 const CREDITS: Array<[string, string]> = [
   ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
-  ['The Duel Rivals', 'Captain Rook, Vex, Mako and Sable: animated characters by Quaternius (CC0); Thorne: Animated Wizard by Quaternius (CC-BY); via Poly Pizza'],
+  ['The Duel Rivals', 'Captain Rook, Vex, Mako, Sable, Sgt. Vance and Kai: animated characters by Quaternius (CC0); Thorne: Animated Wizard by Quaternius (CC-BY); via Poly Pizza'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
   ['Animal sounds', 'Horse neigh: Hü, Wikimedia Commons (public domain) · Horse whinny: Briefer, Maigrot, Mandel, Freymond, Bachmann & Hillmann 2015, Scientific Reports (CC BY 4.0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
