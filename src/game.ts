@@ -544,6 +544,8 @@ export class ShadowGameSystem extends createSystem({
     devInfo.pet = () => (petNow.mood ? { kind: petNow.mood.kind, feeling: petNow.mood.feeling, trust: Number(petNow.mood.trust.toFixed(2)), fear: Number(petNow.mood.fear.toFixed(2)), last: petNow.mood.last } : null);
     // Dev: H pushes Hint; devInfo.hint reports the card.
     devActions.h = () => (this.hintClick = true);
+    // Dev: Tab starts the Quick Tour from anywhere.
+    devActions.tab = () => this.beginTour();
     devInfo.hint = () => ({ left: Number(this.hintLeft.toFixed(2)), opacity: Number(this.hintMaterial.opacity.toFixed(2)), shown: this.hintButton.visible, stuck: Math.round(this.stuckTime), phase: this.phase });
     // Dev: N jumps the opening film to its next scene.
     devActions.n = () => this.intro.skipScene();
@@ -721,7 +723,10 @@ export class ShadowGameSystem extends createSystem({
     const stop = TOUR[this.tourStep];
     this.tourTime += dt;
     this.tourBadge.show(this.tourStep, stop.name, stop.limit - this.tourTime, stop.limit);
-    if (this.tourTime > stop.limit && this.phase !== 'cleared') this.nextTourStop();
+    if (this.tourTime > stop.limit && this.phase !== 'cleared') {
+      if (this.phase === 'intro') this.leaveIntro();
+      else this.nextTourStop();
+    }
   }
 
   update(delta: number): void {
@@ -808,15 +813,18 @@ export class ShadowGameSystem extends createSystem({
         break;
       }
       case 'intro':
-        if (pressed || this.introLine === null) {
-          this.intro.stop();
-          this.playButton.show(false);
+        if (this.introLeaving) {
+          // The film fades out first; only then does what comes next appear behind it.
+          if (this.intro.active) break;
+          this.introLeaving = false;
           this.placePlayButton(PLAY_BUTTON);
           if (this.tourStep >= 0) this.nextTourStop();
           else if (this.introToTitle) {
             this.introToTitle = false;
             this.showTitle();
           } else this.startPuzzle(this.puzzleIndex);
+        } else if (pressed || this.introLine === null) {
+          this.leaveIntro();
         } else {
           this.setCaption(this.introLine);
         }
@@ -921,7 +929,27 @@ export class ShadowGameSystem extends createSystem({
   }
 
   /** The very first time: the shadow-puppet prologue (skippable), then level one. */
+  /** Ends the film: it fades out, and what comes next waits until it has gone. */
+  private leaveIntro(): void {
+    if (this.introLeaving) return;
+    this.intro.stop();
+    this.playButton.show(false);
+    this.introLeaving = true;
+  }
+
+  private introLeaving = false;
+
+  /** Nothing of a level (its shape cards, outline, ghost hand) behind the film or the title card. */
+  private clearScreen(): void {
+    this.cards.forEach((card) => (card.mesh.visible = false));
+    this.outline.visible = false;
+    this.ring.visible = false;
+    this.ghost.show(null);
+  }
+
   private startIntro(): void {
+    this.clearScreen();
+    this.introLeaving = false;
     this.bannerShown = false;
     this.playButton.setText('Skip');
     this.placePlayButton(INTRO_SKIP);
@@ -955,6 +983,8 @@ export class ShadowGameSystem extends createSystem({
     this.best = -1;
     this.fresh = resume === 0 && totalStars() === 0;
     this.intro.stop();
+    this.introLeaving = false;
+    this.clearScreen();
     this.playButton.show(false);
     this.placePlayButton(PLAY_BUTTON);
     this.menu.open('home');

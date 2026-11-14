@@ -17,7 +17,7 @@ export interface TourStop {
 }
 
 export const TOUR: TourStop[] = [
-  { id: 'intro', name: 'The story', limit: 60 },
+  { id: 'intro', name: 'The story', limit: 95 },
   { id: 'pets', name: 'Shadows come alive', limit: 60 },
   { id: 'run-bridge', name: 'A spark on your shadow', limit: 75 },
   { id: 'shadow-slingshot', name: 'The Shadow Slingshot', limit: 75 },

@@ -14,7 +14,7 @@ import { lineSeconds, narrate, stopNarration } from './narrator.js';
 import { FONT, lines } from './ui-theme.js';
 
 /** Redraws per second; the show is soft and slow, so this is plenty. */
-const FPS = 30;
+const FPS = 15;
 
 /** The picture is drawn at twice its layout size, so the subtitles stay sharp. */
 const SCALE = 2;
