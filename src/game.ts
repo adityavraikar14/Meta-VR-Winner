@@ -68,6 +68,7 @@ import {
 } from './matcher.js';
 import { IntroShow } from './intro.js';
 import { howTo } from './howto.js';
+import { FpsMeter, TEST_MODE } from './test-mode.js';
 import { drawArmsChart } from './fight/arms-art.js';
 import { petNow } from './creatures/mood.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
@@ -458,6 +459,8 @@ export class ShadowGameSystem extends createSystem({
     this.hintCard.renderOrder = 22;
     this.hintCard.visible = false;
     paper.add(this.hintCard);
+    // ?test on the link: a frame-rate meter on the screen (removed before submission).
+    if (TEST_MODE) this.fps = new FpsMeter(paper);
     // Home lives in the room, not on the screen, so it is still there when the Arena hides the screen.
     this.homeButton = new PushButton(this.scene, 'Home');
     this.homeButton.size = 0.7;
@@ -662,7 +665,10 @@ export class ShadowGameSystem extends createSystem({
     });
   }
 
+  private fps: FpsMeter | null = null;
+
   update(delta: number): void {
+    this.fps?.tick(delta, this.puzzle?.title ?? this.phase);
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     const dt = Math.min(delta, 0.1);
     this.phaseTime += dt;
