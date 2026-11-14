@@ -384,7 +384,7 @@ export class Creature {
         const hand = hands[this.hand];
         if (!hand || !hand.tracked || !hand.pinching) {
           // Let go: keep the hand's motion so it can be gently tossed.
-          if (hand) this.velocity.copy(hand.pinchVelocity).clampLength(0, 3.5);
+          if (hand) this.velocity.copy(hand.releaseVelocity).clampLength(0, 3.5);
           else this.velocity.set(0, 0, 0);
           this.feelings.released(this.velocity.length());
           this.setState('falling');

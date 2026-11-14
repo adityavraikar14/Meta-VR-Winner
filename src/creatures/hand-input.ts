@@ -28,6 +28,12 @@ export interface HandState {
   /** Midpoint between thumb and index tips. */
   pinch: Vector3;
   pinchVelocity: Vector3;
+  /**
+   * The hand's velocity as you let go: smoothed over the last moments of a
+   * firm pinch, and frozen while the fingers open, so opening them does not
+   * fling what you drop. Use this, not pinchVelocity, for a release.
+   */
+  releaseVelocity: Vector3;
   palm: Vector3;
   wrist: Vector3;
   /** Unit vector out of the palm. */
@@ -50,6 +56,7 @@ function createHand(): HandState {
     pinchEnded: false,
     pinch: new Vector3(),
     pinchVelocity: new Vector3(),
+    releaseVelocity: new Vector3(),
     palm: new Vector3(),
     wrist: new Vector3(),
     palmNormal: new Vector3(0, -1, 0),
@@ -95,8 +102,11 @@ export class HandInput {
       hand.pinch.addVectors(this.a, this.b).multiplyScalar(0.5);
       if (wasTracked && dt > 0) {
         hand.pinchVelocity.subVectors(hand.pinch, this.previousPinch[i]).divideScalar(dt);
+        // Follow the hand while the pinch is firm (or not pinching); hold still while the fingers open.
+        if (!hand.pinching || gap < PINCH_CLOSE + 0.004) hand.releaseVelocity.lerp(hand.pinchVelocity, Math.min(1, dt * 10));
       } else {
         hand.pinchVelocity.set(0, 0, 0);
+        hand.releaseVelocity.set(0, 0, 0);
       }
       if (!hand.pinching && gap < PINCH_CLOSE) {
         hand.pinching = true;

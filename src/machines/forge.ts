@@ -284,6 +284,11 @@ export class Forge {
     this.group.add(this.sparks.points, this.steam.points);
 
     devInfo.forge = () => this.state;
+    // World positions for scripted emulator tests: the shard and the coals.
+    devInfo.forgeSpots = () => {
+      const w = (v: Vector3) => this.group.localToWorld(v.clone()).toArray().map((n) => Number(n.toFixed(3)));
+      return { stone: w(this.stoneItem.group.position), hearth: w(new Vector3(HEARTH.x, this.floor + COAL_TOP + 0.08, HEARTH.z)) };
+    };
     devActions.f = () => this.devNext();
     this.setStep('light');
   }
@@ -601,8 +606,10 @@ export class Forge {
   private release(item: Item, hand: HandState): void {
     item.hand = -1;
     item.place = 'falling';
-    // A flick throws it: the hand's velocity, turned into stage space.
-    item.velocity.copy(hand.pinchVelocity).clampLength(0, 1.5).applyQuaternion(this.group.getWorldQuaternion(this.quat).invert());
+    // Let go gently and it drops straight down where you hold it; only a real flick throws it.
+    item.velocity.copy(hand.releaseVelocity);
+    if (item.velocity.length() < 0.8) item.velocity.set(0, 0, 0);
+    item.velocity.clampLength(0, 1.5).applyQuaternion(this.group.getWorldQuaternion(this.quat).invert());
     // Dropped straight onto a spot it belongs: it settles there.
     this.settle(item, true);
   }
@@ -611,19 +618,23 @@ export class Forge {
   private fall(item: Item, dt: number): void {
     if (item.place !== 'falling') return;
     item.velocity.y -= 9.8 * dt;
+    const fromY = item.group.position.y;
     item.group.position.addScaledVector(item.velocity, dt);
-    this.settle(item, false);
+    this.settle(item, false, fromY);
   }
 
-  private settle(item: Item, dropped: boolean): void {
+  /** `fromY`: where it was a frame ago, so a fast fall cannot skip past a surface between frames. */
+  private settle(item: Item, dropped: boolean, fromY = item.group.position.y): void {
     const p = item.group.position;
     const f = this.floor;
     // Anywhere over the hearth's top counts as the coals: nothing can sink out of sight into its stonework.
-    const overHearth = Math.abs(p.x - HEARTH.x) < HEARTH_W / 2 + 0.012 && Math.abs(p.z - HEARTH.z) < HEARTH_D / 2 + 0.012;
+    // Generous: hand tracking is a centimetre or two off, so a drop near the edge still counts.
+    const overHearth = Math.abs(p.x - HEARTH.x) < HEARTH_W / 2 + 0.025 && Math.abs(p.z - HEARTH.z) < HEARTH_D / 2 + 0.025;
     const nearPot = overHearth || Math.hypot(p.x - HEARTH.x, p.z - HEARTH.z) < POT_R + 0.025;
     const onAnvil = Math.abs(p.x - ANVIL.x) < FACE_HALF.x + 0.02 && Math.abs(p.z - ANVIL.z) < FACE_HALF.z + 0.025;
     const inTrough = Math.abs(p.x - TROUGH.x) < TROUGH_SIZE.x / 2 && Math.abs(p.z - TROUGH.z) < TROUGH_SIZE.z / 2;
-    const above = (y: number) => p.y >= f + y - 0.01 && (dropped || p.y <= f + y + 0.01);
+    // Let go above the surface, or crossed it this frame on the way down.
+    const above = (y: number) => (dropped ? p.y >= f + y - 0.04 : fromY >= f + y - 0.01 && p.y <= f + y + 0.01);
 
     if (item === this.stoneItem && nearPot && above(COAL_TOP)) {
       p.set(HEARTH.x, f + COAL_TOP + 0.004, HEARTH.z);
@@ -642,13 +653,13 @@ export class Forge {
       return;
     }
     // The hammer on the hearth, or anything on the anvil's face: it rests on top, never inside.
-    if (!dropped && overHearth && p.y <= f + HEARTH_H + 0.006) {
+    if (!dropped && overHearth && p.y <= f + HEARTH_H + 0.006 && fromY >= f + HEARTH_H - 0.01) {
       p.y = f + HEARTH_H + 0.006;
       item.place = 'ground';
       item.velocity.set(0, 0, 0);
       return;
     }
-    if (!dropped && onAnvil && p.y <= f + FACE_Y + 0.006) {
+    if (!dropped && onAnvil && p.y <= f + FACE_Y + 0.006 && fromY >= f + FACE_Y - 0.01) {
       p.y = f + FACE_Y + 0.006;
       item.place = 'ground';
       item.velocity.set(0, 0, 0);

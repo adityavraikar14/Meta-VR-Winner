@@ -599,7 +599,7 @@ export class Beast {
     const hand = hands[this.holder];
     if (!hand || !hand.tracked || !hand.pinching) {
       // Let go: it flies with the hand's speed and tumbles.
-      this.flight.copy(hand?.pinchVelocity ?? this.flight.set(0, 0, 0)).clampLength(0, 4);
+      this.flight.copy(hand?.releaseVelocity ?? this.flight.set(0, 0, 0)).clampLength(0, 4);
       const speed = this.flight.length();
       this.rollSpeed = (Math.random() < 0.5 ? -1 : 1) * Math.min(9, speed * 3.5);
       this.bounces = 0;

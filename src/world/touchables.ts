@@ -276,7 +276,9 @@ export class Touchables {
     if (!hand || !hand.tracked || !hand.pinching) {
       // Let go: it flies with the hand's speed.
       item.state = 'flying';
-      item.velocity.copy(hand?.pinchVelocity ?? this.v.set(0, 0, 0)).clampLength(0, 4);
+      item.velocity.copy(hand?.releaseVelocity ?? this.v.set(0, 0, 0)).clampLength(0, 4);
+      // A gentle let-go drops it where you hold it.
+      if (item.velocity.length() < 0.5) item.velocity.set(0, 0, 0);
       item.spin = (Math.random() - 0.5) * 6 * Math.min(1, item.velocity.length());
       if (item.velocity.length() > 1.2) {
         this.throws++;

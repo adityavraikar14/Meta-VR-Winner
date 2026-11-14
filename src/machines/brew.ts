@@ -469,7 +469,8 @@ export class Brew {
   private drop(item: Pickable): void {
     item.hand = -1;
     const p = item.group.position;
-    const overPot = Math.hypot(p.x - PIT.x, p.z - PIT.z) < POT_R + 0.01 && p.y > this.floor + this.height;
+    // Generous: hand tracking is a centimetre or two off, so a drop near the rim still goes in.
+    const overPot = Math.hypot(p.x - PIT.x, p.z - PIT.z) < POT_R + 0.03 && p.y > this.floor + this.height - 0.03;
     if (item.kind !== 'ladle' && overPot) {
       item.used = true;
       item.group.visible = false;
