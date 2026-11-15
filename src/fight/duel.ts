@@ -1507,10 +1507,11 @@ export class InkDuel {
     const trainer = this.trainer;
     if (!trainer) return;
     trainer.root.visible = true;
-    // Beside your sparring partner, on the other side of the screen, a little towards you.
+    // Low on the table in front of you, tilted up like a card on a desk: clear of the Home, Skip
+    // and Hint buttons, of your sparring partner and of the screen, and below your hands.
     const toYou = this.w.copy(this.head).sub(this.rivalSpot).setY(0).normalize();
-    trainer.root.position.copy(this.rivalSpot).addScaledVector(this.side, -Math.sign(this.offset || 1) * 0.33).addScaledVector(toYou, 0.12);
-    trainer.root.position.y = this.head.y - 0.1;
+    trainer.root.position.copy(this.rivalSpot).addScaledVector(toYou, 0.34);
+    trainer.root.position.y = Math.max(this.head.y - 0.42, this.rivalSpot.y + 0.17);
     const tips = hands.filter((h) => h.tracked).map((h) => h.indexTip);
     const seen = this.arms.seen.find((s) => s === trainer.lesson.shape) ?? this.arms.seen.find((s) => s !== null) ?? null;
     trainer.update(dt, tips, seen, this.arms.formingProgress(), this.headWorld);

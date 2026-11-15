@@ -72,22 +72,25 @@ export class Trainer {
 
   constructor(parent: Group, only?: readonly number[]) {
     this.list = only ? only.map((i) => LESSONS[i]) : LESSONS;
+    // The lesson above, a strip along the bottom for Back and Next (inside the card, not hanging below it).
     this.canvas.width = 2048;
-    this.canvas.height = 1400;
+    this.canvas.height = 1624;
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
     this.texture.anisotropy = 8;
     // Big enough to read at arm's length in the headset (it was 44 × 30 cm).
-    const panel = new Mesh(new PlaneGeometry(0.53, 0.362), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
-    panel.renderOrder = 21;
+    // Always in front of the grass, but drawn before its Back and Next buttons (orders 15–20), so they show on it.
+    const panel = new Mesh(new PlaneGeometry(0.53, 0.42), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
+    panel.renderOrder = 14;
     this.root.add(panel);
     this.back = new PushButton(this.root, 'Back');
     this.next = new PushButton(this.root, 'Next');
-    for (const [button, x] of [[this.back, -0.15], [this.next, 0.15]] as const) {
+    for (const [button, x] of [[this.back, -0.19], [this.next, 0.19]] as const) {
       button.size = 0.9;
-      button.root.position.set(x, -0.245, 0.01);
+      button.root.position.set(x, -0.165, 0.01);
       button.show(true);
     }
+    this.root.scale.setScalar(0.78);
     parent.add(this.root);
   }
 
@@ -264,12 +267,12 @@ export class Trainer {
       g.fillStyle = '#49d17d';
       g.font = `900 30px ${FONT}`;
       g.textAlign = 'center';
-      g.fillText(this.finished ? 'TRAINING COMPLETE!' : 'WELL DONE!', w / 2, 650);
+      g.fillText(this.finished ? 'TRAINING COMPLETE!' : 'WELL DONE!', w / 2, 740);
     } else {
       g.fillStyle = '#9fb3d9';
       g.font = `700 24px ${FONT}`;
       g.textAlign = 'center';
-      g.fillText('Back and Next: choose any lesson', w / 2, 660);
+      g.fillText('◀ Back · Next ▶  choose any lesson', w / 2, 740);
     }
     this.texture.needsUpdate = true;
   }

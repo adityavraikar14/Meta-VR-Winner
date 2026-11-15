@@ -57,3 +57,16 @@ Legend: [x] done and checked · [ ] not done yet
 - [x] Typecheck clean, all tests pass (levels, spark, workshop, daily, arms, sketch)
 - [x] Looked at it in the emulator: card (whole, 3 stars), sealed ring caption and lock tag, the lowering thorn on The Climb, the new painting, Arena (Vance used "Double Shot", health bar 100% → 88%). The crush blast is proven by the spark test (it needs a fast real hand)
 - [x] Committed and pushed; live link updated
+
+## 9. Nov 16: fights
+- [x] Fix: boss fights froze on a blank screen after The Ore Train (a hidden Pet Park label broke the fight's ground check), a6128ef
+- [x] Training Arena: bigger, sharper text; big Back / Next buttons on the card; the card now sits low on the table in front of you (clear of Home / Skip / Hint and of Vance)
+- [x] Losing a fight shows **YOU LOSE**, who beat you, a tip, and a green **Play again** button: no stars, no "Level cleared". Story boss fights, the Ink Duel and the dragon fight (Light and Arsenal)
+- [x] Medium difficulty for every boss:
+  - Story fights: rivals take about 11–13 good hits (was 14–17); their hits cost 12 / 15 / 18 (was 15 / 20 / 25), so you survive 6–8 hits; herbs heal 25
+  - Mako's toughness 170 → 140
+  - Dragon (Light): its fire costs 20 (was 30), so five burns to lose and four reflected fireballs to win
+  - Dragon (Arsenal): 6 hearts (was 5)
+  - Arena rivals: about 15% less health, since they now use their whole move book
+- [x] Checked in the emulator: training card, and the YOU LOSE card after losing to Captain Rook
+- [x] Pushed and live

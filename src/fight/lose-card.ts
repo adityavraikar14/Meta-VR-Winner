@@ -27,7 +27,8 @@ export class LoseCard {
     this.texture.colorSpace = SRGBColorSpace;
     this.texture.anisotropy = 8;
     const card = new Mesh(new PlaneGeometry(0.4, 0.19), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
-    card.renderOrder = 40;
+    // Drawn before its Play again button (orders 15–20), so the button always shows.
+    card.renderOrder = 14;
     this.root.add(card);
     this.again = new PushButton(this.root, 'Play again');
     this.again.size = 1;
