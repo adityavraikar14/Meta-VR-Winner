@@ -676,12 +676,19 @@ export class InkDuel {
     const props = this.group.parent!;
     const from = stageRoot.localToWorld(this.w.set(p.x, this.floor + 0.25, p.z));
     const ray = new Raycaster(from.clone(), new Vector3(0, -1, 0), 0, 1);
-    // The ground and the scenery on it, not the props or anyone standing on the table.
-    const targets = stageRoot.children.filter((c) => c !== props && c.name !== 'Mentor' && c.name !== 'RivalShowcase');
+    // The ground and the scenery on it, not the props or anyone standing on the table. Only
+    // visible, plain meshes: a sprite (a label, a glow) can't be ray-tested without a camera and
+    // would throw, and hidden things (the Pet Park, put away) are not ground.
+    const targets: Mesh[] = [];
+    for (const child of stageRoot.children) {
+      if (child === props || child.name === 'Mentor' || child.name === 'RivalShowcase' || !child.visible) continue;
+      child.traverseVisible((o) => {
+        if ((o as Mesh).isMesh && !(o as InstancedMesh).isInstancedMesh) targets.push(o as Mesh);
+      });
+    }
     let best = this.floor;
     let found = false;
-    for (const hit of ray.intersectObjects(targets, true)) {
-      if ((hit.object as InstancedMesh).isInstancedMesh || !(hit.object as Mesh).isMesh) continue;
+    for (const hit of ray.intersectObjects(targets, false)) {
       const y = stageRoot.worldToLocal(hit.point.clone()).y;
       if (y > this.floor + 0.12) continue;
       if (!found || y > best) best = y;
