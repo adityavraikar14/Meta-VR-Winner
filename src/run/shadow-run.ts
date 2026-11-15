@@ -605,7 +605,7 @@ export class ShadowRun {
     // A sealed ring wears a tag: how many gold stars open it.
     if (this.sim.needs > 0 && !level.workshop) {
       this.lockTag = tagSprite('', '#ffc94a');
-      this.lockTag.scale.set(0.1, 0.0375, 1);
+      this.lockTag.scale.set(0.15, 0.056, 1);
       this.paper.add(this.lockTag);
     }
     this.blast = new Sprite(new SpriteMaterial({ map: glowTexture('rgba(255,255,240,1)', 'rgba(255,120,60,0.7)'), blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
@@ -1206,7 +1206,7 @@ export class ShadowRun {
         if (more > 0) redrawTag(this.lockTag, `🔒 ${more} ★`, '#ffc94a');
       }
       this.lockTag.visible = more > 0 && this.paper.visible && sim.state !== 'won';
-      this.lockTag.position.set(gx, gy + GATE_RADIUS + 0.03 + Math.sin(this.time * 2) * 0.003, Z_GATE + 0.01);
+      this.lockTag.position.set(gx, gy + GATE_RADIUS + 0.045 + Math.sin(this.time * 2) * 0.003, Z_GATE + 0.01);
     }
     if (this.blast) {
       this.blastLife = Math.max(0, this.blastLife - dt);

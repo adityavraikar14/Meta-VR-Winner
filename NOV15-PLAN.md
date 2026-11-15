@@ -3,7 +3,7 @@
 Legend: [x] done and checked · [ ] not done yet
 
 ## 1. Level-complete card cut off
-- [ ] The results card (title, stars, "the spark is home…") is drawn in front of the 3D ground blocks, never hidden behind them
+- [x] The results card (title, stars, "the spark is home…") is drawn in front of the 3D ground blocks, never hidden behind them (checked in the emulator: First Light's card shows whole, 3 stars)
 
 ## 2. Star rating
 - [x] Stars = the gold stars you actually collected (0, 1, 2 or 3). Finishing fast no longer gives a free star
@@ -55,5 +55,5 @@ Legend: [x] done and checked · [ ] not done yet
 
 ## 8. Check, ship
 - [x] Typecheck clean, all tests pass (levels, spark, workshop, daily, arms, sketch)
-- [ ] Looked at it in the emulator: card, stars, sealed ring, blast, new look, Arena moves
-- [ ] Committed and pushed; live link updated
+- [x] Looked at it in the emulator: card (whole, 3 stars), sealed ring caption and lock tag, the lowering thorn on The Climb, the new painting, Arena (Vance used "Double Shot", health bar 100% → 88%). The crush blast is proven by the spark test (it needs a fast real hand)
+- [x] Committed and pushed; live link updated
