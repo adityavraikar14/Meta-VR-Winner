@@ -78,6 +78,31 @@ function check(name: string, ok: boolean, detail: string): void {
   check('falls off the bottom with nothing below', s.y < -bounds.hh, `y=${s.y.toFixed(2)}`);
 }
 
+// 6. Crushed: a shadow driven fast into the spark against a wall bursts it; a slow push or a carry does not.
+function squeeze(speed: number): { crushed: boolean; x: number } {
+  const s = new Spark();
+  const wall = box(0.2, -0.3, 0.3, 0.3);
+  const floor = box(-0.5, -0.3, 0.5, -0.2);
+  s.place(0.17, -0.2 + SPARK_RADIUS);
+  const palm = capsule(0.05, -0.19, 0.05, -0.1, 0.01, TAG_HAND_RIGHT);
+  palm.vax = palm.vbx = speed;
+  let crushed = false;
+  for (let i = 0; i < 72 && !crushed; i++) {
+    palm.ax += speed * DT;
+    palm.bx += speed * DT;
+    if (palm.ax > 0.2) break;
+    s.step(DT, [palm], [wall, floor], bounds);
+    crushed = s.crushed;
+  }
+  return { crushed, x: s.x };
+}
+{
+  const fast = squeeze(1.0);
+  const slow = squeeze(0.2);
+  check('crushed against a wall by a fast shadow, it bursts', fast.crushed, `palm at 1 m/s: crushed=${fast.crushed}`);
+  check('a slow push against a wall does not burst it', !slow.crushed, `palm at 0.2 m/s: crushed=${slow.crushed}`);
+}
+
 if (failed) {
   console.log(`${failed} check(s) failed`);
   process.exit(1);

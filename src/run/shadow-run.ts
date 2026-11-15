@@ -14,7 +14,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
-import { playAwaken, playClick, playClunk, playCollect, playHiss, playTink, playTinkle, playWhoosh } from '../audio.js';
+import { playAwaken, playBoom, playClick, playClunk, playCollect, playHiss, playPop, playTink, playTinkle, playUnfold, playWhoosh } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { PushButton } from '../push-button.js';
 import { devActions, devInfo } from '../dev-tools.js';
@@ -23,7 +23,7 @@ import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim, THORN_RADIUS } from './run-sim.js';
 import { ShardSet } from './shards.js';
-import { cloudTexture, hashString, sceneryTexture } from './scenery.js';
+import { hashString, mistTexture, sceneryTexture } from './scenery.js';
 import { Comic } from '../fight/comic.js';
 import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
 import { ADD_ORDER, currentSlot, DEMO, MAX_PIECES, nextSlot, resetWorkshop, saveWorkshop, shelfSpot } from './workshop.js';
@@ -38,8 +38,9 @@ import { gateMesh, groundBlocks, SLAB, starGeometry, starMaterial, stemMesh, tho
  *
  * Flow: the spark waits at the start, glowing, until a hand is in the light
  * (or a few seconds pass), then falls. Off the bottom of the screen it is
- * lost and comes back to the start (a retry). Through the gate: stars for
- * the gate, for all three motes, and for beating par time.
+ * lost and comes back to the start (a retry). Squeezed hard between a fast
+ * shadow and something solid, it bursts. The gate stays sealed until enough
+ * gold stars are collected; the rating is the gold stars collected (0 to 3).
  */
 
 const W = PAPER_BOUNDS.hw * 2;
@@ -49,14 +50,12 @@ const WAIT = 12;
 const RESPAWN = 0.7;
 const WIN_HOLD = 1.3;
 const TRAIL = 14;
-const BURSTS = 28;
+const BURSTS = 44;
 /** Where a fallen spark's flash shows: just above where it drops out of sight. */
 const LOST_FLASH_Y = -0.2;
 /** After this many misses, the caption gives the level's hint. */
 const HINT_AFTER = 2;
 
-/** Layers just in front of the paper (it is z = 0 in its own space). */
-const Z_COURSE = 0.0016;
 /** The spark and what it meets stand in the 3D course, halfway out of the screen (see course-3d.ts). */
 const Z_GATE = Z_PLAY - 0.002;
 const Z_SPARK = Z_PLAY;
@@ -364,7 +363,21 @@ function tagSprite(text: string, color: string): Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 96;
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
+  sprite.scale.set(0.08, 0.03, 1);
+  sprite.renderOrder = 14;
+  redrawTag(sprite, text, color);
+  return sprite;
+}
+
+/** Paints a tag's words (and its pointer) onto its own canvas. */
+function redrawTag(sprite: Sprite, text: string, color: string): void {
+  const texture = sprite.material.map as CanvasTexture;
+  const canvas = texture.image as HTMLCanvasElement;
   const g = canvas.getContext('2d')!;
+  g.clearRect(0, 0, canvas.width, canvas.height);
   g.fillStyle = 'rgba(20, 33, 61, 0.92)';
   g.beginPath();
   g.roundRect(8, 10, 240, 60, 30);
@@ -384,12 +397,7 @@ function tagSprite(text: string, color: string): Sprite {
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(text, 128, 41);
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
-  sprite.scale.set(0.08, 0.03, 1);
-  sprite.renderOrder = 14;
-  return sprite;
+  texture.needsUpdate = true;
 }
 
 function moteTexture(): CanvasTexture {
@@ -462,11 +470,18 @@ export class ShadowRun {
   /** The Prism's dotted path ahead. */
   private ahead: Mesh[] = [];
   private aheadAt: Array<[number, number]> = [];
-  /** Ink thorns on the course. */
+  /** Ink thorns on the course: the fixed ones, then the patrolling ones (sim.thornAt has them all). */
   private thorns: Mesh[] = [];
-  /** The painted world: near clouds that drift, fireflies, and pop words. */
+  /** A patrolling thorn's vine or bramble, stretched to it each frame (null: it floats). */
+  private moverStems: Array<{ stem: Mesh; hang: boolean } | null> = [];
+  /** The sealed ring's tag ("🔒 2 ★"), and how many stars it last said. */
+  private lockTag: Sprite | null = null;
+  private lockShown = -1;
+  /** The burst when the spark is crushed: a flash, seconds left. */
+  private blast: Sprite | null = null;
+  private blastLife = 0;
+  /** The painted world's drifting mist, and pop words. */
   private clouds: Array<{ mesh: Mesh; speed: number }> = [];
-  private flies: Array<{ sprite: Sprite; x: number; y: number; phase: number }> = [];
   private readonly comic = new Comic(4);
   private readonly eye = new Vector3();
   /** The dashed "your shadow here" guide. */
@@ -521,22 +536,14 @@ export class ShadowRun {
     scenery.position.z = 0.0008;
     scenery.renderOrder = 1;
     this.paper.add(scenery);
-    const puff = cloudTexture();
-    for (let i = 0; i < 3; i++) {
-      const mesh = new Mesh(new PlaneGeometry(0.16, 0.08), new MeshBasicMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0.92 }));
-      mesh.position.set(-W / 2 + (i + 0.3) * (W / 3), H / 2 - 0.06 - (i % 2) * 0.05, 0.0011);
-      mesh.scale.setScalar(0.8 + (i % 3) * 0.25);
+    // Slow mist drifting low across the land: the painting breathes, quietly.
+    const mist = mistTexture();
+    for (let i = 0; i < 2; i++) {
+      const mesh = new Mesh(new PlaneGeometry(0.62, 0.15), new MeshBasicMaterial({ map: mist, transparent: true, depthWrite: false, opacity: 0.8 }));
+      mesh.position.set(-W / 2 + i * 0.55, -0.07 - i * 0.09, 0.0011);
       mesh.renderOrder = 1;
       this.paper.add(mesh);
-      this.clouds.push({ mesh, speed: 0.006 + i * 0.003 });
-    }
-    const fly = glowTexture('rgba(255,255,220,1)', 'rgba(255,220,90,0.5)');
-    for (let i = 0; i < 12; i++) {
-      const sprite = new Sprite(new SpriteMaterial({ map: fly, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.7 }));
-      sprite.scale.setScalar(0.012);
-      sprite.renderOrder = 4;
-      this.paper.add(sprite);
-      this.flies.push({ sprite, x: (Math.random() - 0.5) * W * 0.95, y: -H / 2 + 0.03 + Math.random() * H * 0.45, phase: Math.random() * 10 });
+      this.clouds.push({ mesh, speed: 0.004 + i * 0.003 });
     }
     this.paper.add(this.comic.group);
 
@@ -579,6 +586,32 @@ export class ShadowRun {
       this.paper.add(ball);
       this.thorns.push(ball);
     }
+    // Patrolling thorns: one high up lowers on a vine from above, one low pushes up on a bramble.
+    for (const m of level.movers ?? []) {
+      const ball = new Mesh(thorn.geometry, thorn.material);
+      ball.position.set(m.a[0], m.a[1], Z_GATE);
+      this.paper.add(ball);
+      this.thorns.push(ball);
+      const upright = Math.abs(m.a[0] - m.b[0]) < 0.001;
+      if (!upright) {
+        this.moverStems.push(null);
+        continue;
+      }
+      const hang = Math.min(m.a[1], m.b[1]) > 0;
+      const stem = stemMesh(1, !hang);
+      this.paper.add(stem);
+      this.moverStems.push({ stem, hang });
+    }
+    // A sealed ring wears a tag: how many gold stars open it.
+    if (this.sim.needs > 0 && !level.workshop) {
+      this.lockTag = tagSprite('', '#ffc94a');
+      this.lockTag.scale.set(0.1, 0.0375, 1);
+      this.paper.add(this.lockTag);
+    }
+    this.blast = new Sprite(new SpriteMaterial({ map: glowTexture('rgba(255,255,240,1)', 'rgba(255,120,60,0.7)'), blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
+    this.blast.renderOrder = 9;
+    this.blast.visible = false;
+    this.paper.add(this.blast);
 
     const moteShape = starGeometry(0.022);
     const moteGold = starMaterial();
@@ -788,6 +821,13 @@ export class ShadowRun {
           this.burst(sim.spark.x, sim.spark.y - SPARK_RADIUS * 0.6, hand ? 5 : 3, 0.25 + v * 0.6);
         }
       } else if (event.type === 'mote') {
+        // Enough stars: the ring unseals.
+        if (sim.motesTaken === sim.needs && this.lockTag) {
+          playUnfold();
+          const [gx, gy] = sim.gateNow;
+          this.burst(gx, gy, 12, 0.5);
+          this.comic.pop('RING OPEN!', this.v.set(gx, gy + 0.07, 0.03), '#49d17d', 0.4, 1.1);
+        }
         playTinkle();
         playCollect(0.03);
         const [x, y] = this.level.motes[event.index];
@@ -806,14 +846,32 @@ export class ShadowRun {
         stage.say = 'The Phoenix core reignites on the last ledge!';
       } else if (event.type === 'lost') {
         this.lostTime = 0;
-        if (event.thorn !== undefined) {
-          const [tx, ty] = this.level.thorns![event.thorn];
-          this.burst(tx, ty, 16, 0.6);
-          stage.say = 'Caught on an ink thorn! Keep the spark clear of them';
-        }
         stage.cue = 'oops';
         // After a few misses Ada gives the level's hint; before that, a word of encouragement.
         stage.say = sim.retries + 1 >= HINT_AFTER ? this.level.hint : ['Close!', 'Again: you’ve got this.', 'Almost. Watch where it falls.'][sim.retries % 3];
+        if (event.thorn !== undefined) {
+          const [tx, ty] = sim.thornAt(event.thorn);
+          this.burst(tx, ty, 16, 0.6);
+          stage.say = 'Caught on an ink thorn! Keep the spark clear of them';
+        } else if (event.sealed) {
+          const [gx, gy] = sim.gateNow;
+          const more = sim.needs - sim.motesTaken;
+          this.burst(gx, gy, 8, 0.4);
+          this.comic.pop('SEALED!', this.v.set(gx, gy + 0.07, 0.03), '#ff7a5a', 0.38, 1.1);
+          stage.say = `The ring is sealed: collect ${more} more gold star${more > 1 ? 's' : ''} on the way first`;
+          playClunk(0.05);
+        } else if (event.crushed) {
+          // Squeezed too hard: the spark bursts apart.
+          const { x, y } = sim.spark;
+          this.burst(x, y, 30, 1.3);
+          this.blastLife = 0.45;
+          this.blast!.position.set(x, y, Z_SPARK + 0.002);
+          playBoom(0.07);
+          playPop(0.08);
+          this.comic.pop('CRUSHED!', this.v.set(x, y + 0.06, 0.03), '#ff5a4a', 0.4, 1.1);
+          stage.say = 'You crushed the spark against the wall! Carry it gently, don’t squash it';
+          this.trailAt.length = 0;
+        }
         playHiss(0.03, 0.35);
       } else if (event.type === 'won') {
         this.wonTime = 0;
@@ -1055,21 +1113,16 @@ export class ShadowRun {
     // Before the first drop, say who turned up and what they can do.
     const info = this.face.info;
     if (sim.state === 'ready' && sim.retries === 0 && info.power !== 'none' && this.time > 4) text = `This spark is a ${info.name}: ${POWER_LINE[info.power]}`;
-    const motes = `${sim.motesTaken}/${this.level.motes.length} ✦`;
-    this.caption = `${text}  ·  ${motes}`;
+    const motes = `★ ${sim.motesTaken}/${this.level.motes.length}`;
+    this.caption = sim.sealed ? `${text}  ·  ${motes}  ·  🔒 ring opens at ${sim.needs} ★` : `${text}  ·  ${motes}`;
   }
 
   /** Spark, trail, gate and motes where the simulation says. */
   private place(dt = 0): void {
-    // The painted world is alive: near clouds drift, fireflies wander and blink.
+    // The painted world is alive: mist drifts slowly across it.
     for (const c of this.clouds) {
       c.mesh.position.x += c.speed * dt;
-      if (c.mesh.position.x > W / 2 + 0.1) c.mesh.position.x = -W / 2 - 0.1;
-    }
-    for (const f of this.flies) {
-      const t = this.time * 0.6 + f.phase;
-      f.sprite.position.set(f.x + Math.sin(t) * 0.03, f.y + Math.sin(t * 1.7) * 0.015, Z_COURSE + 0.0003);
-      f.sprite.material.opacity = 0.25 + 0.55 * Math.max(0, Math.sin(t * 2.3));
+      if (c.mesh.position.x > W / 2 + 0.31) c.mesh.position.x = -W / 2 - 0.31;
     }
     if (dt > 0) this.comic.update(dt, this.paper.localToWorld(this.eye.copy(VIEWER)));
     const sim = this.sim;
@@ -1138,15 +1191,45 @@ export class ShadowRun {
     // The ring turns a little to and fro, so you see it is solid.
     this.gateRing.rotation.y = Math.sin(this.time * 0.9) * 0.55;
     // The gate follows its level (the Workshop's ring moves it).
-    const [gx, gy] = this.level.gate;
+    const [gx, gy] = this.level.workshop ? this.level.gate : sim.gateNow;
     this.gateRing.position.set(gx, gy, Z_GATE);
     this.gateGlow.position.set(gx, gy, Z_GATE);
     this.gateRing.visible = this.gateGlow.visible = this.gateOk;
+    // Sealed, the ring glows only faintly; open, it breathes.
+    const sealed = sim.sealed && !this.level.workshop;
+    (this.gateGlow.material as SpriteMaterial).opacity = sealed ? 0.3 : 1;
     this.gateGlow.scale.setScalar(GATE_RADIUS * (3 + 0.25 * Math.sin(this.time * 2.4) + 4 * flare));
-    // Thorns turn slowly and pulse, so they read as alive and dangerous.
+    if (this.lockTag) {
+      const more = Math.max(0, sim.needs - sim.motesTaken);
+      if (more !== this.lockShown) {
+        this.lockShown = more;
+        if (more > 0) redrawTag(this.lockTag, `🔒 ${more} ★`, '#ffc94a');
+      }
+      this.lockTag.visible = more > 0 && this.paper.visible && sim.state !== 'won';
+      this.lockTag.position.set(gx, gy + GATE_RADIUS + 0.03 + Math.sin(this.time * 2) * 0.003, Z_GATE + 0.01);
+    }
+    if (this.blast) {
+      this.blastLife = Math.max(0, this.blastLife - dt);
+      const k = this.blastLife / 0.45;
+      this.blast.visible = k > 0;
+      (this.blast.material as SpriteMaterial).opacity = k;
+      this.blast.scale.setScalar(0.03 + (1 - k) * 0.12);
+    }
+    // Thorns turn slowly and pulse, so they read as alive and dangerous; patrolling ones move.
+    const fixed = this.level.thorns?.length ?? 0;
     this.thorns.forEach((t, i) => {
       t.rotation.set(this.time * 0.5 + i, this.time * 0.7 + i, 0);
       t.scale.setScalar(1 + 0.08 * Math.sin(this.time * 3 + i));
+      if (i < fixed) return;
+      const [tx, ty] = sim.thornAt(i);
+      t.position.set(tx, ty, Z_GATE);
+      const vine = this.moverStems[i - fixed];
+      if (vine) {
+        const from = vine.hang ? ty : -PAPER_BOUNDS.hh;
+        const to = vine.hang ? PAPER_BOUNDS.hh : ty;
+        vine.stem.scale.y = Math.max(0.001, to - from);
+        vine.stem.position.set(tx, (from + to) / 2, Z_GATE);
+      }
     });
     // Motes bob gently; a collected one flies into the spark and is gone.
     this.motes.forEach((m, i) => {

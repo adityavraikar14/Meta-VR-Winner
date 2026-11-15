@@ -70,6 +70,8 @@ export interface Boss extends Foe {
   readonly failed: boolean;
   /** Shown instead of its health while its model loads; null once it's here. */
   readonly loadingText: string | null;
+  /** The move it is making right now, named (e.g. "Fan of Knives"), for the label; null between moves. */
+  readonly shout?: string | null;
   place(head: Vector3, forward: Vector3): void;
   reset(): void;
   /** Winds up and fires now, even while calm. */

@@ -37,14 +37,14 @@ export interface RunLevel {
   start: Pt;
   gate: Pt;
   motes: Pt[];
-  /** Seconds for the time star. */
+  /** A good time, in seconds (the solution's pace; no longer a star: stars are the gold stars you collect). */
   par: number;
   /** A shadow thinner than this (m) is needed somewhere: the caption reads out your scale. */
   showScale?: boolean;
   solution: SolutionShape[];
   /** Chapter (WORLDS index); 0 if absent. */
   world?: number;
-  /** A build level: light shards to place, the spark dropped with a button, a star for hands-off. */
+  /** A build level: light shards to place, the spark dropped with a button. */
   build?: boolean;
   shards?: ShardSpec[];
   /** Where its best time is kept (default: its id). */
@@ -56,6 +56,16 @@ export interface RunLevel {
    * One low on the course grows on a bramble up out of the pit; one high up hangs on a vine.
    */
   thorns?: Pt[];
+  /**
+   * The gate is sealed until this many gold stars are collected (default 1; at most the level's
+   * star count). A spark reaching a sealed gate is turned back to the start, so a straight bat at the
+   * ring is no shortcut. Stars stay collected between drops.
+   */
+  gateNeeds?: number;
+  /** The gate rides to and fro between `gate` and `to`, once every `period` seconds. */
+  gateMove?: { to: Pt; period: number };
+  /** Ink thorns that patrol between a and b, once every `period` seconds (phase 0–1 offsets the start). */
+  movers?: Array<{ a: Pt; b: Pt; period: number; phase?: number }>;
 }
 
 /**
@@ -96,6 +106,7 @@ export const RUN_LEVELS: RunLevel[] = [
     motes: [[-0.06, 0.11], [0.05, 0.105], [0.24, 0.105]],
     par: 12,
     solution: [{ a: [-0.21, 0.088], b: [0.17, 0.068], r: 0.014 }],
+    gateNeeds: 1,
   },
   {
     id: 'run-ramp',
@@ -112,6 +123,9 @@ export const RUN_LEVELS: RunLevel[] = [
     gate: [0.4, 0.1],
     motes: [[0.06, 0.01], [0.15, 0.065], [0.3, 0.095]],
     par: 10,
+    gateNeeds: 2,
+    // A thorn on a vine lowers over the ledge and rises again: time the climb.
+    movers: [{ a: [0.32, 0.26], b: [0.32, 0.1], period: 3.2 }],
     solution: [{ a: [0.0, -0.062], b: [0.235, 0.072], r: 0.014 }],
   },
   {
@@ -129,6 +143,9 @@ export const RUN_LEVELS: RunLevel[] = [
     gate: [0.42, 0.225],
     motes: [[0.11, 0.12], [0.19, 0.22], [0.3, 0.27]],
     par: 15,
+    gateNeeds: 2,
+    // The ring rides along the shelf.
+    gateMove: { to: [0.3, 0.225], period: 4 },
     // A scoop: the shadow tilted down to the right, rising at about 1 m/s.
     solution: [{ a: [-0.093, -0.094], b: [0.05, -0.166], r: 0.016, v: [0.4, 0.95], from: 3.0, to: 3.1 }],
   },
@@ -148,6 +165,9 @@ export const RUN_LEVELS: RunLevel[] = [
     thorns: [[-0.06, 0.15], [0.19, 0.135]],
     par: 12,
     showScale: true,
+    gateNeeds: 2,
+    // A bramble pushes up out of the pit and through your bridge, then sinks again.
+    movers: [{ a: [0.06, -0.12], b: [0.06, 0.075], period: 3.6, phase: 0.5 }],
     solution: [{ a: [-0.31, 0.07], b: [0.23, 0.048], r: 0.02 }],
   },
   {
@@ -168,6 +188,9 @@ export const RUN_LEVELS: RunLevel[] = [
     thorns: [[-0.04, -0.07]],
     par: 12,
     showScale: true,
+    gateNeeds: 2,
+    // A thorn drips from the tunnel's roof and draws back up.
+    movers: [{ a: [0.12, 0.056], b: [0.12, 0.028], period: 2.8 }],
     solution: [{ a: [-0.14, -0.008], b: [0.06, -0.01], r: 0.01 }],
   },
   {
@@ -186,6 +209,7 @@ export const RUN_LEVELS: RunLevel[] = [
     motes: [[-0.195, 0.09], [0.195, 0.07], [0.0, 0.12]],
     thorns: [[-0.19, -0.02], [0.2, -0.04], [0.0, 0.19]],
     par: 14,
+    gateNeeds: 3,
     solution: [
       { a: [-0.29, 0.092], b: [-0.1, 0.08], r: 0.013 },
       { a: [0.1, 0.076], b: [0.29, 0.054], r: 0.013 },
@@ -208,6 +232,7 @@ export const RUN_LEVELS: RunLevel[] = [
     gate: [0.41, 0.11],
     motes: [[-0.06, 0.115], [0.04, 0.11], [0.24, 0.105]],
     par: 15,
+    gateNeeds: 1,
     shards: [{ kind: 'plank', at: [0.1, -0.2, 0.6] }],
     solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.17, 0.066], [0.12, 0.054], [0.12, 0.086], [-0.17, 0.098]] }],
   },
@@ -227,6 +252,9 @@ export const RUN_LEVELS: RunLevel[] = [
     gate: [0.41, 0.11],
     motes: [[-0.2, 0.12], [-0.05, 0.11], [0.06, 0.105]],
     par: 15,
+    gateNeeds: 2,
+    // A bramble rises out of the flood and through the glass's shadow: drop when it is low.
+    movers: [{ a: [-0.12, -0.12], b: [-0.12, 0.085], period: 3.4 }],
     showScale: true,
     shards: [{ kind: 'plank', at: [0.1, -0.2, 0.6] }],
     solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.33, 0.04], [0.15, 0.026], [0.15, 0.086], [-0.33, 0.1]] }],
@@ -247,6 +275,9 @@ export const RUN_LEVELS: RunLevel[] = [
     gate: [0.4, 0.06],
     motes: [[0.06, -0.021], [0.16, 0.019], [0.3, 0.055]],
     par: 15,
+    gateNeeds: 2,
+    // The ring rides along the lookouts' ledge.
+    gateMove: { to: [0.3, 0.06], period: 3.5 },
     shards: [{ kind: 'wedge', at: [0.12, -0.2, 0.6] }],
     solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.03, -0.055], [0.24, -0.055], [0.24, 0.053]] }],
   },
@@ -263,6 +294,9 @@ export const RUN_LEVELS: RunLevel[] = [
     gate: [0.4, 0.015],
     motes: [[-0.01, 0.14], [0.14, 0.085], [0.33, 0.01]],
     par: 15,
+    gateNeeds: 2,
+    // A thorn on a vine lowers onto the landing and rises again.
+    movers: [{ a: [0.36, 0.14], b: [0.36, 0.012], period: 3 }],
     shards: [{ kind: 'plank', at: [0.1, -0.2, 0.6] }],
     // A plank at ×3, turned −20°, its shadow centred at (0.08, 0.06).
     solution: [{ a: [0, 0], b: [0, 0], r: 0, poly: [[-0.099, 0.102], [-0.096, 0.096], [0.237, -0.025], [0.245, -0.023], [0.262, 0.023], [-0.082, 0.148]] }],
@@ -285,6 +319,7 @@ export const RUN_LEVELS: RunLevel[] = [
     motes: [[-0.16, 0.1], [0.01, 0.115], [0.18, 0.09]],
     thorns: [[-0.16, 0.03], [0.18, 0.0]],
     par: 15,
+    gateNeeds: 3,
     shards: [
       { kind: 'plank', at: [-0.02, -0.2, 0.6] },
       { kind: 'plank', at: [0.17, -0.2, 0.6] },

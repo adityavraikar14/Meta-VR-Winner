@@ -22,7 +22,7 @@ export type RunEvent =
   | { type: 'bounce'; speed: number; tag: number }
   | { type: 'mote'; index: number }
   | { type: 'revive'; from: [number, number] }
-  | { type: 'lost'; thorn?: number }
+  | { type: 'lost'; thorn?: number; sealed?: boolean; crushed?: boolean }
   | { type: 'won' };
 
 /** A spark's special power (see spark-face.ts). None of them is needed to finish a level. */
@@ -39,7 +39,7 @@ export class RunSim {
   /** Seconds since the level began (all attempts). */
   total = 0;
   retries = 0;
-  /** The spark touched a hand's shadow this attempt (build levels give a star for hands-off). */
+  /** The spark touched a hand's shadow this attempt. */
   handTouched = false;
   readonly motes: boolean[];
   readonly events: RunEvent[] = [];
@@ -51,11 +51,54 @@ export class RunSim {
   private readonly ledges: Array<[number, number]> = [];
   private ledgeClock = 0;
   private readonly scout = new Spark();
+  /** Where the gate is now (it may ride to and fro), and each patrolling thorn. */
+  readonly gateNow: [number, number];
+  readonly moversNow: Array<[number, number]>;
 
   constructor(readonly level: RunLevel) {
     this.terrain = level.terrain.map((points) => poly(points));
     this.motes = level.motes.map(() => false);
     this.spark.place(level.start[0], level.start[1]);
+    this.gateNow = [level.gate[0], level.gate[1]];
+    this.moversNow = (level.movers ?? []).map((m) => [m.a[0], m.a[1]]);
+    this.move();
+  }
+
+  /** Gold stars the gate wants before it opens. */
+  get needs(): number {
+    return Math.min(this.level.gateNeeds ?? 1, this.motes.length);
+  }
+
+  /** The gate is still sealed: not enough stars yet. */
+  get sealed(): boolean {
+    return this.motesTaken < this.needs;
+  }
+
+  /** Thorn i's position now: the fixed thorns first, then the patrolling ones. */
+  thornAt(i: number): readonly [number, number] {
+    const fixed = this.level.thorns ?? [];
+    return i < fixed.length ? fixed[i] : this.moversNow[i - fixed.length];
+  }
+
+  get thornCount(): number {
+    return (this.level.thorns?.length ?? 0) + this.moversNow.length;
+  }
+
+  /** Moving parts follow the level's clock: a smooth to-and-fro (cosine) between their two ends. */
+  private move(): void {
+    const t = this.total;
+    const swing = (period: number, phase = 0) => 0.5 - 0.5 * Math.cos(2 * Math.PI * (t / period + phase));
+    const gm = this.level.gateMove;
+    if (gm) {
+      const k = swing(gm.period);
+      this.gateNow[0] = this.level.gate[0] + (gm.to[0] - this.level.gate[0]) * k;
+      this.gateNow[1] = this.level.gate[1] + (gm.to[1] - this.level.gate[1]) * k;
+    }
+    (this.level.movers ?? []).forEach((m, i) => {
+      const k = swing(m.period, m.phase);
+      this.moversNow[i][0] = m.a[0] + (m.b[0] - m.a[0]) * k;
+      this.moversNow[i][1] = m.a[1] + (m.b[1] - m.a[1]) * k;
+    });
   }
 
   /** Lets the spark fall (from the start). */
@@ -83,6 +126,7 @@ export class RunSim {
   step(dt: number, shadows: readonly Capsule[], extra: readonly Poly[] = []): void {
     this.events.length = 0;
     this.total += dt;
+    this.move();
     if (this.state !== 'live') return;
     this.time += dt;
     const polys = extra.length ? [...this.terrain, ...extra] : this.terrain;
@@ -90,6 +134,12 @@ export class RunSim {
     for (const c of this.spark.contacts) {
       this.events.push({ type: 'bounce', speed: c.speed, tag: c.tag });
       if (c.tag === TAG_HAND_LEFT || c.tag === TAG_HAND_RIGHT) this.handTouched = true;
+    }
+    // Crushed between a fast shadow and something solid: the spark bursts.
+    if (this.spark.crushed) {
+      this.state = 'lost';
+      this.events.push({ type: 'lost', crushed: true });
+      return;
     }
     const { x, y } = this.spark;
     // Remember where it stood on the course's own ground, a few tenths of a second back.
@@ -107,16 +157,22 @@ export class RunSim {
       }
     });
     // An ink thorn: the spark is lost at once (Ember's second chance does not save it).
-    const thorns = this.level.thorns ?? [];
-    for (let i = 0; i < thorns.length; i++) {
-      if (Math.hypot(x - thorns[i][0], y - thorns[i][1]) < THORN_RADIUS + this.spark.r) {
+    for (let i = 0, n = this.thornCount; i < n; i++) {
+      const [tx, ty] = this.thornAt(i);
+      if (Math.hypot(x - tx, y - ty) < THORN_RADIUS + this.spark.r) {
         this.state = 'lost';
         this.events.push({ type: 'lost', thorn: i });
         return;
       }
     }
-    const [gx, gy] = this.level.gate;
+    const [gx, gy] = this.gateNow;
     if (Math.hypot(x - gx, y - gy) < GATE_RADIUS) {
+      if (this.sealed) {
+        // Not enough stars: the sealed ring turns the spark back (the stars it has stay collected).
+        this.state = 'lost';
+        this.events.push({ type: 'lost', sealed: true });
+        return;
+      }
       this.state = 'won';
       this.events.push({ type: 'won' });
     } else if (y < LOST_Y) {
@@ -175,10 +231,9 @@ export class RunSim {
     return n;
   }
 
-  /** Stars: through the gate, all three motes, and inside par time (build levels: hands-off). */
+  /** Stars: the gold stars you collected on the way, one each (a level with none, like the Workshop: three). */
   stars(): number {
     if (this.state !== 'won') return 0;
-    const third = this.level.build ? !this.handTouched : this.time <= this.level.par;
-    return 1 + (this.motesTaken === this.motes.length ? 1 : 0) + (third ? 1 : 0);
+    return this.motes.length ? Math.min(3, this.motesTaken) : 3;
   }
 }

@@ -1,67 +1,82 @@
 import { CanvasTexture, SRGBColorSpace } from '@iwsdk/core';
 
 /**
- * The painted world behind each Shadow Run course: a bright, cheerful
- * cartoon landscape on the screen (sky, sun, clouds, layered rolling hills,
- * trees and bushes), one per chapter, in the spirit of the best casual
- * physics games. The play area (the middle and top of the screen) stays
- * light and open sky, so your hand's dark shadow and the spark always read.
+ * The painted world behind each Shadow Run course: a calm, painterly
+ * landscape on the screen, one per chapter. Layer upon layer of land fades
+ * into a soft, misty distance (atmospheric perspective: the further away,
+ * the more of the sky's own colour it takes on), with quiet silhouettes
+ * of the chapter's world: the jungle's tall old trees, the river's cliffs,
+ * the mine's timber frames, the mountain's peaks, the dragon's castle.
+ *
+ * No cartoon sun, no clouds, nothing that glitters: still and peaceful,
+ * like the light of the lantern you play by. The upper and middle screen
+ * stay pale, so your hand's dark shadow and the spark always read.
  *
  * Painted once per level on a canvas; deterministic (seeded), so a level
  * looks the same every time you play it.
  */
 
+type Ridge = 'hills' | 'peaks' | 'mesas';
+type Feature = 'canopy' | 'cliffs' | 'river' | 'frames' | 'pines' | 'castle';
+
 export interface Palette {
-  sky: [string, string];
-  /** Back to front: each layer of hills, and the light rim along its top. */
-  hills: Array<[string, string]>;
-  sun: 'sun' | 'low-sun' | 'moon' | null;
-  clouds: number;
-  /** Small things standing on the front hill. */
-  props: Array<'blossom' | 'tree' | 'bush' | 'mushroom' | 'flower' | 'pine' | 'balloon' | 'windmill' | 'frame' | 'castle' | 'river' | 'stars' | 'snowcaps' | 'lantern'>;
+  /** Sky, top to horizon. */
+  sky: [string, string, string];
+  /** The soft glow low in the sky where the light comes from (x as a fraction of the width). */
+  glow: { x: number; color: string };
+  /** The nearest land's colour; further layers fade from it into the haze. */
+  land: string;
+  haze: string;
+  ridge: Ridge;
+  features: Feature[];
 }
 
 /** One painted world per chapter (the course's `world`). */
 export const SCENERY: Palette[] = [
-  // Light & Shadow: a spring meadow.
+  // Light & Shadow: a misty jungle at first light, tall old trees standing in the haze.
   {
-    sky: ['#4fc3ff', '#d2f3ff'],
-    hills: [['#bfeaa0', '#dcf7c4'], ['#8fd863', '#b6ee88'], ['#5cbd3e', '#8ee05e']],
-    sun: 'sun',
-    clouds: 4,
-    props: ['blossom', 'tree', 'bush', 'mushroom', 'flower'],
+    sky: ['#d9e8e1', '#eaf0e4', '#f7efdc'],
+    glow: { x: 0.3, color: 'rgba(255, 236, 196, 0.85)' },
+    land: '#4f7a62',
+    haze: '#e4ecdf',
+    ridge: 'hills',
+    features: ['canopy'],
   },
-  // Structures: the river valley, with a windmill on the far hill.
+  // Structures: the river valley, still water between far cliffs.
   {
-    sky: ['#5ccaff', '#e0f7ff'],
-    hills: [['#b4e6c0', '#d6f6dc'], ['#7fd08a', '#a9eab0'], ['#46ad62', '#79d58e']],
-    sun: 'sun',
-    clouds: 3,
-    props: ['river', 'windmill', 'tree', 'bush', 'flower'],
+    sky: ['#d6e5ee', '#e8eff2', '#f4eee2'],
+    glow: { x: 0.68, color: 'rgba(255, 238, 205, 0.8)' },
+    land: '#4a6f7c',
+    haze: '#e2ebee',
+    ridge: 'mesas',
+    features: ['cliffs', 'river', 'pines'],
   },
-  // Fire & Iron: a warm canyon at golden hour, with the mine's timber frames.
+  // Fire & Iron: a warm canyon in amber haze, the mine's timber frames on the rim.
   {
-    sky: ['#ff9a4a', '#ffe3a6'],
-    hills: [['#f6c28e', '#ffdcb4'], ['#e59a5c', '#f6b882'], ['#c4703c', '#e08e58']],
-    sun: 'low-sun',
-    clouds: 2,
-    props: ['frame', 'lantern', 'bush'],
+    sky: ['#f0e2d0', '#f6e9d6', '#fbeed8'],
+    glow: { x: 0.25, color: 'rgba(255, 214, 160, 0.85)' },
+    land: '#8a5a44',
+    haze: '#f2e2cf',
+    ridge: 'mesas',
+    features: ['frames'],
   },
-  // Hot Air: high peaks, many clouds, balloons drifting.
+  // Hot Air: high peaks, layer after layer of cool blue ridges.
   {
-    sky: ['#6fd0ff', '#f2fcff'],
-    hills: [['#d6e6f6', '#ffffff'], ['#a9c8e4', '#d8e8f6'], ['#7fa9cf', '#a9c8e4']],
-    sun: 'sun',
-    clouds: 6,
-    props: ['snowcaps', 'balloon', 'pine'],
+    sky: ['#dae4ef', '#e9eef4', '#f5f1ea'],
+    glow: { x: 0.72, color: 'rgba(255, 240, 220, 0.8)' },
+    land: '#55677f',
+    haze: '#e3e9f1',
+    ridge: 'peaks',
+    features: ['pines'],
   },
-  // The Dragon: a violet dusk, stars coming out, the castle on the hill.
+  // The Dragon: a quiet dusk, rose and lavender, the castle on the far ridge.
   {
-    sky: ['#5a3fb8', '#ffb0c8'],
-    hills: [['#a88ad8', '#c8b0ec'], ['#7c5cbc', '#9c80d4'], ['#54398e', '#7458ae']],
-    sun: 'moon',
-    clouds: 2,
-    props: ['stars', 'castle', 'pine', 'lantern'],
+    sky: ['#ddd6ea', '#ece2ec', '#f6e8e2'],
+    glow: { x: 0.5, color: 'rgba(255, 220, 205, 0.85)' },
+    land: '#5d4d72',
+    haze: '#eae1ec',
+    ridge: 'peaks',
+    features: ['castle', 'pines'],
   },
 ];
 
@@ -83,8 +98,6 @@ export function hashString(text: string): number {
   return h >>> 0;
 }
 
-const OUTLINE = 'rgba(40, 30, 50, 0.55)';
-
 /** The world's landscape on a new canvas texture, `width` px wide, the screen's shape. */
 export function sceneryTexture(world: number, seed: string, width = 1024, aspect = 0.7): CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -97,425 +110,302 @@ export function sceneryTexture(world: number, seed: string, width = 1024, aspect
   return texture;
 }
 
+/** Layers of land, back to front. */
+const LAYERS = 5;
+
 export function paintScenery(canvas: HTMLCanvasElement, look: Palette, seed: number): void {
   const g = canvas.getContext('2d')!;
   const w = canvas.width;
   const h = canvas.height;
   const rand = seeded(seed);
 
-  // Sky.
-  const sky = g.createLinearGradient(0, 0, 0, h * 0.85);
+  // Sky: three soft bands down to a warm horizon.
+  const sky = g.createLinearGradient(0, 0, 0, h * 0.8);
   sky.addColorStop(0, look.sky[0]);
-  sky.addColorStop(1, look.sky[1]);
+  sky.addColorStop(0.55, look.sky[1]);
+  sky.addColorStop(1, look.sky[2]);
   g.fillStyle = sky;
   g.fillRect(0, 0, w, h);
 
-  if (look.props.includes('stars')) {
-    for (let i = 0; i < 60; i++) {
-      const x = rand() * w;
-      const y = rand() * h * 0.45;
-      const r = 0.8 + rand() * 1.8;
-      g.fillStyle = `rgba(255, 250, 230, ${0.5 + rand() * 0.5})`;
-      g.beginPath();
-      g.arc(x, y, r, 0, Math.PI * 2);
-      g.fill();
-    }
-  }
+  // Where the light comes from: a broad, soft glow low in the sky (no disc, no rays).
+  const gx = w * look.glow.x;
+  const gy = h * 0.58;
+  const glow = g.createRadialGradient(gx, gy, 0, gx, gy, w * 0.5);
+  glow.addColorStop(0, look.glow.color);
+  glow.addColorStop(1, 'rgba(255, 240, 220, 0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, w, h);
 
-  // The sun (or moon), with soft rays.
-  if (look.sun) {
-    const low = look.sun === 'low-sun';
-    const moon = look.sun === 'moon';
-    const sx = w * (low ? 0.22 : 0.84);
-    const sy = h * (low ? 0.42 : 0.17);
-    const sr = w * (low ? 0.075 : 0.055);
-    const halo = g.createRadialGradient(sx, sy, sr * 0.6, sx, sy, sr * 4);
-    halo.addColorStop(0, moon ? 'rgba(255, 240, 255, 0.55)' : 'rgba(255, 245, 190, 0.7)');
-    halo.addColorStop(1, 'rgba(255, 245, 190, 0)');
-    g.fillStyle = halo;
-    g.fillRect(sx - sr * 4, sy - sr * 4, sr * 8, sr * 8);
-    if (!moon) {
-      g.save();
-      g.translate(sx, sy);
-      g.fillStyle = 'rgba(255, 236, 140, 0.35)';
-      for (let i = 0; i < 12; i++) {
-        g.rotate(Math.PI / 6);
-        g.beginPath();
-        g.moveTo(-sr * 0.18, sr * 1.15);
-        g.lineTo(0, sr * 2.1);
-        g.lineTo(sr * 0.18, sr * 1.15);
-        g.fill();
-      }
-      g.restore();
-    }
-    const disc = g.createRadialGradient(sx - sr * 0.3, sy - sr * 0.3, sr * 0.1, sx, sy, sr);
-    disc.addColorStop(0, moon ? '#fffaf0' : '#fffbe0');
-    disc.addColorStop(1, moon ? '#f0dcf0' : low ? '#ffb43a' : '#ffd84a');
-    g.fillStyle = disc;
-    g.beginPath();
-    g.arc(sx, sy, sr, 0, Math.PI * 2);
-    g.fill();
-  }
+  // Layers of land, far to near: each lower, darker and sharper; the far ones melt into the haze.
+  for (let layer = 0; layer < LAYERS; layer++) {
+    const near = layer / (LAYERS - 1);
+    const colour = mix(look.haze, look.land, 0.16 + 0.84 * near ** 1.35);
+    const base = h * (0.5 + layer * 0.085);
+    const amp = h * (look.ridge === 'peaks' ? 0.17 - layer * 0.026 : 0.06 - layer * 0.007);
+    const top = ridge(look.ridge, rand, w, base, amp);
 
-  // Far clouds, painted (the near ones drift, see Clouds in shadow-run.ts).
-  for (let i = 0; i < look.clouds; i++) {
-    cloud(g, rand() * w, h * (0.08 + rand() * 0.25), w * (0.06 + rand() * 0.05), 0.75);
-  }
+    // Before this layer: things that stand behind it.
+    if (layer === 1 && look.features.includes('castle')) castle(g, w * 0.7, top, h, colour);
+    if (layer === 2 && look.features.includes('river')) river(g, w, h, base + h * 0.02, look);
 
-  // Snow-capped peaks behind the hills.
-  if (look.props.includes('snowcaps')) {
-    for (let i = 0; i < 5; i++) {
-      const cx = (i + 0.2 + rand() * 0.6) * (w / 5);
-      const top = h * (0.28 + rand() * 0.12);
-      const half = w * (0.12 + rand() * 0.06);
-      const base = h * 0.75;
-      g.fillStyle = '#9fbede';
-      g.beginPath();
-      g.moveTo(cx - half, base);
-      g.lineTo(cx, top);
-      g.lineTo(cx + half, base);
-      g.closePath();
-      g.fill();
-      g.fillStyle = '#ffffff';
-      g.beginPath();
-      const cap = (base - top) * 0.3;
-      g.moveTo(cx, top);
-      g.lineTo(cx + half * 0.3, top + cap);
-      g.lineTo(cx + half * 0.12, top + cap * 0.8);
-      g.lineTo(cx, top + cap * 1.05);
-      g.lineTo(cx - half * 0.14, top + cap * 0.8);
-      g.lineTo(cx - half * 0.3, top + cap);
-      g.closePath();
-      g.fill();
-    }
-  }
-
-  // Rolling hills, back to front; each a sum of gentle waves, with a light rim along its top.
-  const tops: Array<(x: number) => number> = [];
-  look.hills.forEach(([body, rim], layer) => {
-    const base = h * (0.56 + layer * 0.1);
-    const amp = h * (0.05 - layer * 0.008);
-    const f1 = 1.5 + rand() * 1.5;
-    const f2 = 3 + rand() * 3;
-    const p1 = rand() * 6;
-    const p2 = rand() * 6;
-    const top = (x: number) => base - amp * (Math.sin((x / w) * Math.PI * f1 + p1) + 0.45 * Math.sin((x / w) * Math.PI * f2 + p2));
-    tops.push(top);
-    // The river runs in front of the far hill, behind the near ones.
-    if (layer === 1 && look.props.includes('river')) river(g, w, h, base - amp * 0.2);
-    g.fillStyle = body;
+    g.fillStyle = colour;
     g.beginPath();
     g.moveTo(0, h);
-    for (let x = 0; x <= w; x += 8) g.lineTo(x, top(x));
+    for (let i = 0; i < top.length; i++) g.lineTo(i * STEP, top[i]);
     g.lineTo(w, h);
     g.closePath();
     g.fill();
-    g.strokeStyle = rim;
-    g.lineWidth = 6;
-    g.beginPath();
-    for (let x = 0; x <= w; x += 8) (x ? g.lineTo(x, top(x) + 3) : g.moveTo(x, top(x) + 3));
-    g.stroke();
-    // A few soft dabs of lighter grass on the hill's face.
-    g.fillStyle = rim;
-    g.globalAlpha = 0.35;
-    for (let i = 0; i < 10; i++) {
-      const x = rand() * w;
-      g.beginPath();
-      g.ellipse(x, top(x) + h * (0.03 + rand() * 0.08), w * 0.02, h * 0.008, 0, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.globalAlpha = 1;
 
-    // Things standing on this hill: far ones on the back hill, near ones on the front.
-    if (layer === 0) {
-      if (look.props.includes('windmill')) windmill(g, w * (0.12 + rand() * 0.1), top, h);
-      if (look.props.includes('castle')) castle(g, w * 0.72, top, h);
-    }
-    if (layer === 1) {
-      if (look.props.includes('frame')) {
-        for (let i = 0; i < 2; i++) frame(g, w * (0.18 + i * 0.58 + rand() * 0.06), top, h);
-      }
-      if (look.props.includes('pine')) for (let i = 0; i < 6; i++) pine(g, rand() * w, top, h * (0.05 + rand() * 0.03));
-    }
-    if (layer === 2) {
-      const count = 7;
+    // Silhouettes standing on this layer, in its own colour.
+    if (look.features.includes('canopy') && layer >= 1 && layer <= 2) {
+      const count = 2 + layer;
       for (let i = 0; i < count; i++) {
-        const x = ((i + 0.15 + rand() * 0.7) / count) * w;
-        const kind = look.props.filter((p) => ['blossom', 'tree', 'bush', 'mushroom', 'flower', 'lantern'].includes(p));
-        if (!kind.length) break;
-        const pick = kind[Math.floor(rand() * kind.length)];
-        if (pick === 'blossom') tree(g, x, top(x), h * (0.1 + rand() * 0.04), '#ffb3d1', '#ff8ab8');
-        else if (pick === 'tree') tree(g, x, top(x), h * (0.09 + rand() * 0.04), '#6ad04a', '#3fae3a');
-        else if (pick === 'bush') bush(g, x, top(x), w * 0.03);
-        else if (pick === 'mushroom') mushroom(g, x, top(x), h * 0.035);
-        else if (pick === 'lantern') lantern(g, x, top(x), h * 0.06);
-        else flowers(g, x, top(x), w * 0.03, rand);
+        const x = ((i + 0.1 + rand() * 0.8) / count) * w;
+        jungleTree(g, x, at(top, x), h * (0.17 - layer * 0.025) * (0.75 + rand() * 0.5), colour, rand);
       }
     }
-  });
+    if (look.features.includes('pines') && layer >= 2 && layer <= 3) {
+      for (let i = 0; i < 9; i++) {
+        const x = rand() * w;
+        pine(g, x, at(top, x), h * (0.06 - layer * 0.008) * (0.7 + rand() * 0.6), colour);
+      }
+    }
+    if (look.features.includes('cliffs') && layer === 1) {
+      cliff(g, w * (0.08 + rand() * 0.1), top, h, colour);
+      cliff(g, w * (0.82 + rand() * 0.1), top, h, colour);
+    }
+    if (look.features.includes('frames') && layer === 2) {
+      for (let i = 0; i < 2; i++) headframe(g, w * (0.16 + i * 0.62 + rand() * 0.06), top, h, colour);
+    }
 
-  if (look.props.includes('balloon')) {
-    const colours = [['#ff5a5a', '#ffd23a'], ['#3ab0ff', '#ffffff'], ['#7a5cff', '#ffb0d0']];
-    for (let i = 0; i < 3; i++) balloon(g, w * (0.15 + i * 0.32 + rand() * 0.08), h * (0.12 + rand() * 0.2), w * (0.022 + rand() * 0.012), colours[i]);
+    // Mist settling in front of this layer: a soft band of haze, so each layer sits apart.
+    if (layer < LAYERS - 1) {
+      const mist = g.createLinearGradient(0, base - h * 0.04, 0, base + h * 0.12);
+      mist.addColorStop(0, hexA(look.haze, 0));
+      mist.addColorStop(0.5, hexA(look.haze, 0.32));
+      mist.addColorStop(1, hexA(look.haze, 0));
+      g.fillStyle = mist;
+      g.fillRect(0, base - h * 0.04, w, h * 0.16);
+    }
   }
+
+  // A gentle vignette, so the frame holds the eye in the middle.
+  const v = g.createRadialGradient(w / 2, h * 0.45, h * 0.35, w / 2, h * 0.45, w * 0.72);
+  v.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  v.addColorStop(1, 'rgba(30, 30, 40, 0.16)');
+  g.fillStyle = v;
+  g.fillRect(0, 0, w, h);
 }
 
-function cloud(g: CanvasRenderingContext2D, x: number, y: number, r: number, alpha: number): void {
-  g.save();
-  g.globalAlpha = alpha;
-  const puffs: Array<[number, number, number]> = [[-1.1, 0.25, 0.6], [-0.4, -0.15, 0.85], [0.45, -0.05, 0.75], [1.1, 0.25, 0.55], [0, 0.3, 0.7]];
-  g.fillStyle = '#d8e6f2';
-  for (const [dx, dy, s] of puffs) {
-    g.beginPath();
-    g.arc(x + dx * r, y + dy * r + r * 0.12, s * r, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.fillStyle = '#ffffff';
-  for (const [dx, dy, s] of puffs) {
-    g.beginPath();
-    g.arc(x + dx * r, y + dy * r, s * r, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.restore();
-}
-
-/** A drifting cloud on its own little canvas (for the near clouds that move). */
-export function cloudTexture(): CanvasTexture {
+/** A soft, wide band of drifting mist (for the slow mist in front of the painting). */
+export function mistTexture(): CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
+  canvas.width = 512;
   canvas.height = 128;
   const g = canvas.getContext('2d')!;
-  cloud(g, 128, 66, 46, 0.95);
+  for (let i = 0; i < 7; i++) {
+    const x = 60 + i * 66;
+    const r = 70 + (i % 3) * 14;
+    const puff = g.createRadialGradient(x, 64, 0, x, 64, r);
+    puff.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
+    puff.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = puff;
+    g.fillRect(0, 0, 512, 128);
+  }
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
 }
 
-function river(g: CanvasRenderingContext2D, w: number, h: number, y: number): void {
-  const water = g.createLinearGradient(0, y - h * 0.03, 0, y + h * 0.05);
-  water.addColorStop(0, '#7fd8ff');
-  water.addColorStop(1, '#3aa6e6');
-  g.fillStyle = water;
-  g.fillRect(0, y - h * 0.03, w, h * 0.09);
-  g.strokeStyle = 'rgba(255,255,255,0.7)';
-  g.lineWidth = 3;
-  for (let x = 20; x < w; x += 90) {
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + 30, y);
-    g.stroke();
+// ------------------------------------------------------------------ Shapes
+
+/** Ridge samples are this many pixels apart. */
+const STEP = 4;
+
+/** The top edge of one layer of land, as y per sample. */
+function ridge(kind: Ridge, rand: () => number, w: number, base: number, amp: number): number[] {
+  const n = Math.ceil(w / STEP) + 1;
+  const out = new Array<number>(n);
+  if (kind === 'peaks') {
+    // Mountain ridges: a few peaks joined by sagging saddles, roughened with smaller teeth.
+    const peaks = 3 + Math.floor(rand() * 3);
+    const spots = Array.from({ length: peaks }, (_, i) => ({ x: ((i + 0.2 + rand() * 0.6) / peaks) * w, hgt: 0.5 + rand() * 0.5 }));
+    const f = 9 + rand() * 6;
+    const p = rand() * 6;
+    for (let i = 0; i < n; i++) {
+      const x = i * STEP;
+      let best = 0;
+      for (const s of spots) best = Math.max(best, s.hgt * Math.max(0, 1 - Math.abs(x - s.x) / (w / peaks) * 1.5));
+      const teeth = 0.08 * Math.abs(Math.sin((x / w) * Math.PI * f + p));
+      out[i] = base - amp * (best + teeth);
+    }
+    return out;
   }
+  if (kind === 'mesas') {
+    // Flat-topped rock with steep sides: a soft-clipped wave.
+    const f1 = 1.2 + rand() * 1.2;
+    const f2 = 3 + rand() * 2;
+    const p1 = rand() * 6;
+    const p2 = rand() * 6;
+    for (let i = 0; i < n; i++) {
+      const x = i * STEP;
+      const wave = Math.sin((x / w) * Math.PI * f1 + p1) + 0.5 * Math.sin((x / w) * Math.PI * f2 + p2);
+      const flat = Math.tanh(wave * 2.2);
+      out[i] = base - amp * (0.4 + flat * 0.75);
+    }
+    return out;
+  }
+  // Rolling hills: a sum of gentle waves.
+  const f1 = 1.2 + rand() * 1.3;
+  const f2 = 2.6 + rand() * 2.6;
+  const p1 = rand() * 6;
+  const p2 = rand() * 6;
+  for (let i = 0; i < n; i++) {
+    const x = i * STEP;
+    out[i] = base - amp * (Math.sin((x / w) * Math.PI * f1 + p1) + 0.4 * Math.sin((x / w) * Math.PI * f2 + p2));
+  }
+  return out;
 }
 
-function tree(g: CanvasRenderingContext2D, x: number, y: number, size: number, light: string, dark: string): void {
-  g.fillStyle = '#8a5a34';
-  g.strokeStyle = OUTLINE;
-  g.lineWidth = 2;
+/** The ridge's height at x. */
+function at(top: number[], x: number): number {
+  return top[Math.max(0, Math.min(top.length - 1, Math.round(x / STEP)))];
+}
+
+/** A tall rainforest tree: a slender trunk and a few wide, flat crowns, one tone. */
+function jungleTree(g: CanvasRenderingContext2D, x: number, ground: number, height: number, colour: string, rand: () => number): void {
+  g.fillStyle = colour;
+  const trunk = Math.max(2, height * 0.035);
   g.beginPath();
-  g.moveTo(x - size * 0.06, y + 4);
-  g.lineTo(x - size * 0.04, y - size * 0.55);
-  g.lineTo(x + size * 0.04, y - size * 0.55);
-  g.lineTo(x + size * 0.06, y + 4);
+  g.moveTo(x - trunk, ground + 4);
+  g.lineTo(x - trunk * 0.5, ground - height);
+  g.lineTo(x + trunk * 0.5, ground - height);
+  g.lineTo(x + trunk, ground + 4);
   g.closePath();
   g.fill();
-  g.stroke();
-  const blobs: Array<[number, number, number]> = [[-0.32, -0.62, 0.3], [0.3, -0.64, 0.3], [0, -0.82, 0.36], [-0.12, -0.55, 0.28], [0.16, -0.52, 0.26]];
-  g.fillStyle = dark;
-  for (const [dx, dy, r] of blobs) {
-    g.beginPath();
-    g.arc(x + dx * size, y + dy * size + size * 0.04, r * size, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.fillStyle = light;
-  for (const [dx, dy, r] of blobs) {
-    g.beginPath();
-    g.arc(x + dx * size - size * 0.03, y + dy * size - size * 0.02, r * size * 0.88, 0, Math.PI * 2);
-    g.fill();
-  }
-}
-
-function bush(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  g.fillStyle = '#2f9a3a';
-  for (const dx of [-0.8, 0, 0.8]) {
-    g.beginPath();
-    g.arc(x + dx * r, y - r * 0.3, r * (dx ? 0.7 : 0.9), 0, Math.PI * 2);
-    g.fill();
-  }
-  g.fillStyle = '#56c656';
-  for (const dx of [-0.8, 0, 0.8]) {
-    g.beginPath();
-    g.arc(x + dx * r - r * 0.1, y - r * 0.42, r * (dx ? 0.5 : 0.68), 0, Math.PI * 2);
-    g.fill();
-  }
-}
-
-function mushroom(g: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  g.fillStyle = '#fff4e0';
-  g.fillRect(x - s * 0.18, y - s * 0.7, s * 0.36, s * 0.75);
-  g.fillStyle = '#e8402a';
-  g.beginPath();
-  g.ellipse(x, y - s * 0.7, s * 0.6, s * 0.42, 0, Math.PI, 0);
-  g.fill();
-  g.fillStyle = '#ffffff';
-  for (const [dx, dy] of [[-0.3, -0.85], [0.15, -0.95], [0.35, -0.78]]) {
-    g.beginPath();
-    g.arc(x + dx * s, y + dy * s, s * 0.08, 0, Math.PI * 2);
-    g.fill();
-  }
-}
-
-function flowers(g: CanvasRenderingContext2D, x: number, y: number, spread: number, rand: () => number): void {
-  const colours = ['#ff6fa8', '#ffd23a', '#ffffff', '#b07aff'];
-  for (let i = 0; i < 5; i++) {
-    const fx = x + (rand() - 0.5) * spread * 2;
-    const fy = y - 4 - rand() * 6;
-    g.strokeStyle = '#3f9a3a';
-    g.lineWidth = 2;
-    g.beginPath();
-    g.moveTo(fx, y + 2);
-    g.lineTo(fx, fy);
-    g.stroke();
-    g.fillStyle = colours[i % colours.length];
-    for (let p = 0; p < 5; p++) {
-      const a = (p / 5) * Math.PI * 2;
+  // A broad, uneven crown of overlapping leaf masses, and a lower bough or two.
+  const crown = (cx: number, cy: number, span: number) => {
+    for (let i = 0; i < 5; i++) {
+      const dx = (i / 4 - 0.5) * span * 1.4 + (rand() - 0.5) * span * 0.2;
+      const r = span * (0.32 + rand() * 0.18) * (1 - Math.abs(i / 4 - 0.5) * 0.6);
       g.beginPath();
-      g.arc(fx + Math.cos(a) * 3, fy + Math.sin(a) * 3, 2.6, 0, Math.PI * 2);
+      g.ellipse(cx + dx, cy - r * 0.15 + (rand() - 0.5) * r * 0.3, r, r * 0.55, 0, 0, Math.PI * 2);
       g.fill();
     }
-    g.fillStyle = '#ffb020';
+  };
+  crown(x, ground - height, height * 0.42);
+  if (rand() < 0.7) {
+    const side = rand() < 0.5 ? -1 : 1;
+    const by = ground - height * (0.6 + rand() * 0.15);
+    g.lineWidth = Math.max(1.5, trunk * 0.7);
+    g.strokeStyle = colour;
     g.beginPath();
-    g.arc(fx, fy, 2, 0, Math.PI * 2);
-    g.fill();
+    g.moveTo(x, by + height * 0.08);
+    g.lineTo(x + side * height * 0.16, by);
+    g.stroke();
+    crown(x + side * height * 0.18, by, height * 0.2);
   }
 }
 
-function pine(g: CanvasRenderingContext2D, x: number, top: (x: number) => number, s: number): void {
-  const y = top(x) + 3;
-  g.fillStyle = '#6b4a30';
-  g.fillRect(x - s * 0.06, y - s * 0.3, s * 0.12, s * 0.32);
-  for (let i = 0; i < 3; i++) {
-    g.fillStyle = i % 2 ? '#2f8a5a' : '#3aa06a';
-    const ty = y - s * (0.25 + i * 0.32);
-    const half = s * (0.42 - i * 0.1);
+/** A narrow pine. */
+function pine(g: CanvasRenderingContext2D, x: number, ground: number, height: number, colour: string): void {
+  g.fillStyle = colour;
+  g.beginPath();
+  g.moveTo(x, ground - height);
+  g.lineTo(x + height * 0.22, ground + 2);
+  g.lineTo(x - height * 0.22, ground + 2);
+  g.closePath();
+  g.fill();
+}
+
+/** A tall river cliff, rising from its layer. */
+function cliff(g: CanvasRenderingContext2D, x: number, top: number[], h: number, colour: string): void {
+  const ground = at(top, x);
+  const height = h * 0.16;
+  g.fillStyle = colour;
+  g.beginPath();
+  g.moveTo(x - h * 0.09, ground + 2);
+  g.lineTo(x - h * 0.06, ground - height * 0.7);
+  g.lineTo(x - h * 0.03, ground - height);
+  g.lineTo(x + h * 0.05, ground - height * 0.95);
+  g.lineTo(x + h * 0.08, ground - height * 0.4);
+  g.lineTo(x + h * 0.1, ground + 2);
+  g.closePath();
+  g.fill();
+}
+
+/** Still water across the valley: a pale band with a few long, faint light lines. */
+function river(g: CanvasRenderingContext2D, w: number, h: number, y: number, look: Palette): void {
+  const band = g.createLinearGradient(0, y - h * 0.03, 0, y + h * 0.05);
+  band.addColorStop(0, hexA(look.haze, 0.95));
+  band.addColorStop(1, mix(look.haze, look.land, 0.25));
+  g.fillStyle = band;
+  g.fillRect(0, y - h * 0.03, w, h * 0.08);
+  g.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+  g.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {
+    const ly = y - h * 0.015 + i * h * 0.012;
+    const x0 = w * (0.1 + ((i * 37) % 50) / 100);
     g.beginPath();
-    g.moveTo(x - half, ty);
-    g.lineTo(x, ty - s * 0.5);
-    g.lineTo(x + half, ty);
+    g.moveTo(x0, ly);
+    g.lineTo(x0 + w * 0.18, ly);
+    g.stroke();
+  }
+}
+
+/** A mine's timber headframe: two legs, a cross beam and the wheel. */
+function headframe(g: CanvasRenderingContext2D, x: number, top: number[], h: number, colour: string): void {
+  const ground = at(top, x);
+  const height = h * 0.14;
+  g.strokeStyle = colour;
+  g.lineWidth = Math.max(2, h * 0.006);
+  g.beginPath();
+  g.moveTo(x - height * 0.3, ground + 2);
+  g.lineTo(x - height * 0.08, ground - height);
+  g.lineTo(x + height * 0.08, ground - height);
+  g.lineTo(x + height * 0.3, ground + 2);
+  g.moveTo(x - height * 0.22, ground - height * 0.35);
+  g.lineTo(x + height * 0.22, ground - height * 0.35);
+  g.moveTo(x - height * 0.15, ground - height * 0.68);
+  g.lineTo(x + height * 0.15, ground - height * 0.68);
+  g.stroke();
+  g.beginPath();
+  g.arc(x, ground - height, height * 0.13, 0, Math.PI * 2);
+  g.stroke();
+}
+
+/** A far castle on the ridge: towers and a keep, one flat tone. */
+function castle(g: CanvasRenderingContext2D, x: number, top: number[], h: number, colour: string): void {
+  const ground = at(top, x);
+  const s = h * 0.1;
+  g.fillStyle = colour;
+  g.fillRect(x - s * 0.6, ground - s * 0.7, s * 1.2, s * 0.7 + 4);
+  for (const [dx, tall] of [[-0.6, 1.15], [0.45, 1.3], [-0.1, 1.6]] as const) {
+    g.fillRect(x + dx * s - s * 0.1, ground - s * tall, s * 0.22, s * tall);
+    g.beginPath();
+    g.moveTo(x + dx * s - s * 0.14, ground - s * tall);
+    g.lineTo(x + dx * s + s * 0.01, ground - s * (tall + 0.25));
+    g.lineTo(x + dx * s + s * 0.16, ground - s * tall);
     g.closePath();
     g.fill();
   }
 }
 
-function windmill(g: CanvasRenderingContext2D, x: number, top: (x: number) => number, h: number): void {
-  const y = top(x) + 4;
-  const tall = h * 0.2;
-  g.fillStyle = '#26314d';
-  g.beginPath();
-  g.moveTo(x - tall * 0.05, y);
-  g.lineTo(x - tall * 0.015, y - tall);
-  g.lineTo(x + tall * 0.015, y - tall);
-  g.lineTo(x + tall * 0.05, y);
-  g.closePath();
-  g.fill();
-  g.strokeStyle = '#26314d';
-  g.lineWidth = 5;
-  g.lineCap = 'round';
-  for (let i = 0; i < 3; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI * 2) / 3 + 0.3;
-    g.beginPath();
-    g.moveTo(x, y - tall);
-    g.lineTo(x + Math.cos(a) * tall * 0.6, y - tall + Math.sin(a) * tall * 0.6);
-    g.stroke();
-  }
-  g.fillStyle = '#26314d';
-  g.beginPath();
-  g.arc(x, y - tall, 5, 0, Math.PI * 2);
-  g.fill();
+// ------------------------------------------------------------------ Colour
+
+function rgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-/** A timber mine frame, braced with a cross, like a cartoon scaffold. */
-function frame(g: CanvasRenderingContext2D, x: number, top: (x: number) => number, h: number): void {
-  const y = top(x) + 6;
-  const tall = h * 0.16;
-  const wide = tall * 0.9;
-  const beam = (x0: number, y0: number, x1: number, y1: number) => {
-    g.strokeStyle = '#5a3a20';
-    g.lineWidth = 9;
-    g.beginPath();
-    g.moveTo(x0, y0);
-    g.lineTo(x1, y1);
-    g.stroke();
-    g.strokeStyle = '#b07a46';
-    g.lineWidth = 5;
-    g.beginPath();
-    g.moveTo(x0, y0);
-    g.lineTo(x1, y1);
-    g.stroke();
-  };
-  g.lineCap = 'round';
-  beam(x - wide / 2, y, x - wide / 2, y - tall);
-  beam(x + wide / 2, y, x + wide / 2, y - tall);
-  beam(x - wide / 2 - 8, y - tall, x + wide / 2 + 8, y - tall);
-  beam(x - wide / 2, y, x + wide / 2, y - tall);
-  beam(x + wide / 2, y, x - wide / 2, y - tall);
-  g.fillStyle = '#4a4a52';
-  for (const [dx, dy] of [[-0.5, -1], [0.5, -1]]) {
-    g.beginPath();
-    g.arc(x + dx * wide, y + dy * tall, 3, 0, Math.PI * 2);
-    g.fill();
-  }
+/** a → b by k, as a CSS colour. */
+function mix(a: string, b: string, k: number): string {
+  const [r1, g1, b1] = rgb(a);
+  const [r2, g2, b2] = rgb(b);
+  return `rgb(${Math.round(r1 + (r2 - r1) * k)}, ${Math.round(g1 + (g2 - g1) * k)}, ${Math.round(b1 + (b2 - b1) * k)})`;
 }
 
-function lantern(g: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  g.strokeStyle = '#4a3020';
-  g.lineWidth = 3;
-  g.beginPath();
-  g.moveTo(x, y + 2);
-  g.lineTo(x, y - s);
-  g.lineTo(x + s * 0.35, y - s);
-  g.stroke();
-  const glow = g.createRadialGradient(x + s * 0.35, y - s * 0.8, 1, x + s * 0.35, y - s * 0.8, s * 0.6);
-  glow.addColorStop(0, 'rgba(255, 220, 120, 0.9)');
-  glow.addColorStop(1, 'rgba(255, 180, 60, 0)');
-  g.fillStyle = glow;
-  g.fillRect(x - s * 0.3, y - s * 1.45, s * 1.3, s * 1.3);
-  g.fillStyle = '#ffcf5a';
-  g.fillRect(x + s * 0.25, y - s * 0.92, s * 0.2, s * 0.25);
-}
-
-function castle(g: CanvasRenderingContext2D, x: number, top: (x: number) => number, h: number): void {
-  const y = top(x) + 6;
-  const s = h * 0.17;
-  g.fillStyle = '#3a2a66';
-  const block = (cx: number, width: number, tall: number) => {
-    g.fillRect(cx - width / 2, y - tall, width, tall);
-    for (let i = 0; i < 3; i++) g.fillRect(cx - width / 2 + (i * width) / 2.5, y - tall - width * 0.18, width / 5, width * 0.18);
-  };
-  block(x - s * 0.55, s * 0.3, s * 0.95);
-  block(x, s * 0.6, s * 0.7);
-  block(x + s * 0.55, s * 0.3, s * 1.1);
-  g.fillStyle = '#ffd86a';
-  for (const [dx, dy] of [[-0.55, -0.7], [0, -0.45], [0.55, -0.85], [0.1, -0.3]]) g.fillRect(x + dx * s - 3, y + dy * s, 6, 9);
-}
-
-function balloon(g: CanvasRenderingContext2D, x: number, y: number, r: number, [a, b]: string[]): void {
-  g.save();
-  g.beginPath();
-  g.arc(x, y, r, 0, Math.PI * 2);
-  g.clip();
-  for (let i = -3; i <= 3; i++) {
-    g.fillStyle = i % 2 ? a : b;
-    g.fillRect(x + i * r * 0.32 - r * 0.16, y - r, r * 0.32, r * 2);
-  }
-  g.restore();
-  g.strokeStyle = 'rgba(60, 40, 30, 0.6)';
-  g.lineWidth = 1.5;
-  g.beginPath();
-  g.moveTo(x - r * 0.5, y + r * 0.85);
-  g.lineTo(x - r * 0.2, y + r * 1.5);
-  g.moveTo(x + r * 0.5, y + r * 0.85);
-  g.lineTo(x + r * 0.2, y + r * 1.5);
-  g.stroke();
-  g.fillStyle = '#9a6a3a';
-  g.fillRect(x - r * 0.22, y + r * 1.45, r * 0.44, r * 0.3);
+function hexA(hex: string, alpha: number): string {
+  const [r, g, b] = rgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

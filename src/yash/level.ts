@@ -89,6 +89,12 @@ const NEXT_BOSS_LABEL: Record<string, string> = {
 /** The duel's rivals who fight here too, in the order the boss button offers them (Morwen has her own boss). */
 const RIVAL_ORDER = ['vance', 'rook', 'vex', 'mako', 'kai'];
 const UP = new Vector3(0, 1, 0);
+/** Your health as a bar of ten cells and a percentage, like the story's boss fights. */
+function lifeBar(k: number): string {
+  const cells = Math.round(Math.max(0, Math.min(1, k)) * 10);
+  return `${'█'.repeat(cells)}${'░'.repeat(10 - cells)} ${Math.round(k * 100)}%`;
+}
+
 /** Your hearts in a fight; at none you are knocked down and the fight starts over. */
 const ARENA_HEARTS = 8;
 const KNOCKDOWN = 3.5;
@@ -488,7 +494,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
         : this.down > 0
           ? `Knocked down! ${o.title} wins this round. Again in ${Math.ceil(this.down)}…`
           : o.alive
-          ? `${o.title} ${o.hp}/${o.maxHp}   ·   You ${'♥'.repeat(this.hearts)}${'♡'.repeat(ARENA_HEARTS - this.hearts)}`
+          ? `${o.shout ? `⚡ ${o.shout}!   ·   ` : ''}${o.title} ${o.hp}/${o.maxHp}   ·   You ${lifeBar(this.hearts / ARENA_HEARTS)}`
           : this.lastWin
             ? `${o.title} defeated in ${Math.round(this.lastWin.seconds)} s! ${this.lastWin.newBest ? '★ New best' : `Best ${Math.round(this.lastWin.best)} s`}${this.lastWin.trophies ? `  ${this.lastWin.trophies}` : ''}`
             : `${o.title} defeated! (${o.defeats})`,

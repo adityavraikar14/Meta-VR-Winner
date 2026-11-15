@@ -2003,9 +2003,10 @@ export class ShadowGameSystem extends createSystem({
   /** A storybook card on the paper: small heading, big title, a line of text. */
   private drawBanner(kicker: string, title: string, body: string, footer = '', extra?: { lead?: string; meter?: number }): void {
     this.banner.scale.setScalar(1);
-    this.banner.position.set(0, 0.03, 0.006);
-    this.bannerMaterial.depthTest = true;
-    this.banner.renderOrder = 4;
+    // In front of the 3D course (its ground blocks stand 5 cm out of the screen), never cut off by it.
+    this.banner.position.set(0, 0.03, 0.065);
+    this.bannerMaterial.depthTest = false;
+    this.banner.renderOrder = 14;
     const { g: ctx, w, h } = layout(this.bannerCanvas);
     ctx.clearRect(0, 0, w, h);
     // A clean white card: soft shadow, a thick yellow border, a navy kicker pill, bold sans type.

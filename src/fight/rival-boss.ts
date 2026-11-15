@@ -13,6 +13,13 @@
  *   Mako   Thick Hide: the sword and the blaster bounce off. Charges in and slams.
  *   Sable  Parry: strike while her blade is up and your blow comes straight back.
  *
+ * And they fight with their whole story-mode move book (movebook.ts): twenty
+ * named moves each, dealt from a shuffled deck, so every move turns up and
+ * no two fights run the same. Fans, curveballs, lobs, ink rain from above,
+ * walls, snipes, spirals, pincers, rings, geysers and slams; blinks, dashes,
+ * rolls, leaps and feints that end in an attack. Big moves wait until they
+ * are hurt, and come with a warning. Each move's name shows over them.
+ *
  * Below half health they are enraged: less rest, and they close in.
  * All their shots are stopped by the same defences as every other boss's.
  */
@@ -23,6 +30,7 @@ import { rayToSphere, ShotVolley } from '../yash/orbs.js';
 import { sfx } from '../yash/sfx.js';
 import type { Bursts } from '../yash/visuals.js';
 import { NamePlate } from '../yash/witch-model.js';
+import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
 import { preloadRival, Rival3D } from './rival3d.js';
 import type { RivalMove, RivalSpec } from './rivals.js';
 
@@ -60,6 +68,10 @@ const MELT_AFTER = 1.4;
 const MELT_TIME = 2;
 const FINISH_TIME = 5.5;
 const LOAD_TIMEOUT = 30;
+/** A move's name stays over them this long. */
+const SHOUT_TIME = 2.2;
+/** A big move's warning: this long between the flash and the first shot. */
+const BIG_WARNING = 0.6;
 
 type Mood = 'loading' | 'rest' | 'walk' | 'move' | 'charge' | 'defeated';
 
@@ -71,6 +83,8 @@ interface Pending {
   /** A straight shot at this speed, or a lob taking this long. */
   speed?: number;
   lob?: number;
+  /** Aimed this far off the player (a fan, a wall, a ring). */
+  aimOff?: Vector3;
 }
 
 export class RivalBoss implements Boss {
@@ -85,6 +99,8 @@ export class RivalBoss implements Boss {
   calm = false;
   finished = false;
   failed = false;
+  /** The move being made, named, while it shows. */
+  shout: string | null = null;
 
   private readonly spec: RivalSpec;
   private model: Rival3D | null = null;
@@ -112,6 +128,14 @@ export class RivalBoss implements Boss {
   private readonly tmp = new Vector3();
   private readonly up = new Vector3(0, 1, 0);
   private hit: RayHit = { distance: 0, point: new Vector3(), orb: false };
+  /** The move book, shuffled; the attack waiting for a hand to let go; the attack after a move. */
+  private deck: Move[] = [];
+  private current: { move: Move; tech: Technique } | null = null;
+  private queued: Move | null = null;
+  private shoutTime = 0;
+  private readonly across = new Vector3();
+  private readonly toward = new Vector3();
+  private readonly target = new Vector3();
 
   constructor(
     spec: RivalSpec,
@@ -189,6 +213,8 @@ export class RivalBoss implements Boss {
     this.finished = false;
     this.shots.clear();
     this.pending.length = 0;
+    this.current = this.queued = null;
+    this.deck = shuffledMoves(this.spec.id);
     this.plate.draw(1);
     if (this.model) {
       this.model.melt = 0;
@@ -235,6 +261,8 @@ export class RivalBoss implements Boss {
       this.defeats++;
       this.shots.clear();
       this.pending.length = 0;
+      this.current = this.queued = null;
+      this.shout = null;
       model.freeze = 0.2;
       model.play('death');
       sfx.defeated();
@@ -289,14 +317,21 @@ export class RivalBoss implements Boss {
     this.timer -= dt;
     this.react -= dt;
     if (this.enraged) this.ultimate -= dt;
+    this.shoutTime -= dt;
+    if (this.shoutTime <= 0) this.shout = null;
     switch (this.mood) {
       case 'rest':
         if (this.calm) this.timer = REST;
         else if (this.timer <= 0 && !model.busy) this.next(model);
         break;
       case 'walk':
-        // Rival3D walks the slide and stands when it arrives.
-        if (!model.sliding) this.rest(0.35);
+        // Rival3D walks the slide and stands when it arrives; a move ends in its attack.
+        if (!model.sliding) {
+          const then = this.queued;
+          this.queued = null;
+          if (then && !this.calm) this.attackWith(then, then.then ?? 'shot', model);
+          else this.rest(0.35);
+        }
         break;
       case 'move':
         if (model.released) {
@@ -304,9 +339,14 @@ export class RivalBoss implements Boss {
           const by = model.releasedBy ?? 'throw';
           model.released = null;
           model.releasedBy = null;
-          this.release(model, hand, by);
+          if (this.current) this.fireMove(model, hand);
+          else this.release(model, hand, by);
         }
-        if (!model.busy) this.rest();
+        if (!model.busy) {
+          // An animation with no moment of release still lets the move go.
+          if (this.current) this.fireMove(model, model.root);
+          this.rest();
+        }
         break;
       case 'charge':
         this.charge(model, dt);
@@ -324,8 +364,10 @@ export class RivalBoss implements Boss {
       this.pending.splice(i, 1);
       if (p.from) this.from.copy(p.from);
       else model.handAt(p.hand, this.from);
-      if (p.lob) this.shots.lob(this.from, this.aim, p.lob, LOB_GRAVITY);
-      else this.shots.fire(this.from, this.aim, p.speed ?? BOLT_SPEED);
+      this.target.copy(this.aim);
+      if (p.aimOff) this.target.add(p.aimOff);
+      if (p.lob) this.shots.lob(this.from, this.target, p.lob, LOB_GRAVITY);
+      else this.shots.fire(this.from, this.target, p.speed ?? BOLT_SPEED);
       sfx.shoot();
     }
 
@@ -343,6 +385,7 @@ export class RivalBoss implements Boss {
   // ----------------------------------------------------------------- Moves
 
   private startFight(): void {
+    this.current = this.queued = null;
     this.mood = 'rest';
     this.timer = REST;
     this.step = 0;
@@ -447,7 +490,235 @@ export class RivalBoss implements Boss {
     if (r < special) {
       model.play('skill');
       if (this.spec.ability === 'parry') this.bursts.spawn(model.chestAt(this.tmp), this.spec.glow, 0.4);
-    } else model.play(r < special + 0.35 ? 'attack' : 'throw');
+      return;
+    }
+    // A move from their story-mode book.
+    const move = this.draw();
+    this.say(move.name);
+    if (MOVEMENT.has(move.tech)) this.moveThen(move, model);
+    else this.attackWith(move, move.tech, model);
+  }
+
+  // ------------------------------------------------------- The move book
+
+  /** The next move from the deck (big ones only once hurt), reshuffled when it runs out. */
+  private draw(): Move {
+    for (let tries = 0; tries < 24; tries++) {
+      if (!this.deck.length) this.deck = shuffledMoves(this.spec.id);
+      const move = this.deck.pop()!;
+      if (move.big && !this.enraged) {
+        this.deck.unshift(move);
+        continue;
+      }
+      return move;
+    }
+    return { name: 'Shot', tech: 'shot', shot: 'bolt' };
+  }
+
+  private say(name: string): void {
+    this.shout = name;
+    this.shoutTime = SHOUT_TIME;
+  }
+
+  /** Winds up an attack; its shots leave when the hand lets go (see fireMove). */
+  private attackWith(move: Move, tech: Technique, model: Rival3D): void {
+    this.mood = 'move';
+    this.current = { move, tech };
+    const heavy = tech === 'sky' || tech === 'wall' || tech === 'ring' || tech === 'converge' || tech === 'slam' || tech === 'spiral' || tech === 'geyser';
+    const wide = tech === 'fan' || tech === 'cross' || tech === 'pincer' || tech === 'curves' || tech === 'weave';
+    model.play(heavy && model.has('skill') ? 'skill' : wide && model.has('attack') ? 'attack' : 'throw');
+    if (move.big) {
+      // A big move: a flash and a warning first.
+      this.bursts.spawn(model.chestAt(this.tmp), this.spec.glow, 0.7);
+      sfx.telegraph();
+    }
+  }
+
+  /** A way of moving, then the attack it ends in. */
+  private moveThen(move: Move, model: Rival3D): void {
+    if (move.tech === 'feint') {
+      // A fake throw (nothing leaves the hand), then a fast real one.
+      this.attackWith(move, 'feint', model);
+      return;
+    }
+    this.queued = move;
+    this.mood = 'walk';
+    const side = this.angle > 0 ? -1 : 1;
+    const clamp = (a: number) => Math.max(-ARC, Math.min(ARC, a));
+    switch (move.tech) {
+      case 'walk':
+        this.goTo(clamp(this.angle + side * (0.4 + Math.random() * 0.4)), this.distance);
+        break;
+      case 'run':
+        // A sprint in, close.
+        this.distance = NEAR;
+        this.angle = clamp(this.angle * 0.4);
+        model.walkTo(this.at(this.angle, NEAR, this.spot), WALK_SPEED * 2.6);
+        break;
+      case 'dash':
+        // Across to the far side, fast.
+        if (model.has('dodge')) model.play('dodge');
+        this.goTo(clamp(side * ARC * 0.85), this.distance, false, 0.55);
+        playWhoosh(0.6);
+        break;
+      case 'leap':
+        this.goTo(clamp(this.angle + side * 0.6), NEAR + Math.random() * (FAR - NEAR), false, 0.8);
+        this.model?.slide(this.spot, 0.8, 0.45);
+        playWhoosh(0.5);
+        break;
+      case 'blink': {
+        // Gone in a splash, back on the far side.
+        this.bursts.spawn(model.chestAt(this.tmp), this.spec.glow, 0.6);
+        this.goTo(clamp(-this.angle || side * 0.6), this.distance, true);
+        this.bursts.spawn(model.chestAt(this.tmp), this.spec.glow, 0.6);
+        playWhoosh(0.7);
+        break;
+      }
+      default:
+        // roll and zigzag: a quick roll aside (a zigzag goes further).
+        if (model.has('dodge')) model.play('dodge');
+        this.goTo(clamp(this.angle + side * (move.tech === 'zigzag' ? 0.75 : 0.45)), this.distance, false, 0.6);
+        playWhoosh(0.4);
+        break;
+    }
+  }
+
+  /** The move's shots leave: the pattern its technique makes, in their own kind of ink. */
+  private fireMove(model: Rival3D, hand: Object3D): void {
+    const now = this.current;
+    this.current = null;
+    if (!now) return;
+    const { move, tech } = now;
+    const chest = model.chestAt(new Vector3());
+    // The player's frame, from where the rival stands: toward them, across, and up.
+    this.toward.copy(this.aim).sub(chest).setY(0).normalize();
+    this.across.crossVectors(this.toward, this.up).normalize();
+    const n = move.n ?? 1;
+    const wait = move.big ? BIG_WARNING : 0;
+    const kind = move.shot ?? 'bolt';
+    const speed = kind === 'pellet' ? FAST_SPEED : kind === 'curve' ? BOLT_SPEED * 0.9 : BOLT_SPEED;
+    const lob = kind === 'arc' ? LOB_TIME : kind === 'heavy' ? 1.5 : 0;
+    const push = (delay: number, from?: Vector3, aimOff?: Vector3, s = speed, l = lob) =>
+      this.pending.push({ delay: wait + delay, hand, from, aimOff, speed: s, lob: l || undefined });
+    const off = (x: number, y = 0, z = 0) => new Vector3().addScaledVector(this.across, x).addScaledVector(this.up, y).addScaledVector(this.toward, z);
+    const at = (x: number, y = 0, z = 0) => off(x, y, z).add(chest);
+    sfx.inkThrow();
+    switch (tech) {
+      case 'feint':
+        // Nothing left the hand: the real one comes a moment later, fast.
+        this.bursts.spawn(chest, this.spec.glow, 0.2);
+        push(0.35, undefined, undefined, FAST_SPEED * 1.15, 0);
+        break;
+      case 'shot':
+        push(0);
+        break;
+      case 'double':
+        push(0);
+        push(0.25);
+        break;
+      case 'burst':
+        for (let i = 0; i < Math.max(3, n); i++) push(i * 0.12, undefined, undefined, FAST_SPEED, 0);
+        break;
+      case 'stream':
+        for (let i = 0; i < Math.max(3, n); i++) push(i * 0.2);
+        break;
+      case 'fan': {
+        const k = Math.max(3, n);
+        for (let i = 0; i < k; i++) {
+          const u = i - (k - 1) / 2;
+          push(0, at(u * 0.28, 0.1), off(u * 0.24), speed, lob);
+        }
+        break;
+      }
+      case 'curves':
+        push(0, at(-0.7, 0.2), off(0.15), BOLT_SPEED * 0.9, 0);
+        push(0.1, at(0.7, 0.2), off(-0.15), BOLT_SPEED * 0.9, 0);
+        break;
+      case 'weave':
+        for (let i = 0; i < Math.max(3, n); i++) push(i * 0.3, at(i % 2 ? 0.6 : -0.6, 0.15), undefined, BOLT_SPEED * 0.9, 0);
+        break;
+      case 'lob':
+        for (let i = 0; i < Math.max(2, n); i++) push(i * 0.22, undefined, off((Math.random() - 0.5) * 0.4), speed, 1.1 + i * 0.25);
+        break;
+      case 'sky': {
+        // Ink falling from right above the player.
+        for (let i = 0; i < Math.max(3, n); i++) {
+          const from = this.aim.clone().addScaledVector(this.up, 1.4).add(off((Math.random() - 0.5) * 0.7, 0, -0.15));
+          push(0.3 + i * 0.22, from, off((Math.random() - 0.5) * 0.3), 1.9, 0);
+        }
+        break;
+      }
+      case 'wall': {
+        // A low row of ink across the whole width: block it, or move.
+        const k = Math.max(4, n);
+        for (let i = 0; i < k; i++) {
+          const u = i - (k - 1) / 2;
+          push(0, at(u * 0.4, -0.3), off(u * 0.38, -0.12), BOLT_SPEED * 0.8, 0);
+        }
+        break;
+      }
+      case 'snipe':
+        // A moment's aim (a glint at the hand), then one very fast shot.
+        model.handAt(hand, this.tmp);
+        this.bursts.spawn(this.tmp, 0xffffff, 0.2);
+        push(0.55, undefined, undefined, FAST_SPEED * 1.35, 0);
+        break;
+      case 'spiral': {
+        const k = Math.max(4, n);
+        for (let i = 0; i < k; i++) {
+          const a = (i / k) * Math.PI * 2;
+          push(i * 0.12, at(Math.cos(a) * 0.45, Math.sin(a) * 0.45), undefined, speed, 0);
+        }
+        break;
+      }
+      case 'pincer':
+        push(0, at(-1.1, 0.1), off(0.05), speed, 0);
+        push(0, at(1.1, 0.1), off(-0.05), speed, 0);
+        break;
+      case 'converge': {
+        // Thrown one by one from a spread, the later ones faster: they arrive close together.
+        const k = Math.max(3, n);
+        for (let i = 0; i < k; i++) push(i * 0.15, at((i - (k - 1) / 2) * 0.35, 0.1), undefined, BOLT_SPEED * (0.85 + 0.18 * i), 0);
+        break;
+      }
+      case 'cross':
+        push(0, at(-0.7, 0.25), off(0.2), BOLT_SPEED * 0.9, 0);
+        push(0, at(0.7, 0.25), off(-0.2), BOLT_SPEED * 0.9, 0);
+        push(0.1);
+        break;
+      case 'ring': {
+        // A whole ring at once, around them.
+        const k = Math.max(6, n);
+        for (let i = 0; i < k; i++) {
+          const a = (i / k) * Math.PI * 2;
+          push(0, at(Math.cos(a) * 0.55, Math.sin(a) * 0.55), off(Math.cos(a) * 0.2, Math.sin(a) * 0.15), speed, 0);
+        }
+        break;
+      }
+      case 'geyser': {
+        // Up at the player from the floor between you.
+        for (let i = 0; i < Math.max(2, n); i++) {
+          const from = this.aim.clone().addScaledVector(this.toward, -0.9).add(off((i - 1) * 0.4));
+          from.y = this.feet + 0.05;
+          push(0.2 + i * 0.25, from, undefined, 2, 0);
+        }
+        break;
+      }
+      case 'slam': {
+        // A ground slam: a ring of dust, a heavy and two lobs.
+        const feet = this.tmp.copy(model.root.position);
+        feet.y += 0.1;
+        this.bursts.spawn(feet, this.spec.glow, 0.9);
+        sfx.wallBreak();
+        push(0, chest.clone(), undefined, speed, 1.0);
+        push(0.35, chest.clone(), off(0.25), speed, 1.2);
+        push(0.7, chest.clone(), off(-0.25), speed, 1.4);
+        break;
+      }
+      default:
+        push(0);
+        break;
+    }
   }
 
   /** Mako's charge: in close, a slam that throws up three heavy lobs, then back out. */

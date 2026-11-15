@@ -78,6 +78,14 @@ export const MAX_SPEED = 3;
 const REST_SPEED = 0.06;
 /** Rolling resistance while touching something, per second (a rolling ball barely slows). */
 const ROLL_DRAG = 0.08;
+/**
+ * Crushing: a surface driving into the spark faster than this (m/s along the contact normal)
+ * while something still holds it from the opposite side squeezes it to bursting. A gentle push,
+ * a carry or a kick from below never does.
+ */
+export const CRUSH_SPEED = 0.6;
+/** Still enough to be the anvil it is crushed against (m/s). */
+const ANVIL_SPEED = 0.15;
 
 export class Spark {
   x = 0;
@@ -89,6 +97,15 @@ export class Spark {
   readonly contacts: Contact[] = [];
   /** Seconds since it last touched anything. */
   airborne = 0;
+  /** Squeezed hard between a moving shape and a still one during the last step. */
+  crushed = false;
+  // This sub-step's pusher (a shape driving into it) and anvil (a still shape), as contact normals.
+  private pushX = 0;
+  private pushY = 0;
+  private pushed = false;
+  /** This sub-step's still contacts (normals x, y pairs), up to four. */
+  private readonly anvils = [0, 0, 0, 0, 0, 0, 0, 0];
+  private anvilCount = 0;
 
   place(x: number, y: number): void {
     this.x = x;
@@ -97,11 +114,13 @@ export class Spark {
     this.vy = 0;
     this.airborne = 0;
     this.contacts.length = 0;
+    this.crushed = false;
   }
 
   /** Advances by dt seconds against the given shapes. */
   step(dt: number, capsules: readonly Capsule[], polys: readonly Poly[], bounds: Bounds, gravity = GRAVITY): void {
     this.contacts.length = 0;
+    this.crushed = false;
     const speed = Math.hypot(this.vx, this.vy);
     const steps = Math.max(2, Math.min(32, Math.ceil((speed * dt) / (this.r / 3))));
     const h = dt / steps;
@@ -110,9 +129,16 @@ export class Spark {
       this.vy -= gravity * h;
       this.x += this.vx * h;
       this.y += this.vy * h;
+      this.pushed = false;
+      this.anvilCount = 0;
       for (const c of capsules) touched = this.capsule(c) || touched;
       for (const p of polys) touched = this.poly(p) || touched;
       touched = this.walls(bounds) || touched;
+      if (this.pushed) {
+        for (let a = 0; a < this.anvilCount; a++) {
+          if (this.pushX * this.anvils[a * 2] + this.pushY * this.anvils[a * 2 + 1] < -0.6) this.crushed = true;
+        }
+      }
     }
     if (touched) {
       const k = Math.max(0, 1 - ROLL_DRAG * dt);
@@ -235,6 +261,17 @@ export class Spark {
   }
 
   private resolve(nx: number, ny: number, depth: number, svx: number, svy: number, e: number, mu: number, tag: number): void {
+    // Which side squeezes: a shape driving in (the pusher) or one standing still (the anvil).
+    const drive = svx * nx + svy * ny;
+    if (drive > CRUSH_SPEED) {
+      this.pushed = true;
+      this.pushX = nx;
+      this.pushY = ny;
+    } else if (Math.abs(drive) < ANVIL_SPEED && this.anvilCount < 4) {
+      this.anvils[this.anvilCount * 2] = nx;
+      this.anvils[this.anvilCount * 2 + 1] = ny;
+      this.anvilCount++;
+    }
     this.x += nx * depth;
     this.y += ny * depth;
     let rx = this.vx - svx;
