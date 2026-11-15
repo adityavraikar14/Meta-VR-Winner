@@ -11,13 +11,12 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   RingGeometry,
-  Shape,
-  ShapeGeometry,
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
+import { LifeBar } from './life-bar.js';
 import { playBoom, playCharge, playClang, playFireball, playHiss, playSign, playThrow } from '../audio.js';
 import { sfx } from '../yash/sfx.js';
 import type { HandState } from '../creatures/hand-input.js';
@@ -61,7 +60,10 @@ const SIGN_NAMES = Object.keys(SIGNS) as SignName[];
 const SIGN_HOLD = 0.3;
 const FINGER_NAMES = ['index', 'middle', 'ring', 'little'];
 
-const PLAYER_HEALTH = 3;
+/** Your health, what a fireball's burn takes, and what a Healing Draught gives back. */
+const PLAYER_HEALTH = 100;
+const BURN = 30;
+const DRAUGHT_HEAL = 35;
 const DRAGON_HEALTH = 4;
 const FIRE_SPEED = 0.75;
 const HEAD_RADIUS = 0.16;
@@ -167,7 +169,7 @@ export class DragonBattle {
 
   // HUD on the screen.
   private readonly hud = new Group();
-  private readonly hearts: Mesh[] = [];
+  private lifeBar!: LifeBar;
   private bar!: Mesh;
   private note = '';
   private noteTime = 0;
@@ -326,7 +328,7 @@ export class DragonBattle {
   journal(): string[] {
     const t = this.tally;
     return [
-      `Won in ${Math.round(this.time)} s with ${this.health} of ${PLAYER_HEALTH} hearts left`,
+      `Won in ${Math.round(this.time)} s with ${this.health} of ${PLAYER_HEALTH} health left`,
       `${t.light} strong shadow strikes · ${t.sword} sword cuts · ${t.fire} lighter hits and its own fire`,
       `${t.deflected} fireballs bounced back · ${t.blocked} bites blocked`,
     ];
@@ -916,7 +918,7 @@ export class DragonBattle {
     }
   }
 
-  /** A healing draught from the wrist: one heart back, if any were lost. */
+  /** A healing draught from the wrist: health back, if any was lost. */
   private drink(): void {
     const i = play.items.indexOf('potion');
     if (i < 0) return;
@@ -926,10 +928,10 @@ export class DragonBattle {
     }
     play.items.splice(i, 1);
     saveProgress();
-    this.health++;
+    this.health = Math.min(PLAYER_HEALTH, this.health + DRAUGHT_HEAL);
     playCharge();
     this.burstAt(this.v.copy(this.head).add(this.w.set(0, -0.15, -0.1)), 24, 0x9fd060);
-    this.flash('A healing draught! One heart back', 1.6);
+    this.flash(`A healing draught! ${DRAUGHT_HEAL} health back`, 1.6);
   }
 
   private hurtPlayer(at: Vector3): void {
@@ -940,7 +942,7 @@ export class DragonBattle {
       this.flash('Your Iron Ward takes the blow!', 1.6);
       return;
     }
-    this.health--;
+    this.health = Math.max(0, this.health - BURN);
     this.mistakes++;
     playBoom(0.12);
     playHiss(0.05, 0.6);
@@ -955,7 +957,7 @@ export class DragonBattle {
       const potions = play.items.includes('potion');
       this.flash(potions
         ? 'Burned! Look at your palm and tap Drink to heal'
-        : this.health === 1 ? 'Burned! One heart left: shield with an open palm' : 'Burned! Shield with an open palm', 2.2);
+        : this.health <= BURN ? 'Burned! Your health is low: shield with an open palm' : 'Burned! Shield with an open palm', 2.2);
     }
   }
 
@@ -985,18 +987,9 @@ export class DragonBattle {
   // =================================================================== HUD
 
   private buildHud(): void {
-    // Hearts, top left of the screen.
-    const heart = new Shape();
-    heart.moveTo(0, -0.012);
-    heart.bezierCurveTo(-0.02, 0.0, -0.016, 0.016, 0, 0.008);
-    heart.bezierCurveTo(0.016, 0.016, 0.02, 0.0, 0, -0.012);
-    for (let i = 0; i < PLAYER_HEALTH; i++) {
-      const mesh = new Mesh(new ShapeGeometry(heart, 12), new MeshBasicMaterial({ color: 0xd8342c, transparent: true, depthWrite: false }));
-      mesh.position.set(-0.45 + i * 0.04, 0.31, 0.012);
-      mesh.renderOrder = 9;
-      this.hearts.push(mesh);
-      this.hud.add(mesh);
-    }
+    // Your health bar, top left of the screen.
+    this.lifeBar = new LifeBar(this.hud, PLAYER_HEALTH, 0.28);
+    this.lifeBar.mesh.position.set(-0.345, 0.315, 0.012);
     // The dragon's strength, top centre.
     const frame = new Mesh(new BoxGeometry(0.3, 0.022, 0.001), new MeshBasicMaterial({ color: 0x2a1a10, transparent: true, opacity: 0.8, depthWrite: false }));
     frame.position.set(0, 0.315, 0.011);
@@ -1019,11 +1012,7 @@ export class DragonBattle {
   }
 
   private drawHud(dt: number): void {
-    this.hearts.forEach((heart, i) => {
-      const alive = i < this.health;
-      (heart.material as MeshBasicMaterial).opacity = alive ? 0.95 : 0.18;
-      heart.scale.setScalar(alive ? 1 + 0.08 * Math.sin(this.time * 4 + i) : 0.9);
-    });
+    this.lifeBar.update(this.health, dt);
     const k = Math.max(0, this.dragonHealth / DRAGON_HEALTH);
     this.bar.scale.x += (Math.max(0.001, k) - this.bar.scale.x) * Math.min(1, dt * 6);
     // The old light signs are gone from the story: shadow weapons replace them.

@@ -16,8 +16,6 @@ import {
   PlaneGeometry,
   Raycaster,
   RingGeometry,
-  Shape,
-  ShapeGeometry,
   SphereGeometry,
   SRGBColorSpace,
   TubeGeometry,
@@ -35,6 +33,7 @@ import { Comic } from './comic.js';
 import { Doodle, type DoodleWorld, isClosedLoop } from './doodle.js';
 import { FlatRival } from './flat-rival.js';
 import { disposeHerb, herbSprig } from './herb.js';
+import { LifeBar } from './life-bar.js';
 import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
@@ -65,7 +64,12 @@ import { TOUR_LESSONS } from '../tour.js';
  * through, a parry that sends your ink back. First to run out loses.
  */
 
-const PLAYER_HEARTS = 5;
+/** Your health in a boss fight, and what one of their hits takes in each phase (it gets worse as they power up). */
+const PLAYER_LIFE = 100;
+const HIT_DAMAGE = [0, 15, 20, 25];
+/** What a pinched herb and a Healing Draught give back. */
+const HERB_HEAL = 25;
+const DRAUGHT_HEAL = 35;
 const INK_DENSITY = 0.5;
 const MAX_INK = 0.6;
 const STEP = 0.007;
@@ -86,10 +90,14 @@ const FLAT_AFTER = 20;
 /** Living drawings at once, and head-butts each gets before it pops. */
 const MAX_DOODLES = 3;
 const DOODLE_BONKS = 3;
-/** After a hit you are safe for this long, so a volley of three costs one heart, not three. */
+/** After a hit you are safe for this long, so a volley of three costs one hit, not three. */
 const GRACE = 0.9;
-/** Rivals here are three times as tough as their card says: a real fight, not one lucky throw. */
-const HEALTH_SCALE = 3;
+/**
+ * Rivals here are tougher than their card says: a real fight, not one lucky throw. At 1.7 a
+ * captain (90–110 on the card) takes about 14–17 hits of an average shadow weapon (about 11),
+ * Morwen (170) about 26; head hits, the Hammer, Lightning and your super make it quicker.
+ */
+const HEALTH_SCALE = 1.7;
 /** No single hit can take more than this (a head hit can reach half again). */
 const MAX_HIT = 22;
 /** Seconds a rival is untouchable while powering up into a new phase. */
@@ -101,9 +109,9 @@ const SUPER_FILL = 0.22;
 const SUPER_BOLTS = 8;
 const SUPER_DAMAGE = 9;
 /** Healing herbs: seconds between them (while you are hurt), how long one lasts, how close a pinch must be. */
-const HERB_EVERY: [number, number] = [14, 20];
-const HERB_LIFE = 10;
-const HERB_REACH = 0.06;
+const HERB_EVERY: [number, number] = [10, 15];
+const HERB_LIFE = 14;
+const HERB_REACH = 0.09;
 /** How far either side of the screen's middle the rival stands and moves (never in front of its middle). */
 const SIDE_NEAR = 0.2;
 const SIDE_FAR = 0.38;
@@ -216,7 +224,7 @@ export class InkDuel {
   private mode: Mode = 'ready';
   private modeTime = 0;
   private time = 0;
-  private hearts = PLAYER_HEARTS;
+  private life = PLAYER_LIFE;
   /** On the Quick Tour a fight is shorter: 40% of the usual strength (training never falls). */
   private readonly maxHealth = this.spec.health * HEALTH_SCALE * (stage.tour ? 0.4 : 1);
   private rivalHealth = this.maxHealth;
@@ -258,7 +266,7 @@ export class InkDuel {
   private readonly comic = new Comic();
   private readonly splats: Mesh[] = [];
   private readonly splatMaterial: MeshBasicMaterial;
-  private readonly heartMeshes: Mesh[] = [];
+  private lifeBar!: LifeBar;
   private readonly frame: Mesh;
   private readonly bar: Mesh;
   private readonly score: { mesh: Mesh; canvas: HTMLCanvasElement; texture: CanvasTexture; time: number };
@@ -329,17 +337,9 @@ export class InkDuel {
     this.splatMaterial = new MeshBasicMaterial({ map: splatTexture(), transparent: true, depthWrite: false });
 
     // Hearts and the Rival's strength on the screen.
-    const heart = new Shape();
-    heart.moveTo(0, -0.012);
-    heart.bezierCurveTo(-0.02, 0.0, -0.016, 0.016, 0, 0.008);
-    heart.bezierCurveTo(0.016, 0.016, 0.02, 0.0, 0, -0.012);
-    for (let i = 0; i < PLAYER_HEARTS; i++) {
-      const mesh = new Mesh(new ShapeGeometry(heart, 12), new MeshBasicMaterial({ color: 0x4aa8ff, transparent: true, depthWrite: false }));
-      mesh.position.set(-0.45 + i * 0.038, 0.31, 0.012);
-      mesh.renderOrder = 9;
-      this.heartMeshes.push(mesh);
-      this.paper.add(mesh);
-    }
+    // Your health bar, top left, opposite the rival's.
+    this.lifeBar = new LifeBar(this.paper, PLAYER_LIFE, 0.33);
+    this.lifeBar.mesh.position.set(-0.315, 0.323, 0.012);
     const frame = new Mesh(new BoxGeometry(0.26, 0.022, 0.001), new MeshBasicMaterial({ color: 0x1a1218, transparent: true, opacity: 0.8, depthWrite: false }));
     frame.position.set(0.3, 0.315, 0.011);
     frame.renderOrder = 8;
@@ -349,7 +349,7 @@ export class InkDuel {
     this.bar.position.set(0.175, 0.315, 0.0125);
     this.bar.renderOrder = 9;
     this.paper.add(this.bar);
-    // Your super meter, under your hearts: fills as you deal damage and block.
+    // Your super meter, under your health: fills as you deal damage and block.
     this.superFrame = new Mesh(new BoxGeometry(0.19, 0.016, 0.001), new MeshBasicMaterial({ color: 0x14213d, transparent: true, opacity: 0.85, depthWrite: false }));
     this.superFrame.position.set(-0.375, 0.28, 0.011);
     this.superFrame.renderOrder = 8;
@@ -420,7 +420,7 @@ export class InkDuel {
       this.end(true);
     };
     devActions[','] = () => {
-      this.hearts = 0;
+      this.life = 0;
       this.end(false);
     };
     // Dev: ` fills your super and fires it; - grows a herb now; + jumps to the next phase (not #: Shift+3 is a hand pose).
@@ -430,7 +430,7 @@ export class InkDuel {
     };
     devActions['-'] = () => {
       this.herbTimer = 0;
-      if (this.hearts >= PLAYER_HEARTS) this.hearts = PLAYER_HEARTS - 1;
+      if (this.life >= PLAYER_LIFE) this.life = PLAYER_LIFE - HERB_HEAL;
     };
     devActions['+'] = () => {
       this.hurt(Math.max(1, this.rivalHealth - (this.phase === 1 ? (this.maxHealth * 2) / 3 : this.maxHealth / 3) + 1), null);
@@ -451,13 +451,13 @@ export class InkDuel {
       ? `${this.spec.id}=${this.foe.moving}${this.foe.warded ? '+ward' : ''}${this.foe.parrying ? '+parry' : ''}${this.foe.ducking ? '+duck' : ''}`
       : this.flat ? 'flat' : `${this.spec.id}:${rivalLoadState(this.spec)}`;
     const doodles = this.doodles.map((d) => `${d.name}(${d.kind},${d.state},${d.bonks})`).join(',');
-    return `${this.mode} ${who} hearts=${this.hearts} rival=${Math.round(this.rivalHealth)}/${this.maxHealth} phase=${this.phase} super=${Math.round(this.superMeter * 100)}%${this.herb ? ' herb' : ''} inks=${this.inks.map((i) => i.state[0]).join('')} doodles=[${doodles}]`;
+    return `${this.mode} ${who} life=${this.life} rival=${Math.round(this.rivalHealth)}/${this.maxHealth} phase=${this.phase} super=${Math.round(this.superMeter * 100)}%${this.herb ? ' herb' : ''} inks=${this.inks.map((i) => i.state[0]).join('')} doodles=[${doodles}]`;
   }
 
-  /** A Healing Draught from the bag (Drink on the palm menu): one heart back. */
+  /** A Healing Draught from the bag (Drink on the palm menu): health back. */
   private drink(): void {
     if (this.mode !== 'fight') return;
-    if (this.hearts >= PLAYER_HEARTS) {
+    if (this.life >= PLAYER_LIFE) {
       this.flash('You are at full health: keep your draught', 1.6);
       return;
     }
@@ -465,10 +465,10 @@ export class InkDuel {
       this.flash('No draughts left. Brew one in the Bag: 3 herbs', 2);
       return;
     }
-    this.hearts++;
+    this.life = Math.min(PLAYER_LIFE, this.life + DRAUGHT_HEAL);
     playCollect(0.08);
-    this.comic.pop('+1 HEART', this.v.copy(this.head).add(this.w.set(0, -0.12, 0)), '#3ee08a', 0.9, 1.1);
-    this.flash('Gulp! One heart back', 1.4);
+    this.comic.pop(`+${DRAUGHT_HEAL} HEALTH`, this.v.copy(this.head).add(this.w.set(0, -0.12, 0)), '#3ee08a', 0.9, 1.1);
+    this.flash(`Gulp! ${DRAUGHT_HEAL} health back`, 1.4);
   }
 
   // ================================================================ Update
@@ -1126,10 +1126,12 @@ export class InkDuel {
             this.flash(`Your Iron Ward takes the blow${play.items.includes('ward') ? '' : ' (that was your last)'}`, 1.8);
             continue;
           }
-          this.hearts--;
+          const lost = HIT_DAMAGE[this.phase] ?? 20;
+          this.life = Math.max(0, this.life - lost);
           this.mistakes++;
-          this.flash(this.hearts > 1 ? 'Splat! Right in the face' : 'Splat! One heart left');
-          if (this.hearts <= 0) this.end(false);
+          this.comic.pop(`−${lost}`, this.v.copy(this.head).add(this.w.set(0, -0.1, 0)), '#ff5a4a', 0.8, 0.9);
+          this.flash(this.life > 30 ? 'Splat! Right in the face' : 'Splat! Your health is low: pinch a green herb when one grows');
+          if (this.life <= 0) this.end(false);
           continue;
         }
         if (ink.age > 3.5) this.remove(ink);
@@ -1591,23 +1593,24 @@ export class InkDuel {
 
   /**
    * While you are hurt, a healing herb grows in the air within reach every
-   * so often. Pinch it before it wilts: one heart back.
+   * so often. Pinch or touch it before it wilts: health back.
    */
   private tendHerb(dt: number, hands: readonly HandState[]): void {
     if (!this.herb) {
-      if (this.hearts >= PLAYER_HEARTS) return;
+      if (this.life >= PLAYER_LIFE) return;
       this.herbTimer -= dt;
       if (this.herbTimer > 0) return;
       this.herbTimer = HERB_EVERY[0] + Math.random() * (HERB_EVERY[1] - HERB_EVERY[0]);
       const towards = this.v.copy(this.paper.position).sub(this.head).setY(0).normalize();
       const at = this.head.clone().addScaledVector(towards, 0.3).addScaledVector(this.side, (Math.random() < 0.5 ? -1 : 1) * 0.17);
       at.y -= 0.22;
-      const group = herbSprig();
+      // Big and bright, so you notice it mid-fight.
+      const group = herbSprig(1.6);
       group.position.copy(at);
       this.group.add(group);
       this.herb = { group, at, life: HERB_LIFE };
       playCollect(0.025);
-      this.flash('A healing herb! Pinch it for a heart back', 2.2);
+      this.flash(`A healing herb, low down by your hand! Pinch or touch it for +${HERB_HEAL} health`, 2.6);
       return;
     }
     const herb = this.herb;
@@ -1618,16 +1621,19 @@ export class InkDuel {
     herb.group.position.y = herb.at.y + Math.sin(this.time * 2.2) * 0.008;
     herb.group.rotation.y += dt * 0.8;
     for (const hand of hands) {
-      if (!hand.tracked || !hand.pinchStarted) continue;
-      if (this.group.worldToLocal(this.w.copy(hand.pinch)).distanceTo(herb.group.position) > HERB_REACH) continue;
-      this.hearts = Math.min(PLAYER_HEARTS, this.hearts + 1);
+      if (!hand.tracked) continue;
+      // A pinch on it, or just a fingertip touching it.
+      const pinched = hand.pinchStarted && this.group.worldToLocal(this.w.copy(hand.pinch)).distanceTo(herb.group.position) < HERB_REACH;
+      const touched = this.group.worldToLocal(this.w.copy(hand.tips[0])).distanceTo(herb.group.position) < HERB_REACH * 0.6;
+      if (!pinched && !touched) continue;
+      this.life = Math.min(PLAYER_LIFE, this.life + HERB_HEAL);
       for (let i = 0; i < 18; i++) {
         this.v.set(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize().multiplyScalar(0.2 + Math.random() * 0.25);
         this.sparks.emit(herb.group.position, this.v, { life: 0.6, size: [0.012, 0.002], from: 0x7be36a });
       }
       sfx.success();
-      this.comic.pop('+1 ♥', herb.group.position, '#7be36a', 0.7, 1);
-      this.flash('Healed: one heart back', 1.4);
+      this.comic.pop(`+${HERB_HEAL}`, herb.group.position, '#7be36a', 0.8, 1);
+      this.flash(`Healed: ${HERB_HEAL} health back`, 1.4);
       this.dropHerb();
       return;
     }
@@ -1646,7 +1652,7 @@ export class InkDuel {
     const { hits, heads, blocked, bonks, best } = this.tally;
     return [
       `Beat ${this.spec.name} ${this.spec.title} · best throw ½ · ${(best.mass * 1000).toFixed(0)} g · (${best.speed.toFixed(1)} m/s)² = ${best.energy.toFixed(2)} J`,
-      `${hits} hits, ${heads} on the head · ${this.hearts} of ${PLAYER_HEARTS} hearts left`,
+      `${hits} hits, ${heads} on the head · ${this.life} of ${PLAYER_LIFE} health left`,
       `${blocked} throws blocked by your hanging drawings · ${bonks} head-butts from drawings that came alive`,
     ];
   }
@@ -2280,9 +2286,7 @@ export class InkDuel {
   }
 
   private drawHud(dt: number): void {
-    this.heartMeshes.forEach((heart, i) => {
-      (heart.material as MeshBasicMaterial).opacity = i < this.hearts ? 0.95 : 0.15;
-    });
+    this.lifeBar.update(this.life, dt);
     this.superBar.scale.x += (Math.max(0.001, this.superMeter) - this.superBar.scale.x) * Math.min(1, dt * 8);
     const ready = this.superMeter >= 1;
     (this.superBar.material as MeshBasicMaterial).color.setHex(ready && Math.sin(this.time * 10) > 0 ? 0xffffff : 0xffc928);

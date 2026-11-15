@@ -30,7 +30,7 @@ export interface Recipe {
 }
 
 export const RECIPES: Recipe[] = [
-  { item: 'potion', name: 'Healing Draught', label: 'Draught', needs: { herb: 3 }, does: 'heals one heart' },
+  { item: 'potion', name: 'Healing Draught', label: 'Draught', needs: { herb: 3 }, does: 'heals you in a fight' },
   { item: 'ward', name: 'Iron Ward', label: 'Ward', needs: { iron: 2, stone: 1 }, does: 'takes the next blow for you' },
   { item: 'shard', name: 'Sun Shard', label: 'Shard', needs: { crystal: 2, ember: 1 }, does: 'your next throw strikes twice as hard' },
 ];
