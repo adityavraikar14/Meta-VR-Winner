@@ -197,6 +197,9 @@ export class Beast {
   private hoverTime = 0;
   private hoverPoint = new Vector3();
   private snortIn = 6;
+  /** Seconds left of a nap you tucked it into (0: awake), and the next sleepy Z. */
+  private sleepFor = 0;
+  private zzzIn = 0;
 
   private task: TaskStep[] = [];
   private taskTime = 0;
@@ -352,6 +355,43 @@ export class Beast {
     if (this.afterLeap === 'task') this.afterLeap = 'idle';
   }
 
+  /** Shadow Pets care (see pet-care.ts): where its mouth and back are, and how wide it is. */
+  mouth(out: Vector3): Vector3 {
+    if (this.head) return this.head.getWorldPosition(out);
+    this.tmp.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    return out.copy(this.position).addScaledVector(this.tmp, this.length * 0.5).addScaledVector(UP, this.height * 0.8);
+  }
+
+  back(out: Vector3): Vector3 {
+    return out.copy(this.position).addScaledVector(UP, this.height * 0.85);
+  }
+
+  get reach(): number {
+    return Math.max(0.06, this.length * 0.45);
+  }
+
+  get asleep(): boolean {
+    return this.sleepFor > 0;
+  }
+
+  /** A berry from your fingers: it eats, hearts float up, and it nickers happily. */
+  feed(): void {
+    this.feelings.fed();
+    this.happiness = 1;
+    this.sleepFor = 0;
+    for (let i = 0; i < 3; i++) this.fx.heart(this.back(this.tmp2));
+    if (this.state === 'idle') this.setMood('graze', 2.5);
+    this.call(0.7);
+  }
+
+  /** Your palm over its back: it lowers its head and dozes, with sleepy Zs, until you lift or poke it. */
+  tuckIn(): void {
+    if (this.state !== 'idle') return;
+    this.feelings.sleep();
+    this.sleepFor = 16;
+    this.setMood('rest', 16);
+  }
+
   /** A celebration: a happy buck on the spot and a call. */
   cheer(): void {
     if (this.state !== 'idle') return;
@@ -379,6 +419,8 @@ export class Beast {
       if (this.oneShot <= 0 && this.state === 'idle') this.setMood(this.mood, this.moodLength - this.moodTime);
     }
     this.happiness = Math.max(0, this.happiness - dt * 0.05);
+    // Picked up, thrown or busy: no longer asleep.
+    if (this.state !== 'idle') this.sleepFor = 0;
 
     switch (this.state) {
       case 'emerging': {
@@ -436,6 +478,20 @@ export class Beast {
   private live(dt: number, ground: BeastGround, hands: HandState[]): void {
     this.feel(dt, hands);
     if (this.oneShot > 0) return;
+    // Tucked in: it dozes, head low, until the nap is over or it is stroked awake.
+    if (this.sleepFor > 0) {
+      this.sleepFor -= dt;
+      this.zzzIn -= dt;
+      if (this.zzzIn <= 0) {
+        this.zzzIn = 1.4;
+        this.fx.zzz(this.back(this.tmp2));
+      }
+      if (this.mood !== 'rest') this.sleepFor = 0;
+      else {
+        this.moodTime = 0;
+        return;
+      }
+    }
 
     this.moodTime += dt;
     this.snortIn -= dt;

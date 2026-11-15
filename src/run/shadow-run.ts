@@ -659,6 +659,7 @@ export class ShadowRun {
     }
 
     this.buildReadout();
+    if (level.workshop) this.buildGuide();
 
     devInfo.run = () => `${level.id} ${this.sim.state} t=${this.sim.time.toFixed(1)} spark=(${this.sim.spark.x.toFixed(2)},${this.sim.spark.y.toFixed(2)}) motes=${this.sim.motesTaken} retries=${this.sim.retries} hands=${this.shadows.capsules.length} scale=${this.shadows.stats.scale.map((s) => s.toFixed(2)).join('/')}`;
     devActions[']'] = () => {
@@ -854,11 +855,13 @@ export class ShadowRun {
    * your shadow's magnification D ÷ d. Redrawn five times a second.
    */
   private buildReadout(): void {
+    // Drawn at twice its layout size (640 × 96), so the numbers stay sharp in the headset.
     const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 96;
+    canvas.width = 1280;
+    canvas.height = 192;
     const texture = new CanvasTexture(canvas);
     texture.colorSpace = SRGBColorSpace;
+    texture.anisotropy = 4;
     const mesh = new Mesh(new PlaneGeometry(0.44, 0.066), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0.95 }));
     mesh.position.set(0, 0.308, Z_SPARK + 0.001);
     mesh.renderOrder = 30;
@@ -876,10 +879,12 @@ export class ShadowRun {
     const speed = this.sim.state === 'live' ? Math.hypot(vx, vy) : 0;
     const height = Math.max(0, (y - COURSE_FLOOR) * 100);
     const g = r.canvas.getContext('2d')!;
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, r.canvas.width, r.canvas.height);
+    g.setTransform(2, 0, 0, 2, 0, 0);
     g.fillStyle = 'rgba(20, 33, 61, 0.88)';
     g.beginPath();
-    g.roundRect(4, 4, r.canvas.width - 8, r.canvas.height - 8, 44);
+    g.roundRect(4, 4, 632, 88, 44);
     g.fill();
     const cells: Array<[string, string]> = [
       ['SPEED', `${speed.toFixed(2)} m/s`],
@@ -891,13 +896,108 @@ export class ShadowRun {
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillStyle = '#9fb3d9';
-      g.font = `800 19px ${FONT}`;
+      g.font = `800 21px ${FONT}`;
       g.fillText(name, x, 28);
       g.fillStyle = '#ffc928';
       g.font = `800 33px ${FONT}`;
       g.fillText(value, x, 64);
     });
     r.texture.needsUpdate = true;
+  }
+
+  /**
+   * The Workshop's steps, on a card tilted up at you on the table in front of the pieces:
+   * where the spark starts, where it ends, the path between, and Drop. Each ticks off as
+   * it is done, and the one to do now glows.
+   */
+  private guide3: { canvas: HTMLCanvasElement; texture: CanvasTexture; mesh: Mesh; key: string } | null = null;
+
+  private buildGuide(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1600;
+    canvas.height = 420;
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    texture.anisotropy = 4;
+    const mesh = new Mesh(new PlaneGeometry(0.46, 0.46 * 420 / 1600), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }));
+    mesh.name = 'WorkshopSteps';
+    // Standing on the table between the screen and the shelf of pieces, low enough not to hide the course.
+    mesh.position.set(0, -0.165, 0.42);
+    // Tilted back to face your eyes, like a card propped on the table.
+    mesh.rotation.x = -0.3;
+    mesh.renderOrder = 12;
+    this.paper.add(mesh);
+    this.guide3 = { canvas, texture, mesh, key: '' };
+  }
+
+  private updateGuide(): void {
+    const guide = this.guide3;
+    if (!guide) return;
+    guide.mesh.visible = this.paper.visible;
+    const dropped = this.lastTime > 0 || this.sim.state !== 'ready';
+    const done = [this.startOk, this.gateOk, dropped, this.sim.state === 'won' || this.lastTime > 0];
+    const now = done.indexOf(false);
+    const key = `${done.join()}|${now}`;
+    if (key === guide.key) return;
+    guide.key = key;
+    const steps = [
+      ['★', 'START', 'Hold the gold star in the light: its shadow is where the spark drops'],
+      ['◯', 'GOAL', 'Hold the gold ring in the light: its shadow is the finish gate'],
+      ['▬', 'PATH', 'Pinch glass pieces from the shelf: their shadows are the ground. + adds more'],
+      ['▶', 'DROP', 'Push the green Drop button and watch the spark run your course'],
+    ];
+    const g = guide.canvas.getContext('2d')!;
+    const W = guide.canvas.width;
+    const H = guide.canvas.height;
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = 'rgba(20, 33, 61, 0.95)';
+    g.beginPath();
+    g.roundRect(6, 6, W - 12, H - 12, 40);
+    g.fill();
+    g.strokeStyle = '#ffc928';
+    g.lineWidth = 8;
+    g.stroke();
+    g.fillStyle = '#ffc928';
+    g.font = `900 40px ${FONT}`;
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    g.fillText('BUILD YOUR COURSE', 40, 50);
+    g.fillStyle = '#9fb3d9';
+    g.font = `700 30px ${FONT}`;
+    g.textAlign = 'right';
+    g.fillText('Undo takes a piece back · Slot keeps 3 designs', W - 40, 50);
+    const colW = (W - 80) / 2;
+    steps.forEach(([icon, head, text], i) => {
+      const x = 40 + (i % 2) * colW;
+      const y = 92 + Math.floor(i / 2) * 160;
+      const isNow = i === now;
+      g.fillStyle = isNow ? 'rgba(255, 201, 40, 0.22)' : done[i] ? 'rgba(31, 179, 90, 0.16)' : 'rgba(255, 255, 255, 0.05)';
+      g.beginPath();
+      g.roundRect(x, y, colW - 20, 146, 22);
+      g.fill();
+      if (isNow) {
+        g.strokeStyle = '#ffc928';
+        g.lineWidth = 5;
+        g.stroke();
+      }
+      // The number, or a tick once it is done.
+      g.fillStyle = done[i] ? '#1fb35a' : isNow ? '#ffc928' : 'rgba(255,255,255,0.25)';
+      g.beginPath();
+      g.arc(x + 54, y + 73, 36, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = done[i] || isNow ? '#14213d' : '#ffffff';
+      g.font = `900 40px ${FONT}`;
+      g.textAlign = 'center';
+      g.fillText(done[i] ? '✓' : String(i + 1), x + 54, y + 75);
+      g.textAlign = 'left';
+      g.fillStyle = isNow ? '#ffc928' : '#ffffff';
+      g.font = `900 34px ${FONT}`;
+      g.fillText(`${icon}  ${head}`, x + 106, y + 36);
+      g.fillStyle = done[i] && !isNow ? '#9fb3d9' : '#ffffff';
+      g.font = `700 27px ${FONT}`;
+      lineWrap(g, text, colW - 140).slice(0, 2).forEach((row, j) => g.fillText(row, x + 106, y + 80 + j * 34));
+    });
+    guide.texture.needsUpdate = true;
   }
 
   /** Workshop: the star's shadow is the start, the ring's shadow the gate. */
@@ -933,6 +1033,7 @@ export class ShadowRun {
   private updateCaption(scale: number): void {
     const sim = this.sim;
     if (this.level.workshop) {
+      this.updateGuide();
       if (sim.state === 'won') this.caption = `Through the gate in ${sim.time.toFixed(1)} s!`;
       else if (sim.state === 'live') this.caption = 'There it goes… catch it with your hands if it strays';
       else if (!this.startOk) this.caption = 'Hold the gold star in the light: its shadow is where the spark drops';
@@ -981,6 +1082,7 @@ export class ShadowRun {
     // Waiting, it bobs on the spot.
     const bob = waiting ? Math.abs(Math.sin(this.time * 3.2)) * 0.004 : 0;
     this.face.group.position.set(x, y + bob, Z_SPARK);
+    this.face.fitTag(x, y + bob);
     this.halo.position.set(x, y + bob, Z_SPARK - 0.0005);
     this.halo.scale.setScalar(SPARK_RADIUS * 5.5 * pulse);
     // Its mood: joy at a mote or the gate, wide eyes in free fall. Waiting, it watches your shadow.
@@ -1100,4 +1202,19 @@ export class ShadowRun {
       this.bestScale > 0 ? `Your biggest shadow: ×${this.bestScale.toFixed(2)} your hand (D ÷ d)` : 'Your hand made the ground',
     ];
   }
+}
+
+/** Words broken into rows that fit `width` at the canvas's current font. */
+function lineWrap(g: CanvasRenderingContext2D, text: string, width: number): string[] {
+  const rows: string[] = [];
+  let row = '';
+  for (const word of text.split(' ')) {
+    const next = row ? `${row} ${word}` : word;
+    if (row && g.measureText(next).width > width) {
+      rows.push(row);
+      row = word;
+    } else row = next;
+  }
+  if (row) rows.push(row);
+  return rows;
 }

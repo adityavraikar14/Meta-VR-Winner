@@ -81,6 +81,8 @@ export const stage = {
   cue: null as 'wave' | 'point' | 'oops' | 'cheer' | null,
   /** A line for Ada to say in her speech bubble (consumed once). */
   say: null as string | null,
+  /** Shadow Pets is being played: the berry bowl is out. */
+  pets: false,
   /** Burst confetti over the table (consumed once): a level cleared. */
   confetti: false,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */

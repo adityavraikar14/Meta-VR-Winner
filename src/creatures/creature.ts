@@ -173,6 +173,8 @@ export class Creature {
 
   private tmp = new Vector3();
   private top = new Vector3();
+  /** Seconds after being tucked in when a hand over it does not wake it. */
+  private tuckGrace = 0;
   private center = new Vector3();
 
   /** How it feels about you, from how you treat it. */
@@ -255,6 +257,42 @@ export class Creature {
     if (this.afterLeap === 'task') this.afterLeap = 'idle';
   }
 
+  /** Shadow Pets care (see pet-care.ts): where its mouth and back are, and how wide it is. */
+  mouth(out: Vector3): Vector3 {
+    return out.copy(this.position).addScaledVector(UP, this.rig.height * 0.6 * this.scale);
+  }
+
+  back(out: Vector3): Vector3 {
+    return out.copy(this.position).addScaledVector(UP, this.rig.height * this.scale);
+  }
+
+  get reach(): number {
+    return 0.05 * this.scale;
+  }
+
+  get asleep(): boolean {
+    return this.sleeping;
+  }
+
+  /** A berry from your fingers: it munches, hearts float up, and it does a happy little dance. */
+  feed(): void {
+    this.feelings.fed();
+    this.noticed();
+    this.happiness = 1;
+    this.squash = 0.75;
+    for (let i = 0; i < 3; i++) this.fx.heart(this.tmp.copy(this.position).addScaledVector(UP, this.rig.height * this.scale));
+    if (this.state === 'idle') this.startBehavior('dance', 2);
+  }
+
+  /** Your palm over its back: it curls up and sleeps until something wakes it. */
+  tuckIn(): void {
+    if (this.state !== 'idle') return;
+    this.feelings.sleep();
+    this.startBehavior('nap', 16);
+    this.sleeping = true;
+    this.tuckGrace = 3;
+  }
+
   /** Join in a celebration: a happy dance with a little cheer. */
   cheer(): void {
     if (this.state !== 'idle' || this.hideFor > 0) return;
@@ -305,7 +343,8 @@ export class Creature {
   /** Any attention from the player: resets loneliness and wakes a napper. */
   private noticed(): void {
     this.sinceAttention = 0;
-    if (this.sleeping) {
+    // Just tucked in: the palm still resting over it does not wake it again.
+    if (this.sleeping && this.tuckGrace <= 0) {
       this.wake();
       this.squash = 0.7;
       this.blinking = 0.3;
@@ -320,6 +359,7 @@ export class Creature {
 
   update(dt: number, time: number, ground: Ground, hands: HandState[]): void {
     this.stateTime += dt;
+    this.tuckGrace = Math.max(0, this.tuckGrace - dt);
     this.feelings.tick(dt);
     petNow.mood = this.feelings;
     const rig = this.rig;

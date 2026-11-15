@@ -511,15 +511,22 @@ export class ShadowGameSystem extends createSystem({
       if (title === JOURNAL_PAGE) {
         drawJournal(this.bannerCanvas, Number(kicker));
         this.bannerTexture.needsUpdate = true;
-        // A journal spread fills most of the screen, like the bag.
-        this.banner.scale.setScalar(1.22);
-        this.banner.position.y = 0.06;
+        // A journal spread fills most of the screen, like the bag, and comes forward towards
+        // you so its writing is big enough to read comfortably in the headset.
+        this.banner.scale.setScalar(1.28);
+        this.banner.position.set(0, 0.11, 0.2);
+        // Over the plants in front of the screen (the buttons still draw over it).
+        this.bannerMaterial.depthTest = false;
+        this.banner.renderOrder = 14;
       } else if (title === INVENTORY) {
         drawInventory(this.bannerCanvas, kicker);
         this.bannerTexture.needsUpdate = true;
-        // The inventory fills most of the screen, so its slots and counts read easily.
-        this.banner.scale.setScalar(1.22);
-        this.banner.position.y = 0.06;
+        // The inventory fills most of the screen and comes forward, so its slots and counts read easily.
+        this.banner.scale.setScalar(1.28);
+        this.banner.position.set(0, 0.11, 0.2);
+        // Over the plants in front of the screen (the buttons still draw over it).
+        this.bannerMaterial.depthTest = false;
+        this.banner.renderOrder = 14;
       } else {
         this.drawBanner(kicker, title, body, footer);
       }
@@ -1196,7 +1203,7 @@ export class ShadowGameSystem extends createSystem({
       this.drawBanner(
         'Side game · Shadow Pets',
         'Shadow Pets',
-        'Make an animal with your hand’s shadow and it comes alive. Stroke it, let it climb onto your palm, pick it up, toss it… It feels how you treat it, and tells you so.',
+        'Make an animal with your hand’s shadow and it comes alive. Stroke it, let it climb onto your palm, pick it up and toss it, feed it berries from the bowl, or rest your palm over its back to put it to bed. It feels how you treat it, and tells you so.',
         'Your move: make any animal’s shadow',
       );
       this.setCaption('Make any animal’s shadow with your hand');
@@ -1222,6 +1229,7 @@ export class ShadowGameSystem extends createSystem({
   private updateHome(dt: number): void {
     const paper = stage.paper;
     const on = (this.puzzle !== null || stage.arena || this.puzzleIndex === PETS_INDEX) && this.phase !== 'title' && this.phase !== 'intro' && !stage.menuOpen;
+    stage.pets = this.puzzleIndex === PETS_INDEX && this.phase !== 'title' && this.phase !== 'intro';
     this.homeButton.show(on && !!paper);
     if (paper) {
       HOME_AT.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
@@ -1604,7 +1612,7 @@ export class ShadowGameSystem extends createSystem({
       if (showHint) this.hintShown = true;
       const rule = (level.pair ?? level.shape)!;
       const prefix = teaching ? '' : `${level.name}: `;
-      text = showHint ? hintFor(problem!, rule.fingers, level.pair?.spread) : prefix + tip;
+      text = showHint ? hintFor(problem!, rule.fingers, level.pair?.spread, level.shape?.pointSide) : prefix + tip;
     } else if (anyPair && problem === 'twoHands' && !teaching) {
       text = 'Pick a friend: make their shadow';
     }
@@ -1948,7 +1956,9 @@ export class ShadowGameSystem extends createSystem({
   /** A storybook card on the paper: small heading, big title, a line of text. */
   private drawBanner(kicker: string, title: string, body: string, footer = '', extra?: { lead?: string; meter?: number }): void {
     this.banner.scale.setScalar(1);
-    this.banner.position.y = 0.03;
+    this.banner.position.set(0, 0.03, 0.006);
+    this.bannerMaterial.depthTest = true;
+    this.banner.renderOrder = 4;
     const { g: ctx, w, h } = layout(this.bannerCanvas);
     ctx.clearRect(0, 0, w, h);
     // A clean white card: soft shadow, a thick yellow border, a navy kicker pill, bold sans type.
@@ -2140,11 +2150,12 @@ function hintFor(
   problem: Exclude<Problem, null>,
   wants: Record<Finger, string>,
   spread?: 'wide' | 'together',
+  side?: boolean,
 ): string {
   if (problem === 'spread') {
     return spread === 'wide' ? 'Spread your fingers like feathers' : 'Keep your fingers together';
   }
-  if (problem === 'direction') return 'Point your fingers up';
+  if (problem === 'direction') return side ? 'Turn your hand on its side, fingers pointing forward' : 'Point your fingers up';
   if (problem === 'thumbs') return 'Hook your thumbs together';
   if (problem === 'twoHands') return 'This one needs both hands';
   if (problem === 'offPaper' || problem === 'noShadow') return 'Raise your hand into the lantern light';

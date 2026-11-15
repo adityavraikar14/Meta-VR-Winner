@@ -1,5 +1,6 @@
-import { Box3, Euler, type Object3D, Quaternion, Vector3 } from '@iwsdk/core';
-import { playClunk, playCrackle, playPop, playTink, playWhoosh } from '../audio.js';
+import { Box3, type BufferGeometry, ConeGeometry, Euler, Group, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Vector3 } from '@iwsdk/core';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { playClunk, playCrackle, playPluck, playPop, playTink, playWhoosh } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devInfo } from '../dev-tools.js';
 
@@ -58,6 +59,39 @@ const DAMPING = 7;
 const GRAVITY = 9.8;
 /** The world floor (WebXR local-floor). */
 const FLOOR_Y = 0;
+/** Grass tufts you have pulled up, at most (the oldest goes when you pull another). */
+const MAX_TUFTS = 10;
+
+let tuftShape: BufferGeometry | null = null;
+let tuftGreen: MeshStandardMaterial | null = null;
+
+/** A tuft of grass, roots and all: a handful of blades leaning out from one clump, about 5 cm tall. */
+function grassTuft(): Group {
+  if (!tuftShape) {
+    const blades: BufferGeometry[] = [];
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + i * 0.7;
+      const tall = 0.04 + ((i * 37) % 10) * 0.0025;
+      const blade = new ConeGeometry(0.0026, tall, 3);
+      blade.translate(0, tall / 2, 0);
+      blade.rotateZ(Math.cos(a) * 0.35);
+      blade.rotateX(Math.sin(a) * 0.35);
+      blade.translate(Math.cos(a) * 0.004, 0, Math.sin(a) * 0.004);
+      blades.push(blade.toNonIndexed());
+      blade.dispose();
+    }
+    tuftShape = mergeGeometries(blades)!;
+    tuftShape.computeVertexNormals();
+    tuftGreen = new MeshStandardMaterial({ color: 0x5cb83a, roughness: 0.75, emissive: 0x1a4a10, emissiveIntensity: 0.25 });
+  }
+  const group = new Group();
+  group.name = 'GrassTuft';
+  const mesh = new Mesh(tuftShape, tuftGreen!);
+  mesh.castShadow = true;
+  group.add(mesh);
+  group.userData.keep = true;
+  return group;
+}
 
 export class Touchables {
   private items: Item[] = [];
@@ -76,6 +110,9 @@ export class Touchables {
   private grabs = 0;
   private lastHands: readonly HandState[] | null = null;
   private throws = 0;
+  /** Where grass grows under a point (its ground's world y), or null: a pinch there pulls up a tuft. */
+  private grassAt: (p: Vector3) => number | null = () => null;
+  private tufts: Item[] = [];
 
   constructor() {
     devInfo.touch = () => ({
@@ -134,6 +171,11 @@ export class Touchables {
       if (item.object.parent === this.scene) item.object.removeFromParent();
     }
     this.items = [];
+  }
+
+  /** Where a pinch in the grass pulls up a tuft: the grassy ground's world y under a point, or null. */
+  setGrass(grassAt: (p: Vector3) => number | null): void {
+    this.grassAt = grassAt;
   }
 
   /** The table's surface (world y) and whether a world point is over it. */
@@ -251,6 +293,8 @@ export class Touchables {
           bestD = d;
         }
       }
+      // Nothing to take, but your fingers are down in the grass: pull up a tuft.
+      if (!best && this.scene) best = this.pluck(hand.pinch);
       if (!best || !this.scene) return;
       const o = best.object;
       // Out of the ground and into the room: it keeps its place in the world as it comes away.
@@ -269,6 +313,23 @@ export class Touchables {
       if (best.kind === 'plant') playPop(0.05);
       else playTink(0.04);
     });
+  }
+
+  /** A tuft of grass from where you pinched, if there is grass there; it goes straight into your hand. */
+  private pluck(at: Vector3): Item | null {
+    const ground = this.grassAt(at);
+    if (ground === null || at.y - ground > 0.035 || !this.scene) return null;
+    const tuft = grassTuft();
+    tuft.position.set(at.x, ground, at.z);
+    tuft.rotation.y = Math.random() * Math.PI * 2;
+    this.scene.add(tuft);
+    this.register(tuft, 'plant');
+    const item = this.items[this.items.length - 1];
+    this.measure(item);
+    this.tufts.push(item);
+    if (this.tufts.length > MAX_TUFTS) this.tufts.shift()!.object.removeFromParent();
+    playPluck(0.05);
+    return item;
   }
 
   private carry(item: Item, hands: readonly HandState[]): void {

@@ -18,6 +18,8 @@ export interface ShapeRule {
   fingers: Record<Finger, Want>;
   /** Straight fingers should point up, as for rabbit ears. */
   pointUp?: boolean;
+  /** The hand lies on its side, fingers pointing forward, not up (a horse's head). Lenient: a fair tilt still counts. */
+  pointSide?: boolean;
 }
 
 /** 0 = fully curled, 1 = fully straight, per finger. */
@@ -162,6 +164,13 @@ export function scoreShape(
   }
   if (rule.pointUp) {
     const s = ramp(fingersUp(joints, ext), 0.2, 0.6);
+    if (s < score) {
+      score = s;
+      worst = 'direction';
+    }
+  }
+  if (rule.pointSide) {
+    const s = 1 - ramp(Math.abs(fingersUp(joints, ext)), 0.6, 0.9);
     if (s < score) {
       score = s;
       worst = 'direction';

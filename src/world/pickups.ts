@@ -19,7 +19,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { playCollect } from '../audio.js';
-import { add, RESOURCES, type Resource } from '../bag.js';
+import { add, RESOURCES, type Resource, usedFor } from '../bag.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { type NatureModel, piece, surface } from './nature.js';
 import { crystals } from './themes.js';
@@ -193,27 +193,31 @@ function glow(): CanvasTexture {
   return glowMap;
 }
 
-function labelSprite(text: string, color: number): Sprite {
+/** What you got and what it is for: "+1 Wood" over "for an Iron Ward · in your Bag". */
+function labelSprite(text: string, use: string, color: number): Sprite {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 96;
+  canvas.width = 512;
+  canvas.height = 168;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = 'rgba(20, 33, 61, 0.92)';
+  ctx.fillStyle = 'rgba(20, 33, 61, 0.94)';
   ctx.beginPath();
-  ctx.roundRect(8, 16, 240, 64, 32);
+  ctx.roundRect(8, 8, 496, 152, 40);
   ctx.fill();
   ctx.strokeStyle = `#${color.toString(16).padStart(6, '0')}`;
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 7;
   ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `800 34px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, 128, 49);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 58px ${FONT}`;
+  ctx.fillText(text, 256, 62, 470);
+  ctx.fillStyle = '#ffd23a';
+  ctx.font = `800 32px ${FONT}`;
+  ctx.fillText(use ? `${use} · in your Bag` : 'in your Bag', 256, 122, 470);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
-  sprite.scale.set(0.08, 0.03, 1);
+  sprite.scale.set(0.15, 0.049, 1);
   sprite.renderOrder = 12;
   return sprite;
 }
@@ -257,10 +261,11 @@ export class Pickups {
       node.group.position.y = node.base.y + 0.004 + k * 0.08;
       node.group.scale.setScalar(Math.max(0.001, 1 + 0.4 * Math.sin(k * Math.PI) - k));
       if (node.label) {
-        node.label.position.set(node.base.x, node.base.y + 0.06 + node.taken * 0.05, node.base.z);
-        (node.label.material as SpriteMaterial).opacity = Math.max(0, 1 - (node.taken - 0.8) / 0.8);
+        node.label.position.set(node.base.x, node.base.y + 0.07 + Math.min(node.taken, 1) * 0.05, node.base.z);
+        // Long enough to read what it is for.
+        (node.label.material as SpriteMaterial).opacity = Math.max(0, 1 - (node.taken - 2.6) / 0.8);
       }
-      if (node.taken > 1.7) node.group.visible = false;
+      if (node.taken > 3.5) node.group.visible = false;
     }
   }
 
@@ -280,7 +285,7 @@ export class Pickups {
     node.taken = 0;
     add(node.resource);
     const info = RESOURCES[node.resource];
-    node.label = labelSprite(`+1 ${info.name}`, info.color);
+    node.label = labelSprite(`+1 ${info.name}`, usedFor(node.resource), info.color);
     this.group.add(node.label);
     playCollect();
   }

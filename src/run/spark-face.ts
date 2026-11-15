@@ -147,6 +147,12 @@ export class SparkFace {
     this.tag.position.set(0, R + 0.03, 0);
   }
 
+  /** Keeps the tag on the screen: under the spark near the top edge, nudged in near the sides. */
+  fitTag(x: number, y: number): void {
+    this.tag.position.y = y + R + 0.05 > 0.33 ? -(R + 0.035) : R + 0.03;
+    this.tag.position.x = Math.max(-0.41 - x, Math.min(0.41 - x, 0));
+  }
+
   /**
    * `vx, vy` the spark's velocity; `mood` flares or flickers the core;
    * `tag` 0–1 how visible the tag is. (`_lookAt` is unused: it has no eyes.)

@@ -33,11 +33,12 @@ export const LEVELS: Level[] = [
       fingers: { thumb: 'any', index: 'out', middle: 'in', ring: 'in', pinky: 'out' },
       pointUp: true,
     },
+    // A fox's head in profile: pointed ears, a long snout, an eye (not two ears on a blob: that read as a rabbit).
     outline:
-      '0007f8000007f8000007f8000007f8000007f800000ff800001ffc00003ffe00' +
-      '003ffe00003ffe00007fff00003ffe00003ffe00003ffe00001ffe00001ffe00' +
-      '003ffe00003c2f00003c07000038070000380700007807800078078000780380' +
-      '00700380007003800070038000f0018000f00000006000000000000000000000',
+      '003fe000003fe000003fe000003fe000003fe000007fe000007fe000007fe000' +
+      '007fe000007ff00000ffffc000fffffc01fffffc01fffff001ff9f8001ffde00' +
+      '00fff00000fff00000ffe00000ffe00000ffc00000f3c00000f3c00000e1c000' +
+      '00e1c00000c1c00000c080000080800000800000000000000000000000000000',
   },
   {
     id: 'stag',
@@ -58,9 +59,13 @@ export const LEVELS: Level[] = [
     id: 'horse',
     name: 'Horse',
     motion: 'hop',
-    tip: 'thumb up for the ear, drop your pinky for the jaw',
+    tip: 'hand flat on its side, fingers pointing forward, thumb up for the ear',
+    // Easy on purpose: a flat hand on its side is the horse's head. The thumb raised for the ear
+    // looks best but is not required, and the pinky can do what it likes (holding it down alone,
+    // with the ring finger straight, is hard for most hands).
     shape: {
-      fingers: { thumb: 'out', index: 'out', middle: 'out', ring: 'out', pinky: 'in' },
+      fingers: { thumb: 'any', index: 'out', middle: 'out', ring: 'out', pinky: 'any' },
+      pointSide: true,
     },
     outline:
       '00000000000000000000000078000000fe000000ff000000ff800000ffe00000' +

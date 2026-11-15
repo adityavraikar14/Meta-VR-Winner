@@ -28,6 +28,7 @@ import { Beast, createBeast, preloadBeasts } from './beast.js';
 import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
+import { type Caring, PetCare } from './pet-care.js';
 import { createBird } from './bird-model.js';
 import { createButterfly } from './butterfly-model.js';
 import { createDeer } from './deer-model.js';
@@ -104,6 +105,9 @@ export class CreatureSystem extends createSystem({}) {
   private landing = new Vector3();
   private diorama!: Diorama;
   private puzzleVersion = -1;
+  /** Shadow Pets: the berry bowl, feeding and tucking in; and the pets it looks after. */
+  private care!: PetCare;
+  private readonly cared: Caring[] = [];
 
   init(): void {
     const paper = stage.paper;
@@ -135,6 +139,11 @@ export class CreatureSystem extends createSystem({}) {
       index: h.tips[0].toArray().map((n) => Number(n.toFixed(3))),
     }));
     this.diorama = new Diorama(this.stageRoot, STAGE_HEIGHT, this.fx);
+    // The berry bowl, front right of the stage, within easy reach (Shadow Pets only).
+    this.care = new PetCare();
+    this.care.group.position.set(0.27, STAGE_HEIGHT, 0.2);
+    this.care.group.visible = false;
+    this.stageRoot.add(this.care.group);
     preloadBeasts();
 
     const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
@@ -232,6 +241,13 @@ export class CreatureSystem extends createSystem({}) {
       }
     }
     setPurr(purr);
+    // Shadow Pets: feed your pet berries from the bowl, or tuck it in with your palm.
+    this.care.group.visible = stage.pets && !stage.sceneryHidden;
+    if (this.care.group.visible) {
+      this.cared.length = 0;
+      for (const living of this.creatures) this.cared.push(living.creature);
+      this.care.update(dt, this.handInput.hands, this.cared);
+    }
     this.fx.update(dt);
   }
 

@@ -71,7 +71,8 @@ function arrow(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, 
 
 function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, size = 20, color = SEPIA, align: CanvasTextAlign = 'center', italic = true): void {
   g.fillStyle = color;
-  g.font = `${italic ? 600 : 700} ${size}px ${FONT}`;
+  // Nothing smaller than 19 px: at the journal's size in the headset, smaller notes blur.
+  g.font = `${italic ? 600 : 700} ${Math.max(19, size)}px ${FONT}`;
   g.textAlign = align;
   g.textBaseline = 'middle';
   g.fillText(text, x, y);
@@ -774,8 +775,9 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
   g.fillStyle = '#14213d';
   g.fillText(page.formula, rx + 18, 130, rw - 36);
   // The explanation: as large as fits in the space above "Your run".
-  let px = 25;
+  let px = 27;
   let body: string[] = [];
+  // Big first; a long page goes down a size rather than lose its last words.
   for (; px >= 19; px--) {
     g.font = `500 ${px}px ${FONT}`;
     body = wrap(g, page.body, rw);
@@ -792,7 +794,7 @@ export function drawJournal(canvas: HTMLCanvasElement, index: number): void {
     g.roundRect(rx - 10, by, rw + 20, 124, 10);
     g.fill();
     label(g, 'YOUR RUN', rx, by + 18, 18, '#2f6bff', 'left', false);
-    g.font = `700 22px ${FONT}`;
+    g.font = `700 24px ${FONT}`;
     g.fillStyle = BLUE;
     (lines.length ? lines : ['Cleared: the page is yours']).slice(0, 3).forEach((line, i) => g.fillText(line, rx, by + 46 + i * 28, rw));
   } else {
@@ -861,15 +863,15 @@ function shelfCell(g: CanvasRenderingContext2D, cx: number, top: number, i: numb
   const t = TROPHIES[i];
   const earned = t.earned();
   medal(g, cx, top + 74, t.icon, earned);
-  g.font = `800 19px ${FONT}`;
+  g.font = `800 20px ${FONT}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = earned ? SEPIA : 'rgba(59, 42, 26, 0.7)';
+  g.fillStyle = earned ? SEPIA : 'rgba(59, 42, 26, 0.85)';
   g.fillText(t.title, cx, top + 124, 108);
-  g.font = `600 15px ${FONT}`;
-  g.fillStyle = earned ? '#1d2b53' : 'rgba(60, 40, 24, 0.75)';
+  g.font = `700 17px ${FONT}`;
+  g.fillStyle = earned ? '#1d2b53' : 'rgba(40, 28, 16, 0.85)';
   g.textAlign = 'center';
-  wrap(g, t.how, 108).slice(0, 3).forEach((line, j) => g.fillText(line, cx, top + 146 + j * 18));
+  wrap(g, t.how, 110).slice(0, 3).forEach((line, j) => g.fillText(line, cx, top + 146 + j * 20));
 }
 
 /** Every trophy, earned in gold; and how many, with the next one to try. */
@@ -899,7 +901,7 @@ function drawShelf(g: CanvasRenderingContext2D): void {
   label(g, `${count} of ${TROPHIES.length}`, (x0 + x1) / 2, y0 + 40, 30, GOLD, 'center', false);
   label(g, 'trophies earned', (x0 + x1) / 2, y0 + 72, 19, '#5b6782');
   const next = TROPHIES.find((t) => !t.earned());
-  g.font = `700 18px ${FONT}`;
+  g.font = `700 20px ${FONT}`;
   g.fillStyle = BLUE;
   g.textAlign = 'center';
   const tip = next ? `Next: ${next.how.charAt(0).toLowerCase()}${next.how.slice(1)}` : 'Every trophy is yours!';

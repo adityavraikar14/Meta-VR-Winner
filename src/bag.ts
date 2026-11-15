@@ -30,10 +30,17 @@ export interface Recipe {
 }
 
 export const RECIPES: Recipe[] = [
-  { item: 'potion', name: 'Healing Draught', label: 'Draught', needs: { herb: 3 }, does: 'heals you in a fight' },
-  { item: 'ward', name: 'Iron Ward', label: 'Ward', needs: { iron: 2, stone: 1 }, does: 'takes the next blow for you' },
+  // Every resource has a use: herbs ground on a stone, a wooden shield bound with iron, crystal lit by an ember.
+  { item: 'potion', name: 'Healing Draught', label: 'Draught', needs: { herb: 2, stone: 1 }, does: 'heals you in a fight' },
+  { item: 'ward', name: 'Iron Ward', label: 'Ward', needs: { wood: 2, iron: 1 }, does: 'takes the next blow for you' },
   { item: 'shard', name: 'Sun Shard', label: 'Shard', needs: { crystal: 2, ember: 1 }, does: 'your next throw strikes twice as hard' },
 ];
+
+/** What a resource is for, said when you pick it up. */
+export function usedFor(resource: Resource): string {
+  const recipe = RECIPES.find((r) => r.needs[resource]);
+  return recipe ? `for ${/^[AEIOU]/.test(recipe.name) ? 'an' : 'a'} ${recipe.name}` : '';
+}
 
 export function count(resource: Resource): number {
   return play.bag[resource] ?? 0;

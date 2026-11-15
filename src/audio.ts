@@ -635,6 +635,31 @@ export function playHiss(volume = 0.08, seconds = 1.6): void {
   noise(ctx, now, seconds * 0.6, 'bandpass', 900, 1.5, volume * 0.5);
 }
 
+/** A pet eating a berry: three soft little crunches. */
+export function playMunch(volume = 0.04): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (let i = 0; i < 3; i++) noise(ctx, now + i * 0.16, 0.07, 'lowpass', 1100 + Math.random() * 500, 1.2, volume * (1 - i * 0.2));
+}
+
+/** Fingers brushing through grass: a soft, airy swish (louder the faster the hand moves). */
+export function playRustle(volume = 0.02): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  noise(ctx, now, 0.16 + Math.random() * 0.08, 'bandpass', 3200 + Math.random() * 1600, 0.9, volume);
+  noise(ctx, now + 0.03, 0.12, 'highpass', 5200, 0.6, volume * 0.5);
+}
+
+/** A tuft of grass pulled up: a soft tearing of roots. */
+export function playPluck(volume = 0.04): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (let i = 0; i < 4; i++) noise(ctx, now + i * 0.025 + Math.random() * 0.01, 0.03, 'bandpass', 1400 + Math.random() * 1400, 1.4, volume * (0.6 + Math.random() * 0.4));
+}
+
 /** A pop and crackle from the burning charcoal. */
 export function playCrackle(volume = 0.02): void {
   const ctx = audio();

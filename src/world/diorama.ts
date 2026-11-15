@@ -7,7 +7,7 @@ import { PAPER_BOUNDS } from '../run/run-sim.js';
 import { sceneryTexture } from '../run/scenery.js';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
-import { playAwaken, playUnfold, setAmbience, tickAmbience } from '../audio.js';
+import { playAwaken, playRustle, playUnfold, setAmbience, tickAmbience } from '../audio.js';
 import type { Beast } from '../creatures/beast.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { Pickups } from './pickups.js';
@@ -60,6 +60,12 @@ export class Diorama {
   /** The duel rival on the roster card, standing beside the screen. */
   private showcase!: RivalShowcase;
   private readonly kit: Kit;
+  /** Fingertips last frame, for how fast they brush through the grass; and the next rustle. */
+  private readonly lastTips = Array.from({ length: 6 }, () => new Vector3());
+  private rustleWait = 0;
+  /** The stage's ground (world y), and a scratch point. */
+  private groundY = 0;
+  private readonly stagePoint = new Vector3();
 
   constructor(
     private readonly stageRoot: Group,
@@ -74,6 +80,8 @@ export class Diorama {
     this.showcase = new RivalShowcase(stageRoot, floor);
     this.room.name = 'RoomJungle';
     stageRoot.add(this.decor, this.props);
+    // A pinch down in the grass pulls up a tuft you can carry and throw.
+    touchables.setGrass((p) => this.grassUnder(p));
     stage.paper!.add(this.screen, this.room);
     this.kit = {
       floor,
@@ -86,6 +94,21 @@ export class Diorama {
       block: (x, z, radius) =>
         this.blockers.push({ center: this.stageRoot.localToWorld(new Vector3(x, floor, z)), radius }),
     };
+  }
+
+  /**
+   * The stage's grassy ground under a world point (its world y), or null off the slab's
+   * grassy edges or where a level's props stand.
+   */
+  private grassUnder(p: Vector3): number | null {
+    // Grass grows in the jungle, by the river and on the mountain meadow; the mine is bare rock.
+    if (!this.decor.visible || this.worldIndex === 2) return null;
+    this.stageRoot.worldToLocal(this.stagePoint.copy(p));
+    const x = this.stagePoint.x;
+    const z = this.stagePoint.z;
+    if (Math.abs(x) > 0.62 || z < -0.3 || z > 0.32) return null;
+    if (this.blockers.some((b) => Math.hypot(p.x - b.center.x, p.z - b.center.z) < b.radius)) return null;
+    return this.groundY;
   }
 
   /** Rebuild for the puzzle at `play.puzzleIndex` (or free play at -1). */
@@ -286,14 +309,27 @@ export class Diorama {
       this.grow(null);
     }
     animateNature(dt);
-    // The grass parts around your fingertips.
+    // The grass parts around your fingertips, and rustles softly as you brush through it.
+    this.groundY = this.stageRoot.localToWorld(this.stagePoint.set(0, this.floor, 0)).y;
     let t = 0;
+    this.rustleWait -= dt;
+    let brush = 0;
     for (const hand of hands) {
       for (const tip of hand.tips) {
+        const i = t;
         const slot = grassTouch.value[t++];
         if (!slot) break;
+        const last = this.lastTips[i];
+        if (hand.tracked && dt > 0 && tip.y - this.groundY < 0.06 && this.grassUnder(tip) !== null) {
+          brush = Math.max(brush, last.distanceTo(tip) / dt);
+        }
+        last.copy(tip);
         slot.set(tip.x, tip.y, tip.z, hand.tracked ? 1 : 0);
       }
+    }
+    if (brush > 0.12 && brush < 3 && this.rustleWait <= 0) {
+      playRustle(Math.min(0.035, 0.008 + brush * 0.02));
+      this.rustleWait = 0.12 + Math.random() * 0.08;
     }
     tickAmbience(dt);
     // The room's plants stand on the real floor (y = 0), wherever the screen is.

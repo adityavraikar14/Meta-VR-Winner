@@ -154,6 +154,7 @@ export const HOW_TO: Record<string, string[]> = {
     'Stroke its back slowly with your fingertips: it loves that, and trusts you more',
     'Hold your palm open and flat beside it: it climbs on. Pinch its back to pick it up',
     'Toss it gently and it plays; throw it hard and it is hurt and frightened. Poke it too much and it gets cross',
+    'Feed it: pinch a red berry from the bowl and hold it to its mouth. Put it to bed: rest your flat hand over its back, palm down',
   ],
   workshop: [
     'Pinch a glass piece and hold it in the light: its shadow is ground for the spark',

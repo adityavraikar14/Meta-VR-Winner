@@ -251,7 +251,7 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
 
   // How it works, in three steps.
   const steps: Array<[string, string, string]> = [
-    ['1  GATHER', 'Touch the glowing herbs, stones and crystals beside each level'],
+    ['1  GATHER', 'Touch the glowing wood, herbs, stones and crystals beside each level'],
     ['2  MIX', 'Push a recipe’s button below when it says READY'],
     ['3  USE', 'In a fight, turn a palm to your face and push Drink. Wards and shards work by themselves'],
   ].map(([a, b]) => [a, b, ''] as [string, string, string]);
@@ -349,7 +349,8 @@ export function drawInventory(canvas: HTMLCanvasElement, message: string): void 
     const missing = Object.entries(recipe.needs)
       .filter(([r, n]) => count(r as Resource) < (n ?? 0))
       .map(([r, n]) => `${(n ?? 0) - count(r as Resource)} ${RESOURCES[r as Resource].plural.toLowerCase()}`);
-    const status = ready ? 'READY: push ' + recipe.label.toUpperCase() : 'need ' + missing.join(' + ');
+    // Short, so the recipe's name keeps its room: the button below says which to push.
+    const status = ready ? 'READY ✓' : 'need ' + missing.join(' + ');
     g.textAlign = 'right';
     g.font = `900 20px ${FONT}`;
     g.fillStyle = ready ? '#7dffb0' : '#ff9a8a';
