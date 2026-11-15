@@ -90,6 +90,12 @@ export class PetMood {
     } else if (impact > 1.2 && this.fear < 0.3) this.say('happy', 'It lands on its feet');
   }
 
+  /** Did a trick you asked for: a little more trust, and the line for the caption. */
+  obeyed(line: string): void {
+    this.trust = Math.min(1, this.trust + 0.02);
+    this.last = line;
+  }
+
   /** Fed a berry from your fingers. */
   fed(): void {
     this.trust = Math.min(1, this.trust + 0.12);

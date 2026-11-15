@@ -150,11 +150,11 @@ export const HOW_TO: Record<string, string[]> = {
     'Each lesson passes by itself; Back and Next pick any lesson. Vance cannot hurt you here',
   ],
   pets: [
-    'Make an animal with your hand’s shadow (a fox, a horse, a bird, a rabbit…): it comes alive on the table',
-    'Stroke its back slowly with your fingertips: it loves that, and trusts you more',
-    'Hold your palm open and flat beside it: it climbs on. Pinch its back to pick it up',
-    'Toss it gently and it plays; throw it hard and it is hurt and frightened. Poke it too much and it gets cross',
-    'Feed it: pinch a red berry from the bowl and hold it to its mouth. Put it to bed: rest your flat hand over its back, palm down',
+    'Choose a pet on the board in front of you, then copy its hand shape in the light: it comes alive',
+    'Push any of 28 tricks on the board: sit, roll over, play dead, dance, run laps, follow your finger…',
+    'Or give hand signals: palm up = sit, palm down high above = lie down, palm facing it = stay, point at the table = go there, finger gun = play dead',
+    'Throw the ball and it fetches. On PLAY · BUILD, build a log, a hoop and a house, then send it over, through and home',
+    'Feed it berries from the bowl; rest your palm on its back to put it to sleep. New pet swaps it',
   ],
   workshop: [
     'Pinch a glass piece and hold it in the light: its shadow is ground for the spark',

@@ -274,6 +274,11 @@ export class ShadowGameSystem extends createSystem({
   private playButton!: PushButton;
   /** Always-there Skip while a level is on, so any level can be passed over. */
   private skipButton!: PushButton;
+  /** Shadow Pets: your pet is out, so your hands are free to play with it (no new shadow animal until New pet). */
+  private petOut = false;
+  private skipSaysNewPet = false;
+  /** The pet whose shadow Shadow Pets is watching for (follows stage.petChoice). */
+  private petChosen: string | null = null;
   private skipEntity!: Entity;
   private skipClick = false;
   private hintButton!: PushButton;
@@ -767,7 +772,13 @@ export class ShadowGameSystem extends createSystem({
     this.rayClick = false;
     if (pressed) playClick();
     // On the Quick Tour, Skip always moves on to the next stop (side games included).
-    this.skipButton.show((this.puzzle !== null || this.tourStep >= 0) && SKIPPABLE.has(this.phase) && !stage.menuOpen);
+    // In Shadow Pets, the same button swaps your pet for a new one.
+    const newPet = this.puzzleIndex === PETS_INDEX && this.petOut && this.tourStep < 0;
+    this.skipButton.show(((this.puzzle !== null || this.tourStep >= 0) && SKIPPABLE.has(this.phase) || newPet) && !stage.menuOpen);
+    if (newPet !== this.skipSaysNewPet) {
+      this.skipSaysNewPet = newPet;
+      this.skipButton.setText(newPet ? 'New pet' : 'Skip');
+    }
     const skipX = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
     if (this.skipButton.root.position.x !== skipX) {
       // Moved to the other side: turn its face to the player again.
@@ -779,7 +790,16 @@ export class ShadowGameSystem extends createSystem({
     if (skipped) {
       playClick();
       if (this.tourStep >= 0) this.nextTourStop();
-      else if (isSideGame(this.puzzleIndex)) this.showTitle();
+      else if (newPet) {
+        // Your pet goes back into the paper; choose the next on the board.
+        this.petOut = false;
+        stage.petChoice = null;
+        this.petChosen = null;
+        this.candidates = [];
+        play.puzzleVersion++;
+        this.beginMatching();
+        this.setCaption('Choose your pet on the board in front of you');
+      } else if (isSideGame(this.puzzleIndex)) this.showTitle();
       else this.skip();
     }
     this.updateHint(dt);
@@ -1140,6 +1160,7 @@ export class ShadowGameSystem extends createSystem({
     this.table.hide();
     this.menu.close();
     this.puzzleIndex = index;
+    this.petOut = false;
     petNow.mood = null;
     this.petLine = '';
     if (index === WORKSHOP_INDEX) refreshWorkshop();
@@ -1156,7 +1177,13 @@ export class ShadowGameSystem extends createSystem({
     stage.journalPage = null;
 
     const puzzle = this.puzzle;
-    if (!puzzle) {
+    if (index === PETS_INDEX) {
+      // Shadow Pets: choose the animal on the Pet Park's board first; then only its shadow counts.
+      // (The Quick Tour has no time to choose: the fox it is.)
+      stage.petChoice = stage.tour ? 'fox' : null;
+      this.petChosen = null;
+      this.candidates = [];
+    } else if (!puzzle) {
       this.candidates = [...LEVELS];
     } else if (puzzle.warmup || puzzle.walk || puzzle.handsOn) {
       this.candidates = [];
@@ -1203,10 +1230,10 @@ export class ShadowGameSystem extends createSystem({
       this.drawBanner(
         'Side game · Shadow Pets',
         'Shadow Pets',
-        'Make an animal with your hand’s shadow and it comes alive. Stroke it, let it climb onto your palm, pick it up and toss it, feed it berries from the bowl, or rest your palm over its back to put it to bed. It feels how you treat it, and tells you so.',
-        'Your move: make any animal’s shadow',
+        'Choose a fox, a horse or a stag on the board, make its shadow, and it comes alive. Teach it 28 tricks with the board or hand signals, throw its ball, build it a log hurdle, a hoop and a house, feed it and put it to bed. It feels how you treat it, and tells you so.',
+        'Your move: choose your pet on the board',
       );
-      this.setCaption('Make any animal’s shadow with your hand');
+      this.setCaption('Choose your pet on the board in front of you');
     } else {
       this.drawBanner(
         'The ink is gone',
@@ -1230,6 +1257,17 @@ export class ShadowGameSystem extends createSystem({
     const paper = stage.paper;
     const on = (this.puzzle !== null || stage.arena || this.puzzleIndex === PETS_INDEX) && this.phase !== 'title' && this.phase !== 'intro' && !stage.menuOpen;
     stage.pets = this.puzzleIndex === PETS_INDEX && this.phase !== 'title' && this.phase !== 'intro';
+    // A pet chosen on the board: watch for that animal's shadow, and show how to make it.
+    if (stage.pets && !this.petOut && this.phase === 'matching' && stage.petChoice !== this.petChosen) {
+      this.petChosen = stage.petChoice;
+      this.candidates = this.petChosen ? [levelFor(this.petChosen)] : [];
+      this.raw = this.candidates.map(() => 0);
+      this.smooth = this.candidates.map(() => 0);
+      this.candidateShadow = this.candidates.map(() => false);
+      this.candidateBounds = this.candidates.map(() => createBounds());
+      this.candidateProblem = this.candidates.map(() => null);
+      this.beginMatching();
+    }
     this.homeButton.show(on && !!paper);
     if (paper) {
       HOME_AT.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
@@ -1429,7 +1467,8 @@ export class ShadowGameSystem extends createSystem({
     this.best = -1;
     if (stage.shadowMaterial) stage.shadowMaterial.opacity = SHADOW_OPACITY;
 
-    const teach = this.puzzle?.teach;
+    // Shadow Pets teaches the chosen animal's shadow the same way a level teaches a friend.
+    const teach = this.puzzle?.teach ?? (this.puzzleIndex === PETS_INDEX && !this.petOut ? stage.petChoice ?? undefined : undefined);
     if (teach) {
       const cells = decodeCells(levelFor(teach).outline);
       drawTargetLine(this.outlineCanvas, cells, false);
@@ -1442,7 +1481,8 @@ export class ShadowGameSystem extends createSystem({
       this.ghost.show(null);
       this.outline.visible = false;
       // Choosing: a card for every friend the player can make.
-      const n = this.candidates.length;
+      // (None while your pet is out in Shadow Pets: your hands are for playing with it.)
+      const n = this.petOut ? 0 : this.candidates.length;
       this.cards.forEach((card, i) => {
         card.mesh.visible = i < n;
         if (i >= n) return;
@@ -1557,6 +1597,12 @@ export class ShadowGameSystem extends createSystem({
 
   private updateMatching(dt: number): void {
     this.matchTime += dt;
+    // Your pet is out: your hands are for playing with it now, not for making another.
+    if (this.puzzleIndex === PETS_INDEX && this.petOut) return;
+    if (this.puzzleIndex === PETS_INDEX && !stage.petChoice) {
+      this.setCaption('Choose your pet on the board in front of you');
+      return;
+    }
     this.judgeCandidates(dt);
     const best = this.best;
     const level = best >= 0 ? this.candidates[best] : null;
@@ -1917,6 +1963,7 @@ export class ShadowGameSystem extends createSystem({
         this.setCaption(`Go, ${friendName(this.chosen.id)}!`);
         this.setPhase('solving');
       } else {
+        if (this.puzzleIndex === PETS_INDEX) this.petOut = true;
         this.beginMatching();
       }
     }

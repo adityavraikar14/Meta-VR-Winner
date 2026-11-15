@@ -40,7 +40,40 @@ export type TaskStep =
   | { do: 'leap'; to: Vector3; height: number; time: number }
   | { do: 'pose'; pose: TaskPose; time: number; look?: Vector3 }
   | { do: 'call'; run: () => void }
-  | { do: 'harness'; rig: Harness };
+  | { do: 'harness'; rig: Harness }
+  | ActStep;
+
+/**
+ * A trick's body language for a few seconds (the Pet Park's tricks): a clip,
+ * and the whole body tilted, rolled, spun, raised or lowered on top of it.
+ * Angles in radians, heights in body heights; they ease in and out.
+ */
+export interface ActStep {
+  do: 'act';
+  time: number;
+  clip?: string;
+  /** Play the clip once and hold its last frame (play dead), instead of looping. */
+  once?: boolean;
+  rate?: number;
+  /** Nose up (negative) or down (positive). */
+  pitch?: number;
+  /** Over onto its side; a full turn rolls it over. */
+  roll?: number;
+  /** Raised (positive) or sunk into a crouch (negative), in body heights. */
+  lift?: number;
+  /** Whole turns about itself over the step. */
+  spin?: number;
+  /** Wiggles: side to side (sway), nodding (nod), head-shaking yaw (shake), bouncing (hop): amplitude, at `beat` per second. */
+  sway?: number;
+  nod?: number;
+  shake?: number;
+  hop?: number;
+  beat?: number;
+  /** Turn to face this point first. */
+  face?: Vector3;
+  /** Said as the step starts. */
+  sound?: () => void;
+}
 
 /** Where a machine puts a harnessed friend this frame, and how hard it is working. */
 export interface HarnessPose {
@@ -817,6 +850,10 @@ export class Creature {
       case 'harness':
         // Plush pets are too small for machines.
         this.nextStep();
+        return;
+      case 'act':
+        // Tricks belong to the animated animals; a plush pet just waits its turn.
+        if (this.taskTime >= step.time) this.nextStep();
         return;
     }
   }

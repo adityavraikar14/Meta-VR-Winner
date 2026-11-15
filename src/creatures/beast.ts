@@ -18,7 +18,7 @@ import {
 } from '@iwsdk/core';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { playAnimalCall, playHoof, playHorseCall, playNicker, playSnort, playWhoosh } from '../audio.js';
-import type { Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
+import type { ActStep, Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
 import { PetMood, petNow } from './mood.js';
@@ -65,6 +65,8 @@ export const BEASTS: Record<string, BeastSpec> = {
       Idle: 'Fox_Idle', Walk: 'Fox_Walk_InPlace', Gallop: 'Fox_Run_InPlace', Gallop_Jump: 'Fox_Jump_Pivot_InPlace', Jump_toIdle: 'Fox_Idle',
       Eating: 'Fox_Idle', Idle_2: 'Fox_Sit_Idle_Break', Idle_Headlow: 'Fox_Sit_Yes', Idle_2_HeadLow: 'Fox_Sit_Yes',
       Idle_HitReact_Left: 'Fox_Falling_Left', Idle_HitReact_Right: 'Fox_Falling', Attack: 'Fox_Attack_Paws', Attack_Headbutt: 'Fox_Attack_Paws', Attack_Kick: 'Fox_Attack_Tail',
+      // For the Pet Park's tricks: a real sit, a nod from sitting, and a fall that serves as playing dead.
+      Sit: 'Fox_Sit2_Idle', Sit_Yes: 'Fox_Sit_Yes', Death: 'Fox_Falling',
     },
   },
 };
@@ -197,6 +199,12 @@ export class Beast {
   private hoverTime = 0;
   private hoverPoint = new Vector3();
   private snortIn = 6;
+  /** A trick's body language on top of the clip (see ActStep): eased in and out, added in place(). */
+  private actPitch = 0;
+  private actRoll = 0;
+  private actLift = 0;
+  private actYaw = 0;
+  private actSpin = 0;
   /** Seconds left of a nap you tucked it into (0: awake), and the next sleepy Z. */
   private sleepFor = 0;
   private zzzIn = 0;
@@ -400,6 +408,11 @@ export class Beast {
     this.call();
   }
 
+  /** Its call, on command (Speak!). */
+  speak(): void {
+    this.call();
+  }
+
   /** Its voice: a real recording for the horse; the others keep their synthesized calls. */
   private call(volume = 1): void {
     if (this.kind === 'horse' && playHorseCall(0.45 * volume)) return;
@@ -461,6 +474,8 @@ export class Beast {
         break;
     }
 
+    // A trick interrupted (picked up, thrown): its body language goes with it.
+    if (this.state !== 'task') this.actPitch = this.actRoll = this.actLift = this.actYaw = this.actSpin = 0;
     this.restoreLook();
     this.mixer.update(dt);
     this.place();
@@ -765,6 +780,9 @@ export class Beast {
         this.leapTo.copy(step.to);
         this.faceTowards(step.to, 1);
         this.play('Gallop_Jump', false, 0.15, 0.9 / step.time);
+      } else if (step.do === 'act') {
+        if (step.clip) this.play(step.clip, !step.once, 0.25, step.rate ?? 1);
+        step.sound?.();
       } else if (step.do === 'pose') {
         const clip = POSE_CLIPS[step.pose];
         this.play(clip, clip !== 'Gallop_Jump' && !clip.includes('HitReact') && !clip.startsWith('Attack'));
@@ -805,6 +823,9 @@ export class Beast {
         break;
       case 'harness':
         if (!this.pull(step.rig, dt)) this.nextStep();
+        break;
+      case 'act':
+        this.act(step, dt);
         break;
     }
   }
@@ -892,7 +913,35 @@ export class Beast {
 
   private place(): void {
     this.root.position.copy(this.position);
-    this.root.rotation.set(this.lean, this.yaw, this.roll, 'YXZ');
+    this.root.position.y += this.actLift * this.height;
+    this.root.rotation.set(this.lean + this.actPitch, this.yaw + this.actYaw + this.actSpin, this.roll + this.actRoll, 'YXZ');
+  }
+
+  /** Whether the model has a clip of its own for this (a trick may pose its way round a missing one). */
+  hasClip(name: string): boolean {
+    return !!(this.spec.clips?.[name] ? this.actions.get(this.spec.clips[name]) : this.actions.get(name));
+  }
+
+  /** A trick's step, frame by frame: the clip plays, the body leans, rolls, spins and bounces. */
+  private act(step: ActStep, dt: number): void {
+    const t = this.taskTime;
+    const k = Math.min(1, t / step.time);
+    // In over the first 0.3 s, out over the last 0.3 s.
+    const ease = Math.max(0, Math.min(1, t / 0.3, (step.time - t) / 0.3));
+    const smooth = ease * ease * (3 - 2 * ease);
+    const beat = (step.beat ?? 3) * Math.PI * 2 * t;
+    this.actPitch = (step.pitch ?? 0) * smooth + (step.nod ?? 0) * Math.sin(beat) * smooth;
+    this.actRoll = (step.roll ?? 0) * (Math.abs(step.roll ?? 0) > 3 ? k : smooth) + (step.sway ?? 0) * Math.sin(beat) * smooth;
+    this.actLift = (step.lift ?? 0) * smooth + (step.hop ?? 0) * Math.abs(Math.sin(beat)) * smooth;
+    this.actYaw = (step.shake ?? 0) * Math.sin(beat) * smooth;
+    this.actSpin = (step.spin ?? 0) * Math.PI * 2 * (k * k * (3 - 2 * k));
+    if (step.face && t < 0.4) this.faceTowards(step.face, Math.min(1, dt * 6));
+    if (t >= step.time) {
+      // A full spin ends facing the same way: fold it into the heading so nothing jumps.
+      this.actPitch = this.actRoll = this.actLift = this.actYaw = 0;
+      this.actSpin = 0;
+      this.nextStep();
+    }
   }
 
   // ------------------------------------------------------------ Animation

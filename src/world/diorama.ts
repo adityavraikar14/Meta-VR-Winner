@@ -2,7 +2,7 @@ import { RivalShowcase } from '../fight/showcase.js';
 import { touchables } from './touchables.js';
 import { Confetti } from './confetti.js';
 import { shadowBox } from './shadow-box.js';
-import { Group, type Material, Mesh, MeshBasicMaterial, type MeshStandardMaterial, type Object3D, PlaneGeometry, Vector3 } from '@iwsdk/core';
+import { Group, type InstancedMesh, type Material, Matrix4, Mesh, MeshBasicMaterial, type MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion, Vector3 } from '@iwsdk/core';
 import { PAPER_BOUNDS } from '../run/run-sim.js';
 import { sceneryTexture } from '../run/scenery.js';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
@@ -66,6 +66,11 @@ export class Diorama {
   /** The stage's ground (world y), and a scratch point. */
   private groundY = 0;
   private readonly stagePoint = new Vector3();
+  /**
+   * Where grass really grows on the stage: 2 cm cells (in the scenery's own space) holding the
+   * tallest blade there. A pinch pulls up a tuft only where there is grass worth pulling.
+   */
+  private readonly grassCells = new Map<number, number>();
 
   constructor(
     private readonly stageRoot: Group,
@@ -101,12 +106,11 @@ export class Diorama {
    * grassy edges or where a level's props stand.
    */
   private grassUnder(p: Vector3): number | null {
-    // Grass grows in the jungle, by the river and on the mountain meadow; the mine is bare rock.
-    if (!this.decor.visible || this.worldIndex === 2) return null;
-    this.stageRoot.worldToLocal(this.stagePoint.copy(p));
-    const x = this.stagePoint.x;
-    const z = this.stagePoint.z;
-    if (Math.abs(x) > 0.62 || z < -0.3 || z > 0.32) return null;
+    if (!this.decor.visible || this.grassCells.size === 0) return null;
+    // Only where real blades stand, tall enough to get your fingers round.
+    this.decor.worldToLocal(this.stagePoint.copy(p));
+    const tall = this.grassCells.get(grassCell(this.stagePoint.x, this.stagePoint.z)) ?? 0;
+    if (tall < 0.012) return null;
     if (this.blockers.some((b) => Math.hypot(p.x - b.center.x, p.z - b.center.z) < b.radius)) return null;
     return this.groundY;
   }
@@ -247,11 +251,34 @@ export class Diorama {
     });
     // The screen is the back wall of a box of light that reaches out towards you.
     this.screen.add(shadowBox(PAPER_WIDTH, PAPER_HEIGHT, -0.2, world));
+    this.mapGrass();
     mergeStatic(this.decor);
     // Each room plant and frame part is its own group (they grow in one by one),
     // so merging only joins meshes inside a group: fewer draw calls, same growth.
     mergeStatic(this.screen);
     mergeStatic(this.room);
+  }
+
+  /** Records where the stage's grass blades stand and how tall, for pulling tufts. */
+  private mapGrass(): void {
+    this.grassCells.clear();
+    this.decor.updateWorldMatrix(true, true);
+    const toDecor = new Matrix4().copy(this.decor.matrixWorld).invert();
+    const m = new Matrix4();
+    const at = new Vector3();
+    const size = new Vector3();
+    const q = new Quaternion();
+    this.decor.traverse((o) => {
+      const grass = o as InstancedMesh;
+      if (!grass.isInstancedMesh || grass.name !== 'Grass') return;
+      const rel = new Matrix4().multiplyMatrices(toDecor, grass.matrixWorld);
+      for (let i = 0; i < grass.count; i++) {
+        grass.getMatrixAt(i, m);
+        m.premultiply(rel).decompose(at, q, size);
+        const key = grassCell(at.x, at.z);
+        this.grassCells.set(key, Math.max(this.grassCells.get(key) ?? 0, size.y));
+      }
+    });
   }
 
   /** True while a puzzle is waiting for a friend to try it. */
@@ -383,4 +410,9 @@ function clear(group: Group): void {
     m.dispose();
   });
   group.clear();
+}
+
+/** A 2 cm cell of the stage's ground, as one number. */
+function grassCell(x: number, z: number): number {
+  return Math.round(x / 0.02) * 1000 + Math.round(z / 0.02);
 }

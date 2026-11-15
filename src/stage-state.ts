@@ -83,6 +83,8 @@ export const stage = {
   say: null as string | null,
   /** Shadow Pets is being played: the berry bowl is out. */
   pets: false,
+  /** Shadow Pets: the animal chosen on the Pet Park's board (its shadow is the one to make), or none yet. */
+  petChoice: null as string | null,
   /** Burst confetti over the table (consumed once): a level cleared. */
   confetti: false,
   /** Ask the world to grow, from a world point (or its centre if null). Consumed once. */

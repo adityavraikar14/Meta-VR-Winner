@@ -15,7 +15,7 @@ import {
 } from '@iwsdk/core';
 import { touchables } from '../world/touchables.js';
 import { playTransform, setPurr } from '../audio.js';
-import { devInfo } from '../dev-tools.js';
+import { devActions, devInfo } from '../dev-tools.js';
 import { preloadDragon } from '../fight/dragon3d.js';
 import { preloadRival } from '../fight/rival3d.js';
 import { currentRival } from '../fight/rivals.js';
@@ -29,6 +29,7 @@ import { Creature, type Ground } from './creature.js';
 import { Effects } from './fx.js';
 import { HandInput } from './hand-input.js';
 import { type Caring, PetCare } from './pet-care.js';
+import { PARK_TRICKS, PetPark } from './pet-park.js';
 import { createBird } from './bird-model.js';
 import { createButterfly } from './butterfly-model.js';
 import { createDeer } from './deer-model.js';
@@ -108,6 +109,10 @@ export class CreatureSystem extends createSystem({}) {
   /** Shadow Pets: the berry bowl, feeding and tucking in; and the pets it looks after. */
   private care!: PetCare;
   private readonly cared: Caring[] = [];
+  /** Shadow Pets: the board, the tricks, hand signals, the ball and the things you build. */
+  private park!: PetPark;
+  private readonly beasts: Beast[] = [];
+  private readonly bowlAt = new Vector3();
 
   init(): void {
     const paper = stage.paper;
@@ -144,6 +149,31 @@ export class CreatureSystem extends createSystem({}) {
     this.care.group.position.set(0.27, STAGE_HEIGHT, 0.2);
     this.care.group.visible = false;
     this.stageRoot.add(this.care.group);
+    this.park = new PetPark(this.stageRoot, STAGE_HEIGHT);
+    this.park.visible = false;
+    // Dev (Shadow Pets): O brings the fox out; V runs the next trick on it (all of them, in turn).
+    devActions.o = () => {
+      if (!stage.pets) return;
+      stage.petChoice = 'fox';
+      stage.spawns.push({ kind: 'fox', x: 0, y: -0.12 });
+    };
+    devActions.b = () => this.park.buildAll();
+    // Dev: F8 runs the tricks with props in turn: fetch, the log, the hoop, home, laps, eat.
+    let prop = 0;
+    devActions.f8 = () => {
+      const pet = this.beasts[0];
+      const id = ['fetch', 'log', 'hoop', 'home', 'laps', 'eat'][prop++ % 6];
+      console.log(`SHADOWPLAY trick ${id}`);
+      if (pet) this.park.command(id, pet, this.ground, this.bowlAt);
+    };
+    let trick = 0;
+    devActions.v = () => {
+      const pet = this.beasts[0];
+      if (!pet) return;
+      const id = PARK_TRICKS[trick++ % PARK_TRICKS.length];
+      console.log(`SHADOWPLAY trick ${id}`);
+      this.park.command(id, pet, this.ground, this.bowlAt);
+    };
     preloadBeasts();
 
     const round = (v: Vector3) => v.toArray().map((n) => Number(n.toFixed(3)));
@@ -245,9 +275,20 @@ export class CreatureSystem extends createSystem({}) {
     this.care.group.visible = stage.pets && !stage.sceneryHidden;
     if (this.care.group.visible) {
       this.cared.length = 0;
-      for (const living of this.creatures) this.cared.push(living.creature);
+      this.beasts.length = 0;
+      for (const living of this.creatures) {
+        this.cared.push(living.creature);
+        if (living.creature instanceof Beast) this.beasts.push(living.creature);
+      }
       this.care.update(dt, this.handInput.hands, this.cared);
-    }
+      if (!this.park.visible) {
+        this.park.visible = true;
+        this.park.reset();
+      }
+      this.care.group.getWorldPosition(this.bowlAt);
+      this.park.update(dt, this.handInput.hands, this.beasts, this.ground, this.bowlAt);
+      this.park.takeVoice(this.beasts[0] ?? null, this.ground, this.bowlAt);
+    } else if (this.park.visible) this.park.visible = false;
     this.fx.update(dt);
   }
 

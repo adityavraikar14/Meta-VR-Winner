@@ -338,6 +338,8 @@ export function decorateMountain(roots: SceneryRoots): void {
     const cluster = crystals(size, n, s);
     cluster.position.set(x, groundHeight(spec, x, z) - 0.004, z);
     g.add(cluster);
+    cluster.traverse((o) => (o.userData.keep = true));
+    touchables.register(cluster, 'stone');
   }
   roots.screen.add(mineFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
   mountainInRoom(roots.room);
@@ -375,6 +377,8 @@ export function decorateMine(roots: SceneryRoots): void {
     const cluster = crystals(size, n, s, 0xff9b5a);
     cluster.position.set(x, groundHeight(spec, x, z) - 0.004, z);
     g.add(cluster);
+    cluster.traverse((o) => (o.userData.keep = true));
+    touchables.register(cluster, 'stone');
   }
   roots.screen.add(mineFrame(roots.screenWidth, roots.screenHeight, roots.screenGround));
   mountainInRoom(roots.room);
