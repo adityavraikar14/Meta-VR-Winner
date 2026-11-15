@@ -62,7 +62,8 @@ const FINGER_NAMES = ['index', 'middle', 'ring', 'little'];
 
 /** Your health, what a fireball's burn takes, and what a Healing Draught gives back. */
 const PLAYER_HEALTH = 100;
-const BURN = 30;
+/** Five burns to lose; four reflected fireballs to win. */
+const BURN = 20;
 const DRAUGHT_HEAL = 35;
 const DRAGON_HEALTH = 4;
 const FIRE_SPEED = 0.75;
@@ -392,7 +393,7 @@ export class DragonBattle {
         break;
       case 'lost':
         this.caption = 'The fire overwhelms you… Rise and try again!';
-        if (this.modeTime > 3.5) this.restart();
+        if (this.modeTime > 3.5 && !this.holdOnLoss) this.restart();
         break;
       case 'won':
         this.dragon.defeat = Math.min(1, this.modeTime / 2.5);
@@ -444,7 +445,15 @@ export class DragonBattle {
     this.noteTime = seconds;
   }
 
-  private restart(): void {
+  /** The story shows its own Play again card on a loss instead of restarting by itself. */
+  holdOnLoss = false;
+
+  /** Burned down, and the moment of it has played out. */
+  get lost(): boolean {
+    return this.mode === 'lost' && this.modeTime > 2;
+  }
+
+  restart(): void {
     this.health = PLAYER_HEALTH;
     this.dragonHealth = DRAGON_HEALTH;
     for (const f of this.fireballs) this.group.remove(f.sprite);

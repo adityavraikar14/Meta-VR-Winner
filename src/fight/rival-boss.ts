@@ -38,14 +38,15 @@ import type { RivalMove, RivalSpec } from './rivals.js';
 const FEET_DROP = 1.25;
 /** Life-size heights and Arena health, by rival. */
 const SIZE: Record<string, { height: number; girth: number; hp: number }> = {
-  vance: { height: 1.75, girth: 0.24, hp: 130 },
-  rook: { height: 1.55, girth: 0.3, hp: 120 },
-  vex: { height: 1.68, girth: 0.22, hp: 110 },
-  mako: { height: 1.95, girth: 0.36, hp: 190 },
-  kai: { height: 1.78, girth: 0.24, hp: 140 },
-  thorne: { height: 1.7, girth: 0.25, hp: 140 },
-  sable: { height: 1.72, girth: 0.22, hp: 135 },
-  morwen: { height: 1.6, girth: 0.22, hp: 160 },
+  // Medium: with their whole move book they attack more, so they take fewer blows to beat.
+  vance: { height: 1.75, girth: 0.24, hp: 110 },
+  rook: { height: 1.55, girth: 0.3, hp: 100 },
+  vex: { height: 1.68, girth: 0.22, hp: 95 },
+  mako: { height: 1.95, girth: 0.36, hp: 150 },
+  kai: { height: 1.78, girth: 0.24, hp: 120 },
+  thorne: { height: 1.7, girth: 0.25, hp: 120 },
+  sable: { height: 1.72, girth: 0.22, hp: 115 },
+  morwen: { height: 1.6, girth: 0.22, hp: 135 },
 };
 /** The arc they roam: this far either side of straight ahead, between these distances. */
 const ARC = 1.0;

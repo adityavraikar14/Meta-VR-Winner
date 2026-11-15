@@ -14,6 +14,7 @@ import { RUN_LEVELS, type RunLevel } from '../run/run-levels.js';
 import { workshopLevel } from '../run/workshop.js';
 import { ShadowRun } from '../run/shadow-run.js';
 import { duelWith, trainingDuel, InkDuel } from '../fight/duel.js';
+import { LoseCard } from '../fight/lose-card.js';
 import { currentRival, RIVALS } from '../fight/rivals.js';
 import { Bridge } from '../machines/bridge.js';
 import { SkyLantern } from '../machines/balloon.js';
@@ -646,6 +647,7 @@ const shadowDragon: Puzzle = {
     const choice = new PowerChoice(kit.floor);
     root.add(choice.group);
     let battle: DragonBattle | ArsenalDragonBattle | null = null;
+    const dragonLose = new LoseCard(root);
     stage.runNotes = () => battle?.journal() ?? [];
     const task = { caption: choice.caption, done: false, mistakes: 0 };
     stage.task = task;
@@ -660,6 +662,7 @@ const shadowDragon: Puzzle = {
           if (!power) return;
           choice.dispose();
           battle = power === 'light' ? new DragonBattle(root) : new ArsenalDragonBattle(root);
+          battle.holdOnLoss = true;
           root.add(battle.group);
           // Beating it with the Arsenal fills the Arsenal's own Journal page.
           stage.journalPage = power === 'arsenal' ? 'arsenal' : null;
@@ -668,6 +671,15 @@ const shadowDragon: Puzzle = {
         task.caption = battle.caption;
         task.done = battle.done;
         task.mistakes = battle.mistakes;
+        // Burned down: "YOU LOSE" and Play again, instead of starting over by itself.
+        if (battle.lost && !dragonLose.shown) dragonLose.show('The dragon’s fire overwhelmed you.', 'Tip: shield with an open palm, and drink a draught from your wrist');
+        if (dragonLose.shown) {
+          task.caption = 'Push Play again to face the dragon again';
+          if (dragonLose.update(dt, hands, head)) {
+            dragonLose.hide();
+            battle.restart();
+          }
+        }
       },
     };
   },
@@ -838,15 +850,16 @@ function storyFight(o: { id: string; rival: string; world: number; title: string
       const task = { caption: '', done: false, mistakes: 0 };
       stage.task = task;
       let losses = 0;
-      let again = -1;
+      // Lost: "YOU LOSE" and a Play again button (no stars, no "Level cleared").
+      const lose = new LoseCard(root);
       return {
         start: new Vector3(0, kit.floor, 0.12),
         attempt: () => ({ solved: false, steps: [], line: 'This one is yours to fight.' }),
         update: (dt, hands, head) => {
-          if (again > 0) {
-            again -= dt;
-            task.caption = `${spec.name} won this round. Get ready: again in ${Math.ceil(again)}…`;
-            if (again <= 0) {
+          if (lose.shown) {
+            task.caption = `${spec.name} won this round. Push Play again to fight again`;
+            if (lose.update(dt, hands, head)) {
+              lose.hide();
               root.remove(duel.group);
               duel = duelWith(spec, () => new InkDuel(root, kit.floor));
               root.add(duel.group);
@@ -854,14 +867,13 @@ function storyFight(o: { id: string; rival: string; world: number; title: string
             return;
           }
           duel.update(dt, hands, head);
-          // Lost: no menu rematch in the story; they simply come again.
-          task.caption = duel.over && !duel.won ? `Splat! ${spec.name} wins this round, but it is not over. Get ready…` : duel.caption;
+          task.caption = duel.over && !duel.won ? `Splat! ${spec.name} wins this round…` : duel.caption;
           task.mistakes = losses + duel.mistakes;
           if (!duel.done) return;
           if (duel.won) task.done = true;
           else {
             losses++;
-            again = 4;
+            lose.show(`${spec.name} won this round.`, 'Tip: block with an open palm, and touch a herb when you are hurt');
           }
         },
       };
@@ -920,17 +932,33 @@ export const DUEL: Puzzle = {
   handsOn: true,
   solved: 'A duel well fought.',
   build(root, kit) {
-    const duel = new InkDuel(root, kit.floor);
+    let duel = new InkDuel(root, kit.floor);
     root.add(duel.group);
     stage.runNotes = () => duel.journal();
     const task = { caption: '', done: false, mistakes: 0 };
     stage.task = task;
+    const lose = new LoseCard(root);
     return {
       start: new Vector3(0, kit.floor, 0.12),
       attempt: () => ({ solved: false, steps: [], line: 'Draw and throw!' }),
       update: (dt, hands, head) => {
+        if (lose.shown) {
+          task.caption = `${duel.spec.name} won this time. Push Play again for a rematch`;
+          if (lose.update(dt, hands, head)) {
+            lose.hide();
+            root.remove(duel.group);
+            duel = new InkDuel(root, kit.floor);
+            root.add(duel.group);
+          }
+          return;
+        }
         duel.update(dt, hands, head);
         task.caption = duel.caption;
+        // A loss is not a clear: no stars, a Play again card instead.
+        if (duel.done && !duel.won) {
+          lose.show(`${duel.spec.name} won this time.`, 'Tip: block with an open palm, and touch a herb when you are hurt');
+          return;
+        }
         task.done = duel.done;
         task.mistakes = duel.mistakes;
         DUEL.solved = duel.won ? `You beat ${duel.spec.name}! Your ink flew true.` : `${duel.spec.name} won this time. Try again!`;

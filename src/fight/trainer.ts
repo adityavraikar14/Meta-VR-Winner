@@ -76,14 +76,16 @@ export class Trainer {
     this.canvas.height = 1400;
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
-    const panel = new Mesh(new PlaneGeometry(0.44, 0.3), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
+    this.texture.anisotropy = 8;
+    // Big enough to read at arm's length in the headset (it was 44 × 30 cm).
+    const panel = new Mesh(new PlaneGeometry(0.53, 0.362), new MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false }));
     panel.renderOrder = 21;
     this.root.add(panel);
     this.back = new PushButton(this.root, 'Back');
     this.next = new PushButton(this.root, 'Next');
-    for (const [button, x] of [[this.back, -0.12], [this.next, 0.12]] as const) {
-      button.size = 0.5;
-      button.root.position.set(x, -0.19, 0.01);
+    for (const [button, x] of [[this.back, -0.15], [this.next, 0.15]] as const) {
+      button.size = 0.9;
+      button.root.position.set(x, -0.245, 0.01);
       button.show(true);
     }
     parent.add(this.root);
@@ -179,10 +181,10 @@ export class Trainer {
     g.textBaseline = 'middle';
     g.textAlign = 'left';
     g.fillStyle = '#ffd84a';
-    g.font = `900 22px ${FONT}`;
+    g.font = `900 26px ${FONT}`;
     g.fillText(`TRAINING · ${this.index + 1} / ${this.list.length}`, 28, 40);
     g.fillStyle = '#ffffff';
-    g.font = `900 36px ${FONT}`;
+    g.font = `900 40px ${FONT}`;
     g.fillText(l.title, 28, 84, w - 56);
 
     // Left: the shape to make (or the drawing to draw). Right: what your hand is doing now.
@@ -196,14 +198,14 @@ export class Trainer {
     g.roundRect(w - 328, 116, 300, 300, 18);
     g.fill();
     g.fillStyle = '#9fb3d9';
-    g.font = `800 18px ${FONT}`;
+    g.font = `800 22px ${FONT}`;
     g.textAlign = 'center';
     g.fillText(l.shape ? 'MAKE THIS SHAPE' : 'DRAW THIS', 178, 140);
     g.fillText('YOUR HAND NOW', w - 178, 140);
     if (l.shape) drawHand(g, 178, 268, 80, l.shape, color);
     else drawSketch(g, 178, 268, 170, l.sketch!, color);
     g.fillStyle = '#ffffff';
-    g.font = `800 22px ${FONT}`;
+    g.font = `800 27px ${FONT}`;
     g.fillText(l.shape ? SHAPE_LABEL[l.shape] : `then let go`, 178, 396);
 
     const right = l.shape ? this.seen === l.shape : this.formed;
@@ -211,11 +213,11 @@ export class Trainer {
     if (mine) drawHand(g, w - 178, 268, 80, mine, right ? '#49d17d' : '#ffffff');
     else {
       g.fillStyle = '#6f7fa3';
-      g.font = `700 20px ${FONT}`;
+      g.font = `700 24px ${FONT}`;
       g.fillText('no shape yet', w - 178, 280);
     }
     g.fillStyle = right ? '#49d17d' : '#ffffff';
-    g.font = `800 22px ${FONT}`;
+    g.font = `800 27px ${FONT}`;
     g.fillText(mine ? `${SHAPE_LABEL[mine]}${right ? '  ✓' : ''}` : '', w - 178, 396);
     // The ring that fills as the shape is held.
     if (l.shape && this.progress > 0 && !this.formed) {
@@ -230,11 +232,11 @@ export class Trainer {
     g.fillStyle = color;
     g.font = `900 64px ${FONT}`;
     g.fillText('→', w / 2, 220);
-    g.font = `900 28px ${FONT}`;
-    g.fillText(spec.name, w / 2, 280, 300);
-    g.fillStyle = '#9fb3d9';
-    g.font = `700 18px ${FONT}`;
-    g.fillText('forms in your hand', w / 2, 312, 300);
+    g.font = `900 32px ${FONT}`;
+    g.fillText(spec.name, w / 2, 280, 330);
+    g.fillStyle = '#c2d0ec';
+    g.font = `700 22px ${FONT}`;
+    g.fillText('forms in your hand', w / 2, 316, 330);
 
     // The three steps, ticked as you go.
     const steps = [
@@ -244,19 +246,19 @@ export class Trainer {
     ];
     const done = [this.made || this.formed, this.formed, this.count >= l.times];
     steps.forEach((step, i) => {
-      const y = 460 + i * 62;
+      const y = 462 + i * 64;
       g.fillStyle = done[i] ? '#49d17d' : 'rgba(255,255,255,0.15)';
       g.beginPath();
-      g.arc(52, y, 20, 0, Math.PI * 2);
+      g.arc(52, y, 23, 0, Math.PI * 2);
       g.fill();
       g.fillStyle = done[i] ? '#14213d' : '#ffffff';
-      g.font = `900 22px ${FONT}`;
+      g.font = `900 26px ${FONT}`;
       g.textAlign = 'center';
       g.fillText(done[i] ? '✓' : String(i + 1), 52, y + 1);
       g.textAlign = 'left';
       g.fillStyle = done[i] ? '#b8f5cf' : '#ffffff';
-      g.font = `700 24px ${FONT}`;
-      g.fillText(step, 86, y, w - 110);
+      g.font = `700 30px ${FONT}`;
+      g.fillText(step, 90, y, w - 114);
     });
     if (this.passed > 0) {
       g.fillStyle = '#49d17d';
@@ -265,9 +267,9 @@ export class Trainer {
       g.fillText(this.finished ? 'TRAINING COMPLETE!' : 'WELL DONE!', w / 2, 650);
     } else {
       g.fillStyle = '#9fb3d9';
-      g.font = `600 18px ${FONT}`;
+      g.font = `700 24px ${FONT}`;
       g.textAlign = 'center';
-      g.fillText('Back and Next: choose any lesson', w / 2, 655);
+      g.fillText('Back and Next: choose any lesson', w / 2, 660);
     }
     this.texture.needsUpdate = true;
   }

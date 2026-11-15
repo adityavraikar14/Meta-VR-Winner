@@ -37,7 +37,7 @@ import { Dragon3D, dragonLoad, Phoenix, preloadDragon } from './dragon3d.js';
  */
 
 /** More hearts than with the light orb: an Arsenal fight takes more blows and more fire. */
-const PLAYER_HEALTH = 5;
+const PLAYER_HEALTH = 6;
 /**
  * On the Arsenal's damage scale (sword 2, power ball 3, spear 5, blaster 1;
  * half that on the body): a fight of a minute or so.
@@ -228,7 +228,7 @@ export class ArsenalDragonBattle {
         break;
       case 'lost':
         this.caption = 'The fire overwhelms you… Rise and try again!';
-        if (this.modeTime > 3.5) this.restart();
+        if (this.modeTime > 3.5 && !this.holdOnLoss) this.restart();
         break;
       case 'won':
         this.dragon.defeat = Math.min(1, this.modeTime / 2.5);
@@ -298,7 +298,15 @@ export class ArsenalDragonBattle {
     this.noteTime = seconds;
   }
 
-  private restart(): void {
+  /** The story shows its own Play again card on a loss instead of restarting by itself. */
+  holdOnLoss = false;
+
+  /** Burned down, and the moment of it has played out. */
+  get lost(): boolean {
+    return this.mode === 'lost' && this.modeTime > 2;
+  }
+
+  restart(): void {
     this.health = PLAYER_HEALTH;
     this.dragonHealth = DRAGON_HEALTH;
     for (const f of this.fireballs) this.group.remove(f.sprite);

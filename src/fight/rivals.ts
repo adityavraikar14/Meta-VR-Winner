@@ -227,7 +227,7 @@ export const RIVALS: RivalSpec[] = [
     url: 'gltf/rival-mako.glb',
     height: 0.52,
     girth: 0.09,
-    health: 170,
+    health: 140,
     ability: 'armor',
     style: 'Huge, slow and tough. Small, soft throws bounce off his hide. Leaps and slams the ground, throwing up a wave of ink.',
     tip: 'Big drawings, thrown hard: ½mv² is what gets through armour.',

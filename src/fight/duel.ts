@@ -66,7 +66,7 @@ import { TOUR_LESSONS } from '../tour.js';
 
 /** Your health in a boss fight, and what one of their hits takes in each phase (it gets worse as they power up). */
 const PLAYER_LIFE = 100;
-const HIT_DAMAGE = [0, 15, 20, 25];
+const HIT_DAMAGE = [0, 12, 15, 18];
 /** What a pinched herb and a Healing Draught give back. */
 const HERB_HEAL = 25;
 const DRAUGHT_HEAL = 35;
@@ -93,11 +93,12 @@ const DOODLE_BONKS = 3;
 /** After a hit you are safe for this long, so a volley of three costs one hit, not three. */
 const GRACE = 0.9;
 /**
- * Rivals here are tougher than their card says: a real fight, not one lucky throw. At 1.7 a
- * captain (90–110 on the card) takes about 14–17 hits of an average shadow weapon (about 11),
- * Morwen (170) about 26; head hits, the Hammer, Lightning and your super make it quicker.
+ * Rivals here are tougher than their card says: a real fight, not one lucky throw, but a
+ * medium one. At 1.35 a captain (90–110 on the card) takes about 11–13 hits of an average
+ * shadow weapon (about 11), Morwen about 12; head hits, the Hammer, Lightning and your super
+ * make it quicker. You take 6 to 8 of their hits (see HIT_DAMAGE), and herbs heal 25.
  */
-const HEALTH_SCALE = 1.7;
+const HEALTH_SCALE = 1.35;
 /** No single hit can take more than this (a head hit can reach half again). */
 const MAX_HIT = 22;
 /** Seconds a rival is untouchable while powering up into a new phase. */
@@ -1508,7 +1509,7 @@ export class InkDuel {
     trainer.root.visible = true;
     // Beside your sparring partner, on the other side of the screen, a little towards you.
     const toYou = this.w.copy(this.head).sub(this.rivalSpot).setY(0).normalize();
-    trainer.root.position.copy(this.rivalSpot).addScaledVector(this.side, -Math.sign(this.offset || 1) * 0.27).addScaledVector(toYou, 0.12);
+    trainer.root.position.copy(this.rivalSpot).addScaledVector(this.side, -Math.sign(this.offset || 1) * 0.33).addScaledVector(toYou, 0.12);
     trainer.root.position.y = this.head.y - 0.1;
     const tips = hands.filter((h) => h.tracked).map((h) => h.indexTip);
     const seen = this.arms.seen.find((s) => s === trainer.lesson.shape) ?? this.arms.seen.find((s) => s !== null) ?? null;
