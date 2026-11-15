@@ -533,7 +533,7 @@ export class ShadowGameSystem extends createSystem({
     // Dev: D opens the duel's roster (arrows step through it, Enter fights).
     // Dev: Insert opens the Arena straight to the dragon.
     devActions.insert = () => {
-      if (this.phase === 'title') this.menuAction({ do: 'arena', boss: 'dragon' });
+      this.menuAction({ do: 'arena', boss: 'dragon' });
     };
     devActions.d = () => {
       if (this.phase === 'title') this.menu.openRoster('duel');
@@ -543,7 +543,7 @@ export class ShadowGameSystem extends createSystem({
     devActions.f9 = () => void diagnoseDragon((line) => console.log(`SHADOWPLAY diag ${line}`));
     // Dev: P opens Shadow Pets from the title.
     devActions.p = () => {
-      if (this.phase === 'title') this.menuAction({ do: 'pets' });
+      this.menuAction({ do: 'pets' });
     };
     devInfo.pet = () => (petNow.mood ? { kind: petNow.mood.kind, feeling: petNow.mood.feeling, trust: Number(petNow.mood.trust.toFixed(2)), fear: Number(petNow.mood.fear.toFixed(2)), last: petNow.mood.last } : null);
     // Dev: H pushes Hint; devInfo.hint reports the card.

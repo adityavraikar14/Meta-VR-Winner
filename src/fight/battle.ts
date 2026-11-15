@@ -163,6 +163,7 @@ export class DragonBattle {
   private readonly sketchSlots: SketchHand[] = [];
   private readonly shots: Array<{ mesh: Mesh; pos: Vector3; vel: Vector3; accel: Vector3 | null; spin: number; power: number; color: number; age: number }> = [];
   private readonly side = new Vector3(1, 0, 0);
+  private devArm = 0;
 
   // HUD on the screen.
   private readonly hud = new Group();
@@ -230,6 +231,14 @@ export class DragonBattle {
       this.gather(1);
     };
     devActions[']'] = () => this.devThrow();
+    // Dev: Delete throws your next shadow weapon at the dragon (for filming the trailer).
+    devActions.delete = () => {
+      if (this.mode !== 'fight') return;
+      const order: ShadowShape[] = ['horns', 'fist', 'vee', 'thumb', 'three', 'point'];
+      const shape = order[this.devArm++ % order.length];
+      const from = this.head.clone().add(new Vector3(0.1, -0.25, 0)).addScaledVector(this.weakPoints()[0].sub(this.head).normalize(), 0.3);
+      this.fireArm({ shape, from, swing: new Vector3() });
+    };
     devActions[';'] = () => this.breathe();
     devActions["'"] = () => {
       if (this.dragon3d && this.diveTime === 0) this.diveTime = 0.001;

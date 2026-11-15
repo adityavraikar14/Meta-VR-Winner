@@ -1,4 +1,5 @@
 import { FONT } from '../ui-theme.js';
+import { stage } from '../stage-state.js';
 import {
   AdditiveBlending,
   CanvasTexture,
@@ -59,6 +60,7 @@ export class PowerChoice {
   private headWorld = new Vector3();
 
   constructor(floor: number) {
+    this.group.visible = false;
     for (const spec of STONES) {
       const root = new Group();
       const home = new Vector3(spec.x, floor + 0.1, 0.2);
@@ -90,6 +92,8 @@ export class PowerChoice {
   update(dt: number, hands: readonly HandState[], head: Vector3): Power | null {
     this.time += dt;
     this.headWorld.copy(head);
+    // Only once the level is under way: never on the title page or behind the intro film.
+    this.group.visible = stage.playing;
     for (const stone of this.stones) {
       // A slow bob and turn, so they read as alive and touchable.
       stone.root.position.copy(stone.home).setY(stone.home.y + Math.sin(this.time * 1.6 + stone.home.x * 20) * 0.006);

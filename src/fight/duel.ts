@@ -39,6 +39,9 @@ import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
 import { ARMS, type ArmShot, planVolley, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
+
+/** The thrown shadow weapons, in the order the dev key fires them. */
+const DEV_ARMS: ShadowShape[] = ['fist', 'vee', 'horns', 'blade', 'three', 'thumb', 'point', 'shaka', 'ell'];
 import { recognise, type Sketch, SKETCH_NAMES } from './sketch.js';
 import { Trainer } from './trainer.js';
 import { TOUR_LESSONS } from '../tour.js';
@@ -394,6 +397,15 @@ export class InkDuel {
     devActions[';'] = () => this.devRival('throw');
     devActions["'"] = () => this.devDoodle();
     devActions['/'] = () => this.devRival('skill');
+    // Dev: Delete throws your next shadow weapon (for filming the trailer).
+    devActions.delete = () => {
+      if (!this.foe || this.mode !== 'fight') return;
+      const shape = DEV_ARMS[this.devArm++ % DEV_ARMS.length];
+      const toFoe = this.foe.chestAt(new Vector3()).sub(this.head).normalize();
+      const from = this.head.clone().addScaledVector(toFoe, 0.3).add(new Vector3(0.08, -0.22, 0));
+      this.comic.pop(ARMS[shape].name.toUpperCase(), from.clone().setY(from.y + 0.1), hex(ARMS[shape].color), 0.8, 1.1);
+      this.fireArm({ shape, from, swing: new Vector3() });
+    };
     // Dev: > makes the rival do the next move from their book now.
     devActions['>'] = () => {
       if (this.foe && this.mode === 'fight') this.nextRival = this.perform(this.foe, this.drawMove());
@@ -1478,6 +1490,7 @@ export class InkDuel {
   }
 
   private readonly armsTold = new Set<string>();
+  private devArm = 0;
 
   /** The Training Arena's coach: where it stands, what it sees, what it says. */
   private coach(dt: number, hands: readonly HandState[]): void {
