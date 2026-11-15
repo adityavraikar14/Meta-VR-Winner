@@ -9,7 +9,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
-  RingGeometry,
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
@@ -29,6 +28,7 @@ import { Comic } from '../fight/comic.js';
 import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
 import { ADD_ORDER, currentSlot, DEMO, MAX_PIECES, nextSlot, resetWorkshop, saveWorkshop, shelfSpot } from './workshop.js';
 import { capsule, poly, SPARK_RADIUS, TAG_HAND_LEFT, TAG_HAND_RIGHT, TAG_SHARD } from './spark-physics.js';
+import { gateMesh, groundBlocks, SLAB, starGeometry, starMaterial, stemMesh, thornMesh, Z_PLAY } from './course-3d.js';
 
 /**
  * A Shadow Run level on the paper screen: the spark, the cut-paper course,
@@ -57,8 +57,9 @@ const HINT_AFTER = 2;
 
 /** Layers just in front of the paper (it is z = 0 in its own space). */
 const Z_COURSE = 0.0016;
-const Z_GATE = 0.003;
-const Z_SPARK = 0.0045;
+/** The spark and what it meets stand in the 3D course, halfway out of the screen (see course-3d.ts). */
+const Z_GATE = Z_PLAY - 0.002;
+const Z_SPARK = Z_PLAY;
 /** The course floor's height on the paper, for the readout's HEIGHT (see run-levels.ts). */
 const COURSE_FLOOR = -0.15;
 /** Where the player's eyes are in paper space (see ShadowStageSystem), for facing buttons. */
@@ -227,11 +228,31 @@ function paintCourse(canvas: HTMLCanvasElement, level: RunLevel, look: CourseLoo
     }
   }
   g.restore();
-  // A chunky dark outline, like a cut-out sticker.
+  // A chunky dark outline, like a cut-out sticker: around the ground's outside only, not
+  // along the seams between the pieces a smooth slope is built from.
+  const seams = new Map<string, number>();
+  const key = (a: readonly number[], b: readonly number[]) => `${a[0].toFixed(4)},${a[1].toFixed(4)}|${b[0].toFixed(4)},${b[1].toFixed(4)}`;
+  for (const piece of level.terrain) {
+    piece.forEach((p, i) => {
+      const q = piece[(i + 1) % piece.length];
+      seams.set(key(p, q), (seams.get(key(p, q)) ?? 0) + 1);
+      seams.set(key(q, p), (seams.get(key(q, p)) ?? 0) + 1);
+    });
+  }
   g.strokeStyle = look.outline;
   g.lineWidth = 5;
   g.lineJoin = 'round';
-  g.stroke(all);
+  g.lineCap = 'round';
+  g.beginPath();
+  for (const piece of level.terrain) {
+    piece.forEach((p, i) => {
+      const q = piece[(i + 1) % piece.length];
+      if ((seams.get(key(p, q)) ?? 0) >= 2) return;
+      g.moveTo(px(p[0]), py(p[1]));
+      g.lineTo(px(q[0]), py(q[1]));
+    });
+  }
+  g.stroke();
   // Blades standing a few millimetres proud of the top: the same blade every time (no flicker on repaint).
   if (look.tufts) {
     g.fillStyle = look.tufts;
@@ -332,66 +353,6 @@ function guideTexture(level: RunLevel): CanvasTexture | null {
       g.fillStyle = '#14213d';
       g.fillText(text, x, y);
     }
-  }
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
-/** An ink thorn: a black burr of spikes with a red-hot core. */
-function thornTexture(): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 96;
-  const g = canvas.getContext('2d')!;
-  const glow = g.createRadialGradient(48, 48, 0, 48, 48, 46);
-  glow.addColorStop(0, 'rgba(255, 70, 40, 0.65)');
-  glow.addColorStop(1, 'rgba(255, 40, 20, 0)');
-  g.fillStyle = glow;
-  g.fillRect(0, 0, 96, 96);
-  g.fillStyle = '#120a10';
-  g.beginPath();
-  for (let i = 0; i < 18; i++) {
-    const a = (i / 18) * Math.PI * 2;
-    const r = i % 2 ? 13 : 30 + (i % 4) * 2;
-    g.lineTo(48 + Math.cos(a) * r, 48 + Math.sin(a) * r);
-  }
-  g.closePath();
-  g.fill();
-  g.fillStyle = '#ff5a2a';
-  g.beginPath();
-  g.arc(48, 48, 6, 0, Math.PI * 2);
-  g.fill();
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
-/** What holds a thorn: a thorny bramble growing up from the pit, or a vine it hangs from. */
-function stemTexture(bramble: boolean): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 32;
-  canvas.height = 256;
-  const g = canvas.getContext('2d')!;
-  g.strokeStyle = g.fillStyle = bramble ? '#120a10' : '#2f5a2a';
-  g.lineWidth = bramble ? 5 : 4;
-  g.lineCap = 'round';
-  g.beginPath();
-  for (let y = 0; y <= 256; y += 8) g.lineTo(16 + Math.sin(y / 22) * 4, y);
-  g.stroke();
-  for (let y = 18; y < 256; y += 30) {
-    const x = 16 + Math.sin(y / 22) * 4;
-    const side = (y / 30) % 2 < 1 ? 1 : -1;
-    g.beginPath();
-    if (bramble) {
-      // A little hooked spike.
-      g.moveTo(x, y - 4);
-      g.lineTo(x + side * 11, y - 9);
-      g.lineTo(x, y + 3);
-    } else {
-      // A leaf.
-      g.ellipse(x + side * 7, y, 7, 3.5, side * 0.5, 0, Math.PI * 2);
-    }
-    g.fill();
   }
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
@@ -502,7 +463,7 @@ export class ShadowRun {
   private ahead: Mesh[] = [];
   private aheadAt: Array<[number, number]> = [];
   /** Ink thorns on the course. */
-  private thorns: Sprite[] = [];
+  private thorns: Mesh[] = [];
   /** The painted world: near clouds that drift, fireflies, and pop words. */
   private clouds: Array<{ mesh: Mesh; speed: number }> = [];
   private flies: Array<{ sprite: Sprite; x: number; y: number; phase: number }> = [];
@@ -513,7 +474,7 @@ export class ShadowRun {
   private trail: Sprite[] = [];
   private trailAt: Array<[number, number]> = [];
   private bursts: Burst[] = [];
-  private motes: Sprite[] = [];
+  private motes: Mesh[] = [];
   private gateGlow: Sprite;
   private gateRing: Mesh;
   private waitTime = 0;
@@ -579,20 +540,12 @@ export class ShadowRun {
     }
     this.paper.add(this.comic.group);
 
-    const course = new Mesh(
-      new PlaneGeometry(W, H),
-      new MeshBasicMaterial({ map: courseTexture(level), transparent: true, depthWrite: false }),
-    );
-    course.position.z = Z_COURSE;
-    course.renderOrder = 3;
-    this.paper.add(course);
+    // The course stands out of the screen as solid blocks, its front faces the painted ground.
+    const look = COURSE_LOOKS[(level.world ?? 0) % COURSE_LOOKS.length];
+    this.paper.add(groundBlocks(level.terrain, courseTexture(level), W, H, { top: look.top[0], lip: look.top[1], side: look.flat[1], outline: look.outline }, stage.shadowMaterial));
 
-    this.gateRing = new Mesh(
-      new RingGeometry(GATE_RADIUS * 0.76, GATE_RADIUS, 40),
-      new MeshBasicMaterial({ color: 0xff9f1a, transparent: true, opacity: 1, depthWrite: false }),
-    );
+    this.gateRing = gateMesh(GATE_RADIUS);
     this.gateRing.position.set(level.gate[0], level.gate[1], Z_GATE);
-    this.gateRing.renderOrder = 4;
     this.paper.add(this.gateRing);
     this.gateGlow = new Sprite(new SpriteMaterial({ map: glowTexture('rgba(255,240,200,0.9)', 'rgba(255,190,80,0.45)'), blending: AdditiveBlending, transparent: true, depthWrite: false }));
     this.gateGlow.position.set(level.gate[0], level.gate[1], Z_GATE);
@@ -603,42 +556,44 @@ export class ShadowRun {
     const guide = guideTexture(level);
     if (guide) {
       this.guide = new Mesh(new PlaneGeometry(W, H), new MeshBasicMaterial({ map: guide, transparent: true, depthWrite: false, opacity: 0 }));
-      this.guide.position.z = Z_COURSE + 0.0004;
+      // In front of the 3D course, so the dashed outline shows over the blocks too.
+      this.guide.position.z = SLAB + 0.002;
       this.guide.renderOrder = 4;
       this.guide.visible = false;
       this.paper.add(this.guide);
     }
 
-    const thorn = thornTexture();
-    const bramble = stemTexture(true);
-    const vine = stemTexture(false);
+    const thorn = thornMesh(THORN_RADIUS);
     for (const [x, y] of level.thorns ?? []) {
       // Nothing floats: a low thorn grows on a bramble from the pit floor, a high one hangs on a vine.
       const low = y < 0.05;
       const from = low ? -PAPER_BOUNDS.hh : y;
       const to = low ? y : PAPER_BOUNDS.hh;
       if (to - from > 0.01) {
-        const stem = new Mesh(new PlaneGeometry(0.012, to - from), new MeshBasicMaterial({ map: low ? bramble : vine, transparent: true, depthWrite: false }));
-        stem.position.set(x, (from + to) / 2, Z_GATE - 0.0003);
-        stem.renderOrder = 5;
+        const stem = stemMesh(to - from, low);
+        stem.position.set(x, (from + to) / 2, Z_GATE);
         this.paper.add(stem);
       }
-      const sprite = new Sprite(new SpriteMaterial({ map: thorn, transparent: true, depthWrite: false }));
-      sprite.position.set(x, y, Z_GATE);
-      sprite.scale.setScalar(THORN_RADIUS * 3.4);
-      sprite.renderOrder = 5;
-      this.paper.add(sprite);
-      this.thorns.push(sprite);
+      const ball = new Mesh(thorn.geometry, thorn.material);
+      ball.position.set(x, y, Z_GATE);
+      this.paper.add(ball);
+      this.thorns.push(ball);
     }
 
-    const mote = moteTexture();
+    const moteShape = starGeometry(0.022);
+    const moteGold = starMaterial();
+    const moteGlow = new SpriteMaterial({ map: moteTexture(), transparent: true, depthWrite: false, opacity: 0.55 });
     for (const [x, y] of level.motes) {
-      const sprite = new Sprite(new SpriteMaterial({ map: mote, transparent: true, depthWrite: false }));
-      sprite.position.set(x, y, Z_GATE);
-      sprite.scale.setScalar(0.064);
-      sprite.renderOrder = 5;
-      this.paper.add(sprite);
-      this.motes.push(sprite);
+      const star = new Mesh(moteShape, moteGold);
+      star.position.set(x, y, Z_GATE);
+      // A soft halo behind each star, so it still shines like a mote of light.
+      const halo = new Sprite(moteGlow);
+      halo.scale.setScalar(0.07 / 1);
+      halo.position.z = -0.012;
+      halo.renderOrder = 4;
+      star.add(halo);
+      this.paper.add(star);
+      this.motes.push(star);
       this.moteFlight.push(0);
     }
 
@@ -1078,7 +1033,8 @@ export class ShadowRun {
     });
     // Gate: a slow turn and a breathing glow; it flares when the spark is through.
     const flare = sim.state === 'won' ? Math.max(0, 1 - this.wonTime) : 0;
-    this.gateRing.rotation.z = this.time * 0.6;
+    // The ring turns a little to and fro, so you see it is solid.
+    this.gateRing.rotation.y = Math.sin(this.time * 0.9) * 0.55;
     // The gate follows its level (the Workshop's ring moves it).
     const [gx, gy] = this.level.gate;
     this.gateRing.position.set(gx, gy, Z_GATE);
@@ -1087,8 +1043,8 @@ export class ShadowRun {
     this.gateGlow.scale.setScalar(GATE_RADIUS * (3 + 0.25 * Math.sin(this.time * 2.4) + 4 * flare));
     // Thorns turn slowly and pulse, so they read as alive and dangerous.
     this.thorns.forEach((t, i) => {
-      t.material.rotation = this.time * 0.7 + i;
-      t.scale.setScalar(THORN_RADIUS * (3.3 + 0.25 * Math.sin(this.time * 3 + i)));
+      t.rotation.set(this.time * 0.5 + i, this.time * 0.7 + i, 0);
+      t.scale.setScalar(1 + 0.08 * Math.sin(this.time * 3 + i));
     });
     // Motes bob gently; a collected one flies into the spark and is gone.
     this.motes.forEach((m, i) => {
@@ -1098,14 +1054,15 @@ export class ShadowRun {
         const k = Math.min(1, dt * 18);
         m.position.x += (x - m.position.x) * k;
         m.position.y += (y - m.position.y) * k;
-        m.scale.setScalar(Math.max(0.006, m.scale.x * (1 - dt * 6)));
-        m.material.rotation += dt * 14;
+        m.scale.setScalar(Math.max(0.1, m.scale.x * (1 - dt * 6)));
+        m.rotation.y += dt * 14;
         if (this.moteFlight[i] <= 0) m.visible = false;
         return;
       }
       const [mx, my] = this.level.motes[i];
       m.position.set(mx, my + Math.sin(this.time * 2 + i) * 0.004, Z_GATE);
-      m.material.rotation = this.time * 0.8 + i;
+      // Spinning like a coin.
+      m.rotation.y = this.time * 1.8 + i;
     });
     for (const b of this.bursts) {
       if (b.life <= 0) continue;

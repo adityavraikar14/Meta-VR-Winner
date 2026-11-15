@@ -1,6 +1,7 @@
 import { RivalShowcase } from '../fight/showcase.js';
 import { touchables } from './touchables.js';
 import { Confetti } from './confetti.js';
+import { shadowBox } from './shadow-box.js';
 import { Group, type Material, Mesh, MeshBasicMaterial, type MeshStandardMaterial, type Object3D, PlaneGeometry, Vector3 } from '@iwsdk/core';
 import { PAPER_BOUNDS } from '../run/run-sim.js';
 import { sceneryTexture } from '../run/scenery.js';
@@ -221,6 +222,8 @@ export class Diorama {
       screenGround: this.stageRoot.position.y + this.floor,
       room: this.room,
     });
+    // The screen is the back wall of a box of light that reaches out towards you.
+    this.screen.add(shadowBox(PAPER_WIDTH, PAPER_HEIGHT, -0.2, world));
     mergeStatic(this.decor);
     // Each room plant and frame part is its own group (they grow in one by one),
     // so merging only joins meshes inside a group: fewer draw calls, same growth.

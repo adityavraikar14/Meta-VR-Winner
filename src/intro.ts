@@ -1,5 +1,6 @@
 import {
   CanvasTexture,
+  Color,
   Mesh,
   MeshBasicMaterial,
   type Object3D,
@@ -25,6 +26,17 @@ const SCREEN_HEIGHT = SCREEN_WIDTH / 2;
 
 /** The subtitle band along the bottom of the picture. */
 const BAND = 104;
+
+/**
+ * The puppets are cut-outs held in front of the lit screen, not painted on it:
+ * they stand this far out (metres), as a few stacked layers so they have
+ * thickness, and their soft shadow falls on the screen behind them.
+ */
+const PUPPET_DEPTH = 0.06;
+const PUPPET_LAYERS = 4;
+const LAYER_GAP = 0.005;
+/** The puppet layer's resolution (its own canvas, 1.5 × layout size: sharp, and light to upload). */
+const PUPPET_SCALE = 1.5;
 
 /** Each scene's backlight: the colour of the paper lit from behind. */
 type Tint = [string, string];
@@ -313,6 +325,16 @@ export class IntroShow {
   private texture: CanvasTexture;
   readonly mesh: Mesh;
   private material: MeshBasicMaterial;
+  /** The puppets, on their own transparent canvas, and the stacked layers that show it. */
+  private puppets: HTMLCanvasElement;
+  private puppetTexture: CanvasTexture;
+  private puppetMaterials: MeshBasicMaterial[] = [];
+  /** A small copy of the puppets, blown up again: their soft shadow on the screen. */
+  private blur: HTMLCanvasElement;
+  /** How much of the puppet layer shows (it fades with each scene change). */
+  private puppetFade = 1;
+  /** The theatre box's walls, between the screen and the front of the stage. */
+  private wallMaterial: MeshBasicMaterial;
   private scene = -1;
   private sceneTime = 0;
   private time = 0;
@@ -334,6 +356,56 @@ export class IntroShow {
     this.mesh.renderOrder = 25;
     this.mesh.visible = false;
     parent.add(this.mesh);
+
+    // The puppets: a stack of layers in front of the screen, darkest at the front, so a puppet
+    // is a solid cut-out with an edge you can see when you lean, not a picture on the screen.
+    this.puppets = document.createElement('canvas');
+    this.puppets.width = W * PUPPET_SCALE;
+    this.puppets.height = H * PUPPET_SCALE;
+    this.puppetTexture = new CanvasTexture(this.puppets);
+    this.puppetTexture.colorSpace = SRGBColorSpace;
+    this.puppetTexture.anisotropy = 4;
+    const plane = new PlaneGeometry(SCREEN_WIDTH, SCREEN_HEIGHT);
+    for (let i = 0; i < PUPPET_LAYERS; i++) {
+      const front = i === PUPPET_LAYERS - 1;
+      // The back layers are the cut edge: lit warm by the lantern behind the screen.
+      const material = new MeshBasicMaterial({
+        map: this.puppetTexture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        opacity: 0,
+        color: front ? new Color(1, 1, 1) : new Color(1.9, 1.35, 0.8),
+        // Only solid puppet shows in the back layers: a see-through glow or tint would stack up darker.
+        alphaTest: front ? 0 : 0.6,
+      });
+      const layer = new Mesh(plane, material);
+      layer.name = 'IntroPuppets';
+      layer.position.z = PUPPET_DEPTH - (PUPPET_LAYERS - 1 - i) * LAYER_GAP;
+      layer.renderOrder = 26 + i;
+      this.mesh.add(layer);
+      this.puppetMaterials.push(material);
+    }
+    this.blur = document.createElement('canvas');
+    this.blur.width = 128;
+    this.blur.height = 64;
+
+    // The theatre box: dark wooden walls from the screen's edge to the front of the stage.
+    this.wallMaterial = new MeshBasicMaterial({ color: 0x2a1a10, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
+    const depth = PUPPET_DEPTH + 0.02;
+    const side = new PlaneGeometry(depth, SCREEN_HEIGHT);
+    const lid = new PlaneGeometry(SCREEN_WIDTH, depth);
+    for (const sign of [-1, 1]) {
+      const wall = new Mesh(side, this.wallMaterial);
+      wall.position.set((sign * SCREEN_WIDTH) / 2, 0, depth / 2);
+      wall.rotation.y = (-sign * Math.PI) / 2;
+      wall.renderOrder = 25;
+      const roof = new Mesh(lid, this.wallMaterial);
+      roof.position.set(0, (sign * SCREEN_HEIGHT) / 2, depth / 2);
+      roof.rotation.x = (sign * Math.PI) / 2;
+      roof.renderOrder = 25;
+      this.mesh.add(wall, roof);
+    }
   }
 
   get active(): boolean {
@@ -362,6 +434,8 @@ export class IntroShow {
     const target = this.playing ? 1 : 0;
     this.material.opacity += (target - this.material.opacity) * Math.min(1, dt * 4);
     this.mesh.visible = this.material.opacity > 0.01;
+    for (const m of this.puppetMaterials) m.opacity = this.material.opacity * this.puppetFade;
+    this.wallMaterial.opacity = this.material.opacity * 0.92;
     if (!this.playing) return null;
     this.time += dt;
     this.sceneTime += dt;
@@ -403,22 +477,43 @@ export class IntroShow {
     // The scene's ground line sits just above the subtitles; the floor runs edge to edge.
     const fit = 0.92 * (1 + 0.04 * k);
     const floor = top - 18;
+    ctx.fillStyle = INK;
+    ctx.fillRect(0, floor, W, top - floor);
+    // The puppets on their own layer, in front of the screen.
+    const p = this.puppets.getContext('2d')!;
+    p.setTransform(1, 0, 0, 1, 0, 0);
+    p.globalAlpha = 1;
+    p.globalCompositeOperation = 'source-over';
+    p.clearRect(0, 0, this.puppets.width, this.puppets.height);
+    p.setTransform(PUPPET_SCALE, 0, 0, PUPPET_SCALE, 0, 0);
+    p.save();
+    p.beginPath();
+    p.rect(0, 0, W, top);
+    p.clip();
+    p.translate(W / 2, floor);
+    p.scale(fit, fit);
+    p.translate(-W / 2, -GROUND);
+    scene.draw(p, this.time, k);
+    p.restore();
+    // Their shadow on the screen: soft and a little larger, as if the lamp were close behind.
+    const b = this.blur.getContext('2d')!;
+    b.clearRect(0, 0, this.blur.width, this.blur.height);
+    b.drawImage(this.puppets, 0, 0, this.blur.width, this.blur.height);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, W, top);
     ctx.clip();
-    ctx.fillStyle = INK;
-    ctx.fillRect(0, floor, W, top - floor);
-    ctx.translate(W / 2, floor);
-    ctx.scale(fit, fit);
-    ctx.translate(-W / 2, -GROUND);
-    scene.draw(ctx, this.time, k);
+    ctx.globalAlpha = 0.5;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.blur, -W * 0.02 + 10, -H * 0.02 + 8, W * 1.04, H * 1.04);
     ctx.restore();
+    this.puppetTexture.needsUpdate = true;
     this.dust(ctx, top);
     this.vignette(ctx, top);
     this.subtitle(ctx, scene.line, k);
     // Scenes fade through dark, like a turning page.
     const edge = Math.min(1, this.sceneTime / 0.45, (scene.seconds - this.sceneTime) / 0.45);
+    this.puppetFade = Math.max(0, edge);
     if (edge < 1) {
       ctx.fillStyle = `rgba(8, 10, 22, ${1 - Math.max(0, edge)})`;
       ctx.fillRect(0, 0, W, top);
