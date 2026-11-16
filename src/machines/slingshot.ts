@@ -316,7 +316,7 @@ export class ShadowSlingshot {
         this.release(rest);
         return;
       }
-      const p = this.group.worldToLocal(this.v.copy(hand.pinch));
+      const p = this.group.worldToLocal(this.v.copy(hand.hold));
       // The pouch follows the pinch, but the bands only stretch so far.
       const pull = p.sub(rest);
       if (pull.length() > MAX_PULL) pull.setLength(MAX_PULL);

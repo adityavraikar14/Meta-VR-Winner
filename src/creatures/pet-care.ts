@@ -106,7 +106,7 @@ export class PetCare {
         continue;
       }
       // Carried between the fingers.
-      berry.mesh.position.copy(this.group.worldToLocal(this.v.copy(hand.pinch)));
+      berry.mesh.position.copy(this.group.worldToLocal(this.v.copy(hand.hold)));
       for (const pet of pets) {
         if (!pet.emerged || pet.asleep) continue;
         if (pet.mouth(this.mouth).distanceTo(hand.pinch) > EAT + pet.reach * 0.3) continue;

@@ -424,7 +424,7 @@ export class Brew {
         this.trammelHand = -1;
         return;
       }
-      const y = this.group.worldToLocal(this.v.copy(hand.pinch)).y - this.trammelGrab;
+      const y = this.group.worldToLocal(this.v.copy(hand.hold)).y - this.trammelGrab;
       const notched = Math.round((y - LOW) / NOTCH) * NOTCH + LOW;
       if (Math.abs(notched - this.height) > 1e-4) this.setHeight(notched);
     });

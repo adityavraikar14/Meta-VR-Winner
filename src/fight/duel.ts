@@ -896,7 +896,7 @@ export class InkDuel {
             playWhee();
           }
         } else {
-          doodle.carry(this.group.worldToLocal(this.v.copy(hand.pinch)), dt);
+          doodle.carry(this.group.worldToLocal(this.v.copy(hand.hold)), dt);
         }
       }
       const event = doodle.update(dt, world);

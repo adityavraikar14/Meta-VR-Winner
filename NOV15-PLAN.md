@@ -77,3 +77,11 @@ Legend: [x] done and checked · [ ] not done yet
 - [x] **Quick Tour: Captain Rook is the real 3D character.** The flat shadow puppet only stood in because his model took over 20 s to download on the headset; now the fight waits for him (and the tour fetches him while the film plays). The puppet appears only if every download try fails
 - [x] **Quick Tour never leaves a stop on a timer:** each stop moves on only when you finish it or push Skip. The badge says so (Pets and Training: "play as long as you like · push Skip for the next stop")
 - [x] Checked in the emulator: move mode (frame, caption, 20 cm drag, settles and saves, game resumes), tour badge; typecheck and all tests pass
+
+## 11. Nov 16: second Quest test
+- [x] **The spark falls faster** (gravity 2.2 → 3.6): dropped onto a shard's shadow it now gathers enough speed to roll on to the ring. Every level, daily course and workshop build is still proven finishable
+- [x] **Picking things up works like your fingers:** let go as soon as your fingers open a little (about 1.6 cm wider than your tightest pinch), not only at 5 cm; while the fingers open the thing holds still, so letting go never drags or twists it; it does not grab again until you pinch again. Applies to everything you pick up: shards, plants and stones, pets, berries, the ball, the slingshot, forge, brew and bridge pieces, drawings
+- [x] **Shards:** follow your hand smoothly (tracking jitter eased out), and stay at exactly the angle you leave them (no more 15° snap on release). Checked in the emulator: pinch, carry 8 cm, open the fingers part way: released, stayed put, same angle
+- [x] **Wrist menu no longer pops up during play:** it opens only when you look straight at your open palm, held close to your face, for a full second while playing (half a second elsewhere). Palms raised for shadows no longer open it
+- [x] **Big leaves:** the giant leaf plants stand further out to the sides and lower, so they don't arch over the screen; a hand (fingers or palm) anywhere on a big plant pushes it; push firmly and it stays parted out of your way, like real foliage
+- [x] Typecheck and all tests pass

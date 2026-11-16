@@ -682,7 +682,7 @@ export class Beast {
       return;
     }
     // Hanging below the pinch, swinging with the hand.
-    this.position.copy(hand.pinch).addScaledVector(UP, -this.height * 0.75);
+    this.position.copy(hand.hold).addScaledVector(UP, -this.height * 0.75);
     const swing = Math.max(-0.6, Math.min(0.6, hand.pinchVelocity.x * 0.35));
     this.roll += (swing - this.roll) * Math.min(1, dt * 8);
     this.lean = Math.max(-0.4, Math.min(0.4, -hand.pinchVelocity.y * 0.2));

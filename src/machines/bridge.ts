@@ -315,7 +315,7 @@ export class Bridge {
         this.deleting[h] = null;
         return;
       }
-      const p = this.group.worldToLocal(this.v.copy(hand.pinch));
+      const p = this.group.worldToLocal(this.v.copy(hand.hold));
       if (hand.pinchStarted && Math.abs(p.z) < 0.09) {
         const from = this.nearestJoint(p.x, p.y, SNAP + 0.008);
         if (from >= 0) {

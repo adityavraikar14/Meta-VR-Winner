@@ -14,9 +14,17 @@ export const TOUCH_TIPS = [9, 14, 19] as const;
 const EXT_SMOOTH = 0.05;
 const INDEX_TIP = 9;
 
-/** Pinch closes below this thumb-index gap and opens above the second. */
+/**
+ * Pinch closes below this thumb-index gap. It opens as soon as the fingers
+ * part a little from the tightest they were during this pinch (as you would
+ * let go of a real thing), and in any case above PINCH_OPEN.
+ */
 const PINCH_CLOSE = 0.03;
-const PINCH_OPEN = 0.05;
+const PINCH_OPEN = 0.045;
+/** Fingers this much wider than their tightest during the pinch: letting go. */
+const LET_GO = 0.016;
+/** Fingers this much wider than their tightest: starting to open (what is held stops following). */
+const EASING_OPEN = 0.005;
 
 export interface HandState {
   tracked: boolean;
@@ -27,6 +35,21 @@ export interface HandState {
   pinchEnded: boolean;
   /** Midpoint between thumb and index tips. */
   pinch: Vector3;
+  /**
+   * Where a held thing should be: the pinch point while the pinch is firm,
+   * and still while the fingers open to let go, so letting go never drags,
+   * drops or twists what you were holding.
+   */
+  hold: Vector3;
+  /** Fingers parting at the end of a pinch: hold what you carry still. */
+  opening: boolean;
+  /** Tightest thumb-index gap during this pinch. */
+  pinchMin: number;
+  /**
+   * A new pinch closes under this gap: PINCH_CLOSE, or tighter than where the
+   * last one let go, so fingers easing open don't take hold again at once.
+   */
+  reclose: number;
   pinchVelocity: Vector3;
   /**
    * The hand's velocity as you let go: smoothed over the last moments of a
@@ -55,6 +78,10 @@ function createHand(): HandState {
     pinchStarted: false,
     pinchEnded: false,
     pinch: new Vector3(),
+    hold: new Vector3(),
+    opening: false,
+    pinchMin: 1,
+    reclose: PINCH_CLOSE,
     pinchVelocity: new Vector3(),
     releaseVelocity: new Vector3(),
     palm: new Vector3(),
@@ -89,6 +116,8 @@ export class HandInput {
       if (!hand.tracked) {
         if (hand.pinching) hand.pinchEnded = true;
         hand.pinching = false;
+        hand.opening = false;
+        hand.reclose = PINCH_CLOSE;
         hand.pointing = false;
         continue;
       }
@@ -103,18 +132,29 @@ export class HandInput {
       if (wasTracked && dt > 0) {
         hand.pinchVelocity.subVectors(hand.pinch, this.previousPinch[i]).divideScalar(dt);
         // Follow the hand while the pinch is firm (or not pinching); hold still while the fingers open.
-        if (!hand.pinching || gap < PINCH_CLOSE + 0.004) hand.releaseVelocity.lerp(hand.pinchVelocity, Math.min(1, dt * 10));
+        if (!hand.pinching || gap < hand.pinchMin + EASING_OPEN) hand.releaseVelocity.lerp(hand.pinchVelocity, Math.min(1, dt * 10));
       } else {
         hand.pinchVelocity.set(0, 0, 0);
         hand.releaseVelocity.set(0, 0, 0);
       }
-      if (!hand.pinching && gap < PINCH_CLOSE) {
+      // Opened properly since the last let-go: the usual threshold again.
+      if (!hand.pinching && gap > PINCH_CLOSE + 0.006) hand.reclose = PINCH_CLOSE;
+      if (!hand.pinching && gap < hand.reclose) {
         hand.pinching = true;
         hand.pinchStarted = true;
-      } else if (hand.pinching && gap > PINCH_OPEN) {
-        hand.pinching = false;
-        hand.pinchEnded = true;
+        hand.pinchMin = gap;
+        hand.hold.copy(hand.pinch);
+      } else if (hand.pinching) {
+        hand.pinchMin = Math.min(hand.pinchMin, gap);
+        if (gap > PINCH_OPEN || gap > hand.pinchMin + LET_GO) {
+          hand.pinching = false;
+          hand.pinchEnded = true;
+          hand.reclose = Math.min(PINCH_CLOSE, gap - 0.012);
+        }
       }
+      hand.opening = hand.pinching && gap > hand.pinchMin + EASING_OPEN;
+      // The hold point follows the pinch, except while the fingers part to let go.
+      if (!hand.opening) hand.hold.copy(hand.pinch);
 
       // Palm normal from the wrist and the index/pinky knuckles; the cross
       // product points out of the palm for a right hand, so flip the left.

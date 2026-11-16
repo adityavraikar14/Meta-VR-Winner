@@ -34,6 +34,9 @@ interface Item {
   tiltZ: number;
   speedX: number;
   speedZ: number;
+  /** Pushed firmly aside: the lean it keeps (radians), as real foliage stays parted. */
+  leanX: number;
+  leanZ: number;
   state: 'rooted' | 'held' | 'flying' | 'lying';
   hand: number;
   offset: Vector3;
@@ -53,7 +56,9 @@ const GRAB_MIN = 0.05;
 const GRAB_MAX = 0.14;
 /** A fingertip this close to the stem bends it. */
 const BEND_REACH = 0.06;
-const MAX_TILT = 0.45;
+const MAX_TILT = 0.55;
+/** How much of a firm push a plant keeps once your hand has gone. */
+const PARTED = 0.85;
 const SPRING = 60;
 const DAMPING = 7;
 const GRAVITY = 9.8;
@@ -150,6 +155,8 @@ export class Touchables {
       tiltZ: 0,
       speedX: 0,
       speedZ: 0,
+      leanX: 0,
+      leanZ: 0,
       state: 'rooted',
       hand: -1,
       offset: new Vector3(),
@@ -217,7 +224,8 @@ export class Touchables {
     }
     item.object.getWorldPosition(item.base);
     item.top.set(item.base.x, this.box.max.y, item.base.z);
-    item.radius = Math.max(0.02, Math.min(0.5, Math.max(size.x, size.z) * 0.5));
+    // Big leafy plants spread far from their stem: their whole spread is touchable.
+    item.radius = Math.max(0.02, Math.min(1.6, Math.max(size.x, size.z) * 0.5));
     item.measured = true;
   }
 
@@ -237,8 +245,9 @@ export class Touchables {
     const reach = BEND_REACH + item.radius * 0.6;
     for (const hand of hands) {
       if (!hand.tracked) continue;
-      for (let t = 0; t < hand.tips.length; t++) {
-        const tip = hand.tips[t];
+      // Fingertips and the palm: brush a leaf aside with any part of the hand.
+      for (let t = 0; t <= hand.tips.length; t++) {
+        const tip = t < hand.tips.length ? hand.tips[t] : hand.palm;
         if (tip.y < item.base.y - 0.02 || tip.y > item.top.y + 0.04) continue;
         const d = this.toStem(item, tip);
         if (d > reach) continue;
@@ -253,8 +262,19 @@ export class Touchables {
       }
     }
     if (item.kind === 'stone') return;
-    const wantX = Math.max(-1, Math.min(1, pushX)) * MAX_TILT;
-    const wantZ = Math.max(-1, Math.min(1, pushZ)) * MAX_TILT;
+    let wantX = Math.max(-1, Math.min(1, pushX)) * MAX_TILT;
+    let wantZ = Math.max(-1, Math.min(1, pushZ)) * MAX_TILT;
+    const pushed = Math.hypot(pushX, pushZ);
+    // A firm push parts it for good (it stays leaning out of your way); a brush springs back.
+    if (pushed > 0.45) {
+      const k = Math.min(1, dt * 2.5);
+      item.leanX += (wantX * PARTED - item.leanX) * k;
+      item.leanZ += (wantZ * PARTED - item.leanZ) * k;
+    }
+    if (pushed < 0.05) {
+      wantX = item.leanX;
+      wantZ = item.leanZ;
+    }
     item.speedX += ((wantX - item.tiltX) * SPRING - item.speedX * DAMPING) * dt;
     item.speedZ += ((wantZ - item.tiltZ) * SPRING - item.speedZ * DAMPING) * dt;
     item.tiltX += item.speedX * dt;
@@ -348,7 +368,7 @@ export class Touchables {
       item.hand = -1;
       return;
     }
-    item.object.position.copy(hand.pinch).add(item.offset);
+    item.object.position.copy(hand.hold).add(item.offset);
     // A gentle sway as it is carried.
     item.object.rotation.z = item.rest.z + Math.max(-0.4, Math.min(0.4, -hand.pinchVelocity.x * 0.15));
   }

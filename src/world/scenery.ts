@@ -200,7 +200,8 @@ function junglePlantsInRoom(room: Group): void {
     { model: 'shrub', node: 'shrub_03_a', x: -1.25, z: 1.6, scale: 0.6, turn: 0.8 },
     { model: 'shrub', node: 'shrub_03_c', x: 1.3, z: 1.85, scale: 0.6, turn: 2.4 },
   ]);
-  for (const [x, z, h, s] of [[-0.75, -0.6, 1.8, 3], [0.85, -0.5, 2.0, 5], [-0.45, 2.3, 1.6, 9]] as const) {
+  // Giant leaves frame the screen from well out to the sides and behind you, never arching over the play.
+  for (const [x, z, h, s] of [[-1.25, -0.75, 1.5, 3], [1.3, -0.65, 1.6, 5], [-0.6, 2.4, 1.5, 9]] as const) {
     const plant = giantLeafPlant(h, 8, s);
     plant.position.set(x, 0, z);
     room.add(plant);

@@ -577,7 +577,7 @@ export class Forge {
     for (const item of this.items()) {
       if (item.place !== 'held') continue;
       const hand = hands[item.hand];
-      const pinch = this.group.worldToLocal(this.tmp.copy(hand.pinch));
+      const pinch = this.group.worldToLocal(this.tmp.copy(hand.hold));
       const wrist = this.group.worldToLocal(this.tmp2.copy(hand.wrist));
       this.fwd.subVectors(pinch, wrist).normalize();
       if (item === this.hammer) {

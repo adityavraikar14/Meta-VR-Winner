@@ -71,7 +71,7 @@ export const TAG_SHARD = 4;
 export const TAG_INK = 5;
 
 /** Toy-scale gravity: the 1 m screen reads like a tall wall, and the motion stays easy to follow. */
-export const GRAVITY = 2.2;
+export const GRAVITY = 3.6;
 export const SPARK_RADIUS = 0.012;
 export const MAX_SPEED = 3;
 /** Below this closing speed a contact doesn't bounce (resting contact). */

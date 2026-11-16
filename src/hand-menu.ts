@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Quaternion,
   SRGBColorSpace,
   Vector3,
   VisibilityState,
@@ -23,8 +24,17 @@ const PINKY_KNUCKLE = 21;
 const INDEX_TIP = 9;
 
 /** Palm must face the eyes this squarely (cosine) to count as "looking at it". */
-const FACING = 0.7;
-const OPEN_HOLD = 0.35;
+const FACING = 0.75;
+/**
+ * And you must be looking at the palm: it within this cone of where your head
+ * points (cosine, about 28°), close to your face. Shadow play holds palms up to
+ * the eyes all the time; only a real look at your hand opens the menu.
+ */
+const GAZE = 0.88;
+const PALM_NEAR = 0.5;
+/** Seconds of that look before it opens: longer while a level is being played. */
+const OPEN_HOLD = 0.5;
+const PLAYING_OPEN_HOLD = 1.0;
 const CLOSE_DELAY = 0.6;
 /** In the Arena a palm up is a fighting sign; the menu waits longer. */
 const ARENA_OPEN_HOLD = 1.3;
@@ -90,6 +100,9 @@ export class HandMenuSystem extends createSystem({}) {
   private b = new Vector3();
   private tip = new Vector3();
   private goal = new Vector3();
+  private gaze = new Vector3(0, 0, -1);
+  private headTurn = new Quaternion();
+  private playerTurn = new Quaternion();
 
   init(): void {
     this.root.name = 'HandMenu';
@@ -143,6 +156,10 @@ export class HandMenuSystem extends createSystem({}) {
     const dt = Math.min(delta, 0.1);
     this.player.head.getWorldPosition(this.head);
     this.player.worldToLocal(this.head);
+    // Where the head points, in player space (a camera looks down its -Z).
+    this.player.head.getWorldQuaternion(this.headTurn);
+    this.player.getWorldQuaternion(this.playerTurn);
+    this.gaze.set(0, 0, -1).applyQuaternion(this.headTurn).applyQuaternion(this.playerTurn.invert());
 
     const facing = [this.facesEyes(0), this.facesEyes(1)];
     for (let i = 0; i < 2; i++) {
@@ -150,7 +167,7 @@ export class HandMenuSystem extends createSystem({}) {
       const asking = facing[i] && !facing[1 - i];
       this.holdTime[i] = asking ? this.holdTime[i] + dt : 0;
     }
-    const openHold = stage.arena ? ARENA_OPEN_HOLD : OPEN_HOLD;
+    const openHold = stage.arena ? ARENA_OPEN_HOLD : stage.playing ? PLAYING_OPEN_HOLD : OPEN_HOLD;
 
     if (this.spent && !facing[0] && !facing[1]) this.spent = false;
     if (this.owner < 0) {
@@ -222,8 +239,10 @@ export class HandMenuSystem extends createSystem({}) {
     this.palmOf(hand);
     this.toHead.subVectors(this.head, this.palm);
     const distance = this.toHead.length();
-    if (distance > 0.65) return false;
-    return this.normal.dot(this.toHead.divideScalar(distance)) > FACING;
+    if (distance > PALM_NEAR) return false;
+    if (this.normal.dot(this.toHead.divideScalar(distance)) <= FACING) return false;
+    // Looking at it: the palm lies near the middle of the view, not just somewhere in front.
+    return -this.toHead.dot(this.gaze) > GAZE;
   }
 
   /** Palm centre and the unit vector out of the palm, in player space. */

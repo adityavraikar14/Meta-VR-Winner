@@ -16,6 +16,7 @@ import {
 } from '@iwsdk/core';
 import { playClick, playTink } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
+import { devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
 import { isMarker, OUTLINES, RING_HOLE, type ShardKind, shadowOf, shadowScale, shardShadow, THICKNESS } from './shard-shapes.js';
 import { type Poly, TAG_SHARD } from './spark-physics.js';
@@ -26,11 +27,12 @@ export { isMarker, type ShardKind } from './shard-shapes.js';
  * Light shards: cut-glass pieces you hold in the lantern's light. Their
  * shadows are solid ground for the spark, exactly like your hands'.
  *
- * Holding one: pinch near it (thumb and index tips within 3 cm, released at
- * 5 cm, the hand tracker's own hysteresis). It follows the pinch in 3D; roll
- * your wrist to turn it (the knuckle line's angle on the screen's plane);
- * let go and it stays, its angle snapped to 15°. Its depth is kept between
- * the lantern and the screen, so it always casts a shadow.
+ * Holding one: pinch near it (thumb and index tips within 3 cm). It follows
+ * the pinch in 3D, smoothly; roll your wrist to turn it (the knuckle line's
+ * angle on the screen's plane). Open your fingers a little and it lets go,
+ * staying exactly where and how you held it: while the fingers part it
+ * stops following, so letting go never nudges or twists it. Its depth is
+ * kept between the lantern and the screen, so it always casts a shadow.
  *
  * Its shadow is the convex hull of its corners projected through the lantern
  * (P′ = L + (P − L)·D/d), so the physics matches what you see, and while you
@@ -51,7 +53,8 @@ const GRAB_REACH = 0.07;
 /** Depth limits, as a fraction of the lantern-to-screen distance from the screen. */
 const NEAREST = 0.2;
 const FARTHEST = 0.8;
-const SNAP = (15 * Math.PI) / 180;
+/** How quickly a held shard catches up with the hand (per second): smooth, but no lag you can feel. */
+const FOLLOW = 28;
 const KNUCKLE_INDEX = 6;
 const KNUCKLE_PINKY = 21;
 /** The pinch cursor's ring: open at this thumb-to-index gap (m) and wider, closed at a full pinch. */
@@ -182,6 +185,7 @@ export class ShardSet {
   private time = 0;
   private eye = new Vector3();
   private v = new Vector3();
+  private w = new Vector3();
   private a = new Vector3();
   private b = new Vector3();
 
@@ -199,6 +203,12 @@ export class ShardSet {
       parent.add(ring);
       this.cursors.push({ ring, material });
     }
+    // Dev info: each shard's world position, angle and who holds it.
+    devInfo.shards = () =>
+      this.shards.map((s) => {
+        const at = this.parent.localToWorld(this.eye.copy(s.position));
+        return { kind: s.kind, at: at.toArray().map((n) => Number(n.toFixed(3))), angle: Math.round((s.angle * 180) / Math.PI), held: s.held };
+      });
   }
 
   private make(spec: ShardSpec): Shard {
@@ -284,8 +294,8 @@ export class ShardSet {
       const hand = hands[h];
       const grab = this.grabs[h];
       if (grab && (!hand.tracked || !hand.pinching)) {
+        // Let go: it stays exactly as it was held (no snapping).
         grab.shard.held = -1;
-        grab.shard.angle = Math.round(grab.shard.angle / SNAP) * SNAP;
         this.grabs[h] = null;
         playTink(0.04);
         continue;
@@ -334,14 +344,20 @@ export class ShardSet {
           this.moves++;
           playClick();
         }
-      } else if (grab) {
-        grab.shard.position.copy(this.v).add(grab.offset);
-        grab.shard.position.z = Math.min(lz * FARTHEST, Math.max(lz * NEAREST, grab.shard.position.z));
+      } else if (grab && !hand.opening) {
+        // Follows the hand (its hold point), eased a little so tracking jitter doesn't shake it.
+        // While the fingers open to let go it holds still instead.
+        const k = 1 - Math.exp(-FOLLOW * dt);
+        paper.worldToLocal(this.w.copy(hand.hold)).add(grab.offset);
+        this.w.z = Math.min(lz * FARTHEST, Math.max(lz * NEAREST, this.w.z));
+        grab.shard.position.lerp(this.w, k);
         const roll = this.roll(h);
         if (roll !== null) {
           let turn = roll - grab.roll0;
           turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-          grab.shard.angle = grab.angle0 + turn;
+          let step = grab.angle0 + turn - grab.shard.angle;
+          step = Math.atan2(Math.sin(step), Math.cos(step));
+          grab.shard.angle += step * k;
         }
       }
     }

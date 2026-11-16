@@ -729,7 +729,7 @@ export class PetPark {
           // A good throw: it chases the ball and brings it back, as any dog would.
           if (pet && pet.state === 'idle') window.setTimeout(() => this.autoFetch(pet, ground), 700);
         }
-      } else this.ballPos.copy(this.stageRoot.worldToLocal(this.v.copy(hand.pinch)));
+      } else this.ballPos.copy(this.stageRoot.worldToLocal(this.v.copy(hand.hold)));
     } else {
       // Rolling and bouncing on the table.
       hands.forEach((hand, h) => {

@@ -464,7 +464,7 @@ export class Creature {
           break;
         }
         // Held by the scruff, hanging below the pinch.
-        this.position.copy(hand.pinch).addScaledVector(UP, -rig.height * 0.8 * s);
+        this.position.copy(hand.hold).addScaledVector(UP, -rig.height * 0.8 * s);
         this.faceTowards(ground.viewer, dt, 4);
         this.noticed();
         break;

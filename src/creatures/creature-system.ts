@@ -140,6 +140,8 @@ export class CreatureSystem extends createSystem({}) {
       tracked: h.tracked,
       pinching: h.pinching,
       gap: Number(h.pinchGap.toFixed(3)),
+      min: Number(h.pinchMin.toFixed(3)),
+      opening: h.opening,
       pinch: h.pinch.toArray().map((n) => Number(n.toFixed(3))),
       index: h.tips[0].toArray().map((n) => Number(n.toFixed(3))),
     }));
