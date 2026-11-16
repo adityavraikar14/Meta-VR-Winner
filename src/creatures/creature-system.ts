@@ -91,6 +91,19 @@ export class CreatureSystem extends createSystem({}) {
     const local = this.stageRoot.worldToLocal(this.tableLocal.copy(p));
     return Math.abs(local.x) < 0.62 && local.z > -0.62 && local.z < 0.28;
   };
+  /** Pulls a point back onto the table's top (a little inside its edge); true if it moved. */
+  private readonly keepOnTable = (p: Vector3): boolean => {
+    const local = this.stageRoot.worldToLocal(this.tableLocal.copy(p));
+    const x = Math.max(-0.54, Math.min(0.54, local.x));
+    const z = Math.max(-0.54, Math.min(0.2, local.z));
+    if (x === local.x && z === local.z) return false;
+    local.x = x;
+    local.z = z;
+    const y = p.y;
+    p.copy(this.stageRoot.localToWorld(local));
+    p.y = y;
+    return true;
+  };
   private creatures: Living[] = [];
   private blobGeometry!: CircleGeometry;
   private blobMaterial!: MeshBasicMaterial;
@@ -100,6 +113,8 @@ export class CreatureSystem extends createSystem({}) {
     viewer: new Vector3(),
     creatures: [],
     blockers: [],
+    table: (p) => this.overTable(p),
+    keepOn: (p) => this.keepOnTable(p),
   };
   private spawnPoint = new Vector3();
   private paperRotation = new Quaternion();
@@ -168,6 +183,9 @@ export class CreatureSystem extends createSystem({}) {
       console.log(`SHADOWPLAY trick ${id}`);
       if (pet) this.park.command(id, pet, this.ground, this.bowlAt);
     };
+    // Dev: F6 rolls over, F7 jumps (to watch them land on the table).
+    devActions.f6 = () => this.beasts[0] && this.park.command('roll', this.beasts[0], this.ground, this.bowlAt);
+    devActions.f7 = () => this.beasts[0] && this.park.command('jump', this.beasts[0], this.ground, this.bowlAt);
     let trick = 0;
     devActions.v = () => {
       const pet = this.beasts[0];

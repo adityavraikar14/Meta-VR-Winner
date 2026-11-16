@@ -24,13 +24,22 @@ export interface Caring {
   readonly reach: number;
   feed(): void;
   tuckIn(): void;
+  /** Turns to look at a berry held out to it. */
+  notice?(at: Vector3): void;
+  /** Takes the bite: head down, chewing. */
+  chew?(): void;
   readonly asleep: boolean;
 }
 
 const BERRIES = 5;
 /** A pinch this close to a berry takes it; held this close to a mouth, it is eaten. */
 const TAKE = 0.035;
-const EAT = 0.06;
+const EAT = 0.045;
+/** Held within this of its mouth, it looks and stretches for the berry. */
+const NOTICE = 0.2;
+/** The berry slides from your fingers into its mouth, then it chews. */
+const BITE_TIME = 0.22;
+const CHEW_TIME = 1.0;
 /** Seconds a palm must rest over a pet's back to tuck it in. */
 const TUCK_TIME = 1.4;
 
@@ -40,6 +49,11 @@ interface Berry {
   hand: number;
   /** Seconds until an eaten berry grows back in the bowl. */
   regrow: number;
+  /** Being eaten by this pet, and for how long so far. */
+  eater: Caring | null;
+  eaten: number;
+  /** Where it left the fingers (local), as it slides into the mouth. */
+  from: Vector3;
 }
 
 export class PetCare {
@@ -69,13 +83,17 @@ export class PetCare {
       mesh.position.copy(home);
       mesh.castShadow = true;
       this.group.add(mesh);
-      this.berries.push({ mesh, home, hand: -1, regrow: 0 });
+      this.berries.push({ mesh, home, hand: -1, regrow: 0, eater: null, eaten: 0, from: new Vector3() });
     }
   }
 
   update(dt: number, hands: readonly HandState[], pets: readonly Caring[]): void {
     if (!this.group.visible) return;
     for (const berry of this.berries) {
+      if (berry.eater) {
+        this.eat(berry, dt);
+        continue;
+      }
       if (berry.regrow > 0) {
         berry.regrow -= dt;
         if (berry.regrow <= 0) {
@@ -109,17 +127,47 @@ export class PetCare {
       berry.mesh.position.copy(this.group.worldToLocal(this.v.copy(hand.hold)));
       for (const pet of pets) {
         if (!pet.emerged || pet.asleep) continue;
-        if (pet.mouth(this.mouth).distanceTo(hand.pinch) > EAT + pet.reach * 0.3) continue;
-        // Eaten from your fingers.
+        const d = pet.mouth(this.mouth).distanceTo(hand.hold);
+        if (d < NOTICE) pet.notice?.(hand.hold);
+        if (d > EAT + pet.reach * 0.15) continue;
+        // It takes the berry from your fingers with its mouth.
         berry.hand = -1;
-        berry.mesh.visible = false;
-        berry.regrow = 4;
-        playMunch(0.05);
-        pet.feed();
+        berry.eater = pet;
+        berry.eaten = 0;
+        berry.from.copy(berry.mesh.position);
+        pet.chew?.();
+        playPop(0.02);
         break;
       }
     }
     // A palm held flat over a pet's back, facing down, tucks it in.
+    this.tuckIns(dt, hands, pets);
+  }
+
+  /** In its mouth: the berry slides in, is chewed smaller and smaller, and is gone; then the pet is happy. */
+  private eat(berry: Berry, dt: number): void {
+    const pet = berry.eater!;
+    berry.eaten += dt;
+    const mouth = this.group.worldToLocal(pet.mouth(this.mouth));
+    if (berry.eaten < BITE_TIME) {
+      const k = berry.eaten / BITE_TIME;
+      berry.mesh.position.lerpVectors(berry.from, mouth, k * k * (3 - 2 * k));
+      return;
+    }
+    const chew = (berry.eaten - BITE_TIME) / CHEW_TIME;
+    berry.mesh.position.copy(mouth);
+    berry.mesh.scale.setScalar(Math.max(0.05, 0.85 * (1 - chew)));
+    // A crunch on each bite.
+    const bites = Math.floor(chew * 3);
+    if (bites !== Math.floor((chew - dt / CHEW_TIME) * 3) && bites < 3) playMunch(0.045);
+    if (chew < 1) return;
+    berry.eater = null;
+    berry.mesh.visible = false;
+    berry.regrow = 4;
+    pet.feed();
+  }
+
+  private tuckIns(dt: number, hands: readonly HandState[], pets: readonly Caring[]): void {
     for (const pet of pets) {
       if (!pet.emerged || pet.asleep) {
         this.tuck.delete(pet);

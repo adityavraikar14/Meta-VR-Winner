@@ -546,7 +546,7 @@ export class ArsenalDragonBattle {
     } else {
       const potions = play.items.includes('potion');
       this.flash(potions
-        ? 'Burned! Look at your palm and tap Drink to heal'
+        ? 'Burned! Tap your wrist and push Drink to heal'
         : this.health === 1 ? 'Burned! One heart left: raise a shield or a wall' : 'Burned! Block the fire with a shield ✋ or a wall 🙌', 2.2);
     }
   }

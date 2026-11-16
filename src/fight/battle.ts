@@ -967,7 +967,7 @@ export class DragonBattle {
     } else {
       const potions = play.items.includes('potion');
       this.flash(potions
-        ? 'Burned! Look at your palm and tap Drink to heal'
+        ? 'Burned! Tap your wrist and push Drink to heal'
         : this.health <= BURN ? 'Burned! Your health is low: shield with an open palm' : 'Burned! Shield with an open palm', 2.2);
     }
   }

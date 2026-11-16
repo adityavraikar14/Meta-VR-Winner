@@ -176,6 +176,12 @@ export class PetPark {
   private ballHand = -1;
   /** The ball rides in the pet's mouth while it fetches. */
   private carried = false;
+  /** Fetching: where to run to (moved each frame as the ball rolls), and the ball's slide into its mouth. */
+  private chasing = false;
+  private readonly chase = new Vector3();
+  private chaseGap = 0;
+  private pickTime = 1;
+  private readonly pickFrom = new Vector3();
   private readonly logMesh: Group;
   private readonly hoopMesh: Group;
   private readonly houseMesh: Group;
@@ -317,6 +323,9 @@ export class PetPark {
     this.w.copy(viewer);
     this.w.y = at.y + (viewer.y - at.y) * 0.85;
     this.board.lookAt(this.w);
+    // Tilted back towards you, its bottom edge still stands on the table, never in it.
+    const upright = this.v.set(0, 1, 0).applyQuaternion(this.board.quaternion).y;
+    this.board.position.y = this.floor + 0.006 + (BOARD_H / 2 + 0.006) * Math.max(0.3, upright);
   }
 
   private tiles(): Tile[] {
@@ -602,19 +611,19 @@ export class PetPark {
       case 'sit':
         return [act({ time: 4, clip: sitClip, face, ...sitting })];
       case 'down':
-        return [act({ time: 5, clip: pet.hasClip('Sit') ? 'Sit' : 'Idle_Headlow', face, lift: -0.3, pitch: 0.06 })];
+        return [act({ time: 5, clip: pet.hasClip('Sit') ? 'Sit' : 'Idle_Headlow', face, pitch: 0.06 })];
       case 'stay':
         return [act({ time: 6, clip: 'Idle', face })];
       case 'jump':
-        return [{ do: 'leap', to: here, height: h * 1.1, time: 0.8 }];
+        return [{ do: 'leap', to: here, height: h * 1.1, time: 1.0 }, act({ time: 0.5, clip: 'Idle', face })];
       case 'spin':
         return [act({ time: 1.6, clip: 'Walk', rate: 1.6, spin: 1 })];
       case 'roll':
-        return [act({ time: 1.7, clip: 'Idle_HitReact_Left', once: true, roll: Math.PI * 2, lift: -0.15 })];
+        return [act({ time: 1.9, clip: 'Idle_HitReact_Left', once: true, roll: Math.PI * 2 })];
       case 'dead':
         return pet.hasClip('Death')
           ? [act({ time: 4.5, clip: 'Death', once: true }), act({ time: 0.6, clip: 'Idle' })]
-          : [act({ time: 4.5, clip: 'Idle', roll: 1.45, lift: -0.25 })];
+          : [act({ time: 4.5, clip: 'Idle', roll: 1.45 })];
       case 'speak':
         return [act({ time: 1.3, clip: 'Idle', face, sound: () => pet.speak(), nod: 0.08, beat: 3 })];
       case 'beg':
@@ -666,13 +675,18 @@ export class PetPark {
           this.say('Throw the ball first: pinch it, swing and let go');
           return null;
         }
-        const ball = this.stageRoot.localToWorld(ballAt.clone());
+        // Run to the ball (following it while it still rolls), nose down to it, and take it in the mouth.
+        const ball = this.stageRoot.localToWorld(this.v.copy(this.ballPos));
+        this.chaseGap = pet.length * 0.42;
+        this.chase.copy(approach(ball, here, this.chaseGap));
+        this.chasing = true;
         return [
-          { do: 'walk', to: approach(ball, here, pet.length * 0.45) },
-          act({ time: 0.5, clip: 'Eating', face: ball }),
-          { do: 'call', run: () => (this.carried = true) },
-          { do: 'walk', to: this.spot(FRONT) },
-          act({ time: 0.8, clip: sitClip, face, ...sitting }),
+          { do: 'walk', to: this.chase, rush: 1.8 },
+          { do: 'call', run: () => this.reachBall() },
+          act({ time: 0.35, clip: 'Eating', face: this.stageRoot.localToWorld(this.w.copy(this.ballPos)).clone() }),
+          { do: 'call', run: () => this.pickBall() },
+          { do: 'walk', to: this.spot(FRONT), rush: 1.5 },
+          act({ time: 0.6, clip: sitClip, face, ...sitting }),
           { do: 'call', run: () => this.dropBall(pet) },
         ];
       }
@@ -713,9 +727,23 @@ export class PetPark {
 
   private updateBall(dt: number, hands: readonly HandState[], pet: Beast | null, ground: ParkGround): void {
     const r = 0.014;
+    if (this.chasing && pet) {
+      // The chase target follows the rolling ball.
+      if (pet.state !== 'task') this.chasing = false;
+      else {
+        this.stageRoot.localToWorld(this.w.copy(this.ballPos));
+        this.v.copy(pet.position).sub(this.w).setY(0);
+        if (this.v.lengthSq() < 1e-6) this.v.set(0, 0, 1);
+        this.chase.copy(this.w).addScaledVector(this.v.normalize(), this.chaseGap);
+        this.chase.y = pet.position.y;
+      }
+    }
     if (this.carried && pet) {
-      pet.mouth(this.v);
-      this.ballPos.copy(this.stageRoot.worldToLocal(this.v));
+      // Picked up: it slides from the table into the mouth over a moment, then rides there.
+      this.pickTime = Math.min(1, this.pickTime + dt / 0.2);
+      this.stageRoot.worldToLocal(pet.mouth(this.v));
+      const k = this.pickTime * this.pickTime * (3 - 2 * this.pickTime);
+      this.ballPos.lerpVectors(this.pickFrom, this.v, k);
       this.ballVel.set(0, 0, 0);
     } else if (this.ballHand >= 0) {
       const hand = hands[this.ballHand];
@@ -727,7 +755,7 @@ export class PetPark {
         if (this.ballVel.length() > 0.5) {
           playWhoosh(Math.min(1, this.ballVel.length() / 3));
           // A good throw: it chases the ball and brings it back, as any dog would.
-          if (pet && pet.state === 'idle') window.setTimeout(() => this.autoFetch(pet, ground), 700);
+          if (pet && pet.state === 'idle') window.setTimeout(() => this.autoFetch(pet, ground), 250);
         }
       } else this.ballPos.copy(this.stageRoot.worldToLocal(this.v.copy(hand.hold)));
     } else {
@@ -779,8 +807,22 @@ export class PetPark {
     playTink(0.04);
   }
 
+  /** At the ball: it stops rolling under its nose. */
+  private reachBall(): void {
+    this.chasing = false;
+    this.ballVel.set(0, 0, 0);
+  }
+
+  private pickBall(): void {
+    this.carried = true;
+    this.pickTime = 0;
+    this.pickFrom.copy(this.ballPos);
+    playPop(0.025);
+  }
+
   private dropBall(pet: Beast): void {
     this.carried = false;
+    this.chasing = false;
     this.ballVel.set(0, 0.2, 0.15);
     pet.feelings.obeyed('It brought the ball back! Throw it again');
     this.showLabel('Good catch!');

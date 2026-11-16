@@ -97,3 +97,15 @@ Legend: [x] done and checked · [ ] not done yet
 - [x] **Arsenal signs count on the page** in the dragon fight, and **in front of you** in the Arena (it has no screen)
 - [x] Training: 6 lessons (3 signs, then draw a circle, triangle, box); the Arena tutorial teaches sword, ball and shield with no charging step; How to play cards and the weapons chart updated
 - [x] Tests: new sign tests for both systems (45 + 15 checks); all suites pass. Emulator: a fist low in the lap makes nothing, the same fist raised into the light forms the Shadow Ball; in the Arena a fist gives the sword straight away
+
+## 13. Nov 16 evening: pets, blinking, intro voice (third Quest test)
+- [x] **Screen blinking on the Quest (Quick Tour, story levels):** the camera's near plane was 1 mm, which leaves the headset's depth buffer almost no precision at screen distance, so layers a few millimetres apart fought and flickered. Near plane now 4 cm (iwsdk.config.json)
+- [x] **Intro voice on the Quest:** the headset has no speech voice, so the nine prologue lines are now recorded files (public/audio/voice/intro-1..9.mp3, Windows voice slowed and lowered, a little room echo); scenes are paced to each recording; device speech is only the fallback
+- [x] **Pets never sink into the table:** every frame the body's lowest point (hooves, back or flank) is kept on the table's top, so Roll over, Play dead, Lie down, Beg and Rear stay on the surface; tricks no longer push the body down
+- [x] **Jump lands cleanly:** the jump clip is timed to the leap, so the legs come down as the body does; it settles into standing
+- [x] **Pick up and drop:** lowered onto the table it stands on it, not in it; let go anywhere over the table (its real shape, not a small circle) it lands on the table; thrown at the edge it bumps back in; after a tumble it rights itself smoothly instead of snapping upright
+- [x] **Trick board** no longer dips below the table's top (bottom edge always above it, whatever its tilt)
+- [x] **Feeding:** hold a berry near its mouth: it looks at it, takes it with its mouth, chews (three crunches, the berry shrinking), then a contented sound, hearts and its call
+- [x] **Fetch:** starts at once, runs fast, follows the ball while it still rolls, stops it under its nose, picks it up into its mouth (no teleport), runs back
+- [x] **Wrist menu while playing:** never opens by looking at your palm (shadow poses for the stag or horse kept opening it). Tap your wrist with the other index finger instead; it stays until used, tapped again, or 4 s alone. Outside play, looking at the palm still works
+- [x] **Stag pose easier:** the pinky may do what it likes (holding it down alone is hard); "fingers up" is more forgiving

@@ -227,7 +227,7 @@ export class MainMenu {
       'Shadowplay',
       'Settings',
       `Sound: ${isMuted() ? 'off' : 'on'}  ·  Table: ${table}  ·  Around you: ${BACKDROP_NAME[backdrop()]}  ·  Spark: ${isRelaxed() ? 'relaxed (60%)' : 'full speed'}`,
-      'During play, look at your open palm for the quick menu',
+      'During play, tap your wrist with the other index finger for the quick menu',
     );
     return [
       { label: 'Back', run: () => this.go('home'), primary: true },

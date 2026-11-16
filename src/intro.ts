@@ -11,7 +11,7 @@ import { playAwaken, playPrompt, playRoar, playTinkle } from './audio.js';
 import {
   book, corsair, dragon, ease, ellipse, glow, GROUND, grass, H, hand, hooded, INK, inkFlood, lantern, mage, slingshot, star, sword, trance, W, witch,
 } from './puppets.js';
-import { lineSeconds, narrate, stopNarration } from './narrator.js';
+import { lineSeconds, narrate, preloadNarration, stopNarration } from './narrator.js';
 import { FONT, lines } from './ui-theme.js';
 
 /** Redraws per second; the show is soft and slow, so this is plenty. */
@@ -287,7 +287,7 @@ export const SCENES: Scene[] = [
 ];
 
 // Each scene lasts at least as long as its line takes to say.
-for (const scene of SCENES) scene.seconds = Math.max(scene.seconds, lineSeconds(scene.line) + 1);
+SCENES.forEach((scene, i) => (scene.seconds = Math.max(scene.seconds, lineSeconds(scene.line, `intro-${i + 1}`) + 1)));
 
 /** Paper fibres, made once: the backlit screen of a shadow theatre. */
 let fibres: HTMLCanvasElement | null = null;
@@ -342,6 +342,7 @@ export class IntroShow {
   private playing = false;
 
   constructor(parent: Object3D) {
+    preloadNarration();
     this.canvas = document.createElement('canvas');
     this.canvas.width = W * SCALE;
     this.canvas.height = H * SCALE;
@@ -413,6 +414,7 @@ export class IntroShow {
   }
 
   start(): void {
+    preloadNarration();
     this.playing = true;
     this.scene = -1;
     this.time = 0;

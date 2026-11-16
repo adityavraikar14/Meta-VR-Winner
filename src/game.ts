@@ -1256,6 +1256,7 @@ export class ShadowGameSystem extends createSystem({
   private updateHome(dt: number): void {
     const paper = stage.paper;
     const on = (this.puzzle !== null || stage.arena || this.puzzleIndex === PETS_INDEX) && this.phase !== 'title' && this.phase !== 'intro' && !stage.menuOpen;
+    stage.inLevel = (this.puzzle !== null || stage.arena || this.puzzleIndex === PETS_INDEX || this.puzzleIndex === TRAINING_INDEX) && this.phase !== 'title' && this.phase !== 'intro';
     stage.pets = this.puzzleIndex === PETS_INDEX && this.phase !== 'title' && this.phase !== 'intro';
     // A pet chosen on the board: watch for that animal's shadow, and show how to make it.
     if (stage.pets && !this.petOut && this.phase === 'matching' && stage.petChoice !== this.petChosen) {

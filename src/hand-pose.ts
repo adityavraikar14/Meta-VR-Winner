@@ -163,7 +163,7 @@ export function scoreShape(
     }
   }
   if (rule.pointUp) {
-    const s = ramp(fingersUp(joints, ext), 0.2, 0.6);
+    const s = ramp(fingersUp(joints, ext), 0.15, 0.5);
     if (s < score) {
       score = s;
       worst = 'direction';

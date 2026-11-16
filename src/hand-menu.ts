@@ -42,6 +42,16 @@ const ARENA_OPEN_HOLD = 1.3;
 const ABOVE_PALM = 0.13;
 const TOWARDS_EYES = 0.03;
 
+/**
+ * While playing, hands make shadow shapes, signs and shields with palms turned
+ * every way, so the menu never opens by looking at a palm: tap the inside of
+ * one wrist with the other hand's index finger instead, like checking a watch.
+ */
+const TAP_REACH = 0.05;
+const TAP_HOLD = 0.15;
+/** A menu opened by a tap stays this long with no finger near it. */
+const TAP_STAY = 4;
+
 const BUTTON_GAP = 0.062;
 const BUTTON_RADIUS = 0.024;
 const BUTTON_WIDTH = 0.054;
@@ -69,7 +79,8 @@ interface Button {
 }
 
 /**
- * Look at your palm to open a small menu above it; poke a button with the
+ * Look at your palm to open a small menu above it (while playing: tap your
+ * wrist with the other index finger instead); poke a button with the
  * other hand's index finger. Recenter moves the paper in front of you,
  * Restart replays the level, Skip moves on.
  */
@@ -85,6 +96,12 @@ export class HandMenuSystem extends createSystem({}) {
   private closing = 0;
   /** After a press, the palm must turn away before the menu can open again. */
   private spent = false;
+  /** Wrist taps: how long the other index finger has rested on each wrist, and whether it has left since. */
+  private tapTime = [0, 0];
+  private tapReady = [true, true];
+  private byTap = false;
+  private tapTip = new Vector3();
+  private tapWrist = new Vector3();
 
   private extension = createExtension();
   /** Carried items, drawn on a strip above the buttons. */
@@ -168,11 +185,38 @@ export class HandMenuSystem extends createSystem({}) {
       this.holdTime[i] = asking ? this.holdTime[i] + dt : 0;
     }
     const openHold = stage.arena ? ARENA_OPEN_HOLD : stage.playing ? PLAYING_OPEN_HOLD : OPEN_HOLD;
+    const tapOnly = stage.inLevel || stage.arena || stage.fight || stage.pets;
+    for (let i = 0; i < 2; i++) {
+      const on = this.tapping(i);
+      if (!on) this.tapReady[i] = true;
+      this.tapTime[i] = on && this.tapReady[i] ? this.tapTime[i] + dt : 0;
+    }
 
     if (this.spent && !facing[0] && !facing[1]) this.spent = false;
     if (this.owner < 0) {
-      const hand = this.spent ? -1 : this.holdTime.findIndex((t) => t >= openHold);
-      if (hand >= 0) this.open(hand);
+      const tapped = this.tapTime.findIndex((t) => t >= TAP_HOLD);
+      const looked = tapOnly || this.spent ? -1 : this.holdTime.findIndex((t) => t >= openHold);
+      if (tapped >= 0) {
+        this.tapReady[tapped] = false;
+        this.open(tapped);
+        this.byTap = true;
+      } else if (looked >= 0) {
+        this.open(looked);
+        this.byTap = false;
+      }
+    } else if (this.byTap) {
+      // Opened by a tap: it stays until used, tapped again, or left alone a while.
+      this.awayTime += dt;
+      if (this.tapTime[this.owner] >= TAP_HOLD) {
+        this.tapReady[this.owner] = false;
+        this.closing = 0.2;
+      }
+      if (this.closing > 0) {
+        this.closing -= dt;
+        if (this.closing <= 0) this.owner = -1;
+      } else if (this.awayTime > TAP_STAY || !stage.tracked[this.owner]) {
+        this.owner = -1;
+      }
     } else {
       this.awayTime = facing[this.owner] ? 0 : this.awayTime + dt;
       if (this.closing > 0) {
@@ -228,6 +272,17 @@ export class HandMenuSystem extends createSystem({}) {
     this.placeGoal();
     this.root.position.copy(this.goal);
     playMenuOpen();
+  }
+
+  /** Whether the other hand's index fingertip rests on this hand's wrist. */
+  private tapping(hand: number): boolean {
+    const other = 1 - hand;
+    if (!stage.tracked[hand] || !stage.tracked[other]) return false;
+    const a = stage.joints[other];
+    const b = stage.joints[hand];
+    this.tapTip.set(a[INDEX_TIP * 3], a[INDEX_TIP * 3 + 1], a[INDEX_TIP * 3 + 2]);
+    this.tapWrist.set(b[WRIST * 3], b[WRIST * 3 + 1], b[WRIST * 3 + 2]);
+    return this.tapTip.distanceTo(this.tapWrist) < TAP_REACH;
   }
 
   /** Whether this hand is open with its palm turned towards the eyes. */

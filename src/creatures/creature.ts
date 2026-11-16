@@ -36,7 +36,8 @@ export type TaskPose = 'look' | 'reach' | 'eat' | 'sniff' | 'dig' | 'bonk' | 'sh
  * list of these: walk to the log, leap over it, eat the carrot, cheer.
  */
 export type TaskStep =
-  | { do: 'walk'; to: Vector3 }
+  /** `rush` speeds the walk up (fetching a ball: 1.6 is a dash). `to` may be moved while it walks (a rolling ball). */
+  | { do: 'walk'; to: Vector3; rush?: number }
   | { do: 'leap'; to: Vector3; height: number; time: number }
   | { do: 'pose'; pose: TaskPose; time: number; look?: Vector3 }
   | { do: 'call'; run: () => void }
@@ -102,6 +103,10 @@ export interface Ground {
   creatures: Creature[];
   /** Puzzle props that idle pets walk around instead of standing in. */
   blockers: Array<{ center: Vector3; radius: number }>;
+  /** Whether a world point is over the table's top (its real shape, wider than `radius`). */
+  table?: (p: Vector3) => boolean;
+  /** Pulls a world point back inside the table's top; true if it had to. */
+  keepOn?: (p: Vector3) => boolean;
 }
 
 const EMERGE_TIME = 0.8;

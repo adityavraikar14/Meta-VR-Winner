@@ -46,7 +46,7 @@ export const LEVELS: Level[] = [
     motion: 'hop',
     tip: 'three fingers up for antlers',
     shape: {
-      fingers: { thumb: 'any', index: 'out', middle: 'out', ring: 'out', pinky: 'in' },
+      fingers: { thumb: 'any', index: 'out', middle: 'out', ring: 'out', pinky: 'any' },
       pointUp: true,
     },
     outline:

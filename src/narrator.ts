@@ -10,8 +10,34 @@ import { isMuted } from './audio.js';
  * depends on sound.
  */
 
-/** Line ids that have a recorded file in public/audio/voice/. */
-const RECORDED = new Set<string>([]);
+/**
+ * Line ids that have a recorded file in public/audio/voice/, with its length
+ * in seconds. The Quest has no speech voice of its own, so the prologue is
+ * recorded; device speech is only the fallback.
+ */
+const RECORDED = new Map<string, number>([
+  ['intro-1', 5.44],
+  ['intro-2', 8.71],
+  ['intro-3', 16.17],
+  ['intro-4', 9.84],
+  ['intro-5', 11.26],
+  ['intro-6', 10.34],
+  ['intro-7', 14.13],
+  ['intro-8', 15.78],
+  ['intro-9', 11.47],
+]);
+const cache = new Map<string, HTMLAudioElement>();
+
+/** Starts fetching the recorded lines, so the first one plays the moment it is needed. */
+export function preloadNarration(): void {
+  for (const id of RECORDED.keys()) {
+    if (cache.has(id)) continue;
+    const a = new Audio(`${import.meta.env.BASE_URL}audio/voice/${id}.mp3`);
+    a.preload = 'auto';
+    a.load();
+    cache.set(id, a);
+  }
+}
 
 /** Voice names that are men's (Windows, Apple, Google, Edge and Android voices). */
 const MALE = /\bmale\b|george|thomas|ryan|arthur|daniel|oliver|alfie|elliot|guy|davis|tony|christopher|eric|roger|steffan|brian|james|william|david|mark|fred|ralph|aaron|gordon|reed/i;
@@ -50,8 +76,10 @@ function voice(): SpeechSynthesisVoice | null {
 
 if (typeof window !== 'undefined') synth()?.addEventListener?.('voiceschanged', () => (chosen = null));
 
-/** Roughly how long a line takes to say, in seconds (for pacing scenes), at the storyteller's slow pace. */
-export function lineSeconds(text: string): number {
+/** How long a line takes to say, in seconds (for pacing scenes): its recording, or a guess at the storyteller's slow pace. */
+export function lineSeconds(text: string, id?: string): number {
+  const recorded = id ? RECORDED.get(id) : undefined;
+  if (recorded) return recorded;
   const words = text.split(/\s+/).filter(Boolean).length;
   return 0.8 + words * 0.46;
 }
@@ -59,10 +87,12 @@ export function lineSeconds(text: string): number {
 /** Say a line, cutting off whatever was being said. */
 export function narrate(id: string, text: string): void {
   stopNarration();
-  until = performance.now() / 1000 + lineSeconds(text);
+  until = performance.now() / 1000 + lineSeconds(text, id);
   if (isMuted()) return;
   if (RECORDED.has(id)) {
-    audio = new Audio(`${import.meta.env.BASE_URL}audio/voice/${id}.mp3`);
+    audio = cache.get(id) ?? new Audio(`${import.meta.env.BASE_URL}audio/voice/${id}.mp3`);
+    cache.set(id, audio);
+    audio.currentTime = 0;
     audio.volume = 0.95;
     speaking = true;
     audio.onended = () => (speaking = false);

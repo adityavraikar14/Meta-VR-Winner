@@ -69,6 +69,8 @@ export const stage = {
   arenaBoss: null as string | null,
   /** The level is being played right now (not the menu, the table or the story card). */
   playing: false,
+  /** Anything is being played (a level, a side game, a fight, the Arena): the wrist menu waits for a tap on the wrist. */
+  inLevel: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */
   task: null as { caption: string; done: boolean; mistakes: number; stars?: number } | null,
   /** The level's own numbers for its Inventor's Journal page, read when it is cleared. */

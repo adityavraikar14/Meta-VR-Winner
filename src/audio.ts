@@ -635,6 +635,18 @@ export function playHiss(volume = 0.08, seconds = 1.6): void {
   noise(ctx, now, seconds * 0.6, 'bandpass', 900, 1.5, volume * 0.5);
 }
 
+/** A pet that has eaten well: a warm, contented "mmm" and a soft sparkle. */
+export function playContent(volume = 0.05): void {
+  const ctx = audio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  sweep(ctx, 'sine', 190, 250, now, 0.22, volume);
+  sweep(ctx, 'sine', 250, 205, now + 0.2, 0.42, volume * 0.85);
+  sweep(ctx, 'triangle', 380, 500, now, 0.22, volume * 0.18);
+  tone(ctx, 1320, now + 0.32, 0.5, volume * 0.22);
+  tone(ctx, 1760, now + 0.42, 0.6, volume * 0.16);
+}
+
 /** A pet eating a berry: three soft little crunches. */
 export function playMunch(volume = 0.04): void {
   const ctx = audio();

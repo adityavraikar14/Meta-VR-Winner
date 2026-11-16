@@ -17,7 +17,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { playAnimalCall, playHoof, playHorseCall, playNicker, playSnort, playWhoosh } from '../audio.js';
+import { playAnimalCall, playContent, playHoof, playHorseCall, playNicker, playSnort, playWhoosh } from '../audio.js';
 import type { ActStep, Ground, Harness, HarnessPose, TaskPose, TaskStep } from './creature.js';
 import type { Effects } from './fx.js';
 import type { HandState } from './hand-input.js';
@@ -111,7 +111,7 @@ export function createBeast(kind: string, fx: Effects, size = 1): Beast | null {
 }
 
 type BeastState = 'emerging' | 'leaping' | 'idle' | 'task' | 'held' | 'thrown';
-type BeastGround = Pick<Ground, 'center' | 'radius' | 'viewer' | 'blockers'>;
+type BeastGround = Pick<Ground, 'center' | 'radius' | 'viewer' | 'blockers' | 'table' | 'keepOn'>;
 type Mood = 'stand' | 'graze' | 'rest' | 'shift' | 'stroll' | 'approach';
 
 const EMERGE_TIME = 0.9;
@@ -155,6 +155,8 @@ export class Beast {
   readonly height: number;
   /** Nose-to-tail length on the stage. */
   readonly length: number;
+  /** Side to side. */
+  readonly width: number;
   mood: Mood = 'stand';
 
   private readonly mixer: AnimationMixer;
@@ -219,8 +221,11 @@ export class Beast {
   /** Forward lean into the collar, radians. */
   private lean = 0;
 
+  /** The table's top this frame (world y), which the body never sinks below. */
+  private surface = 0;
   private tmp = new Vector3();
   private tmp2 = new Vector3();
+  private tmp3 = new Vector3();
   private forward = new Vector3();
   private rel = new Vector3();
   private contact = new Vector3();
@@ -257,6 +262,7 @@ export class Beast {
     model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
     this.height = spec.height * this.size;
     this.length = extent.z * scale;
+    this.width = extent.x * scale;
 
     model.traverse((o) => {
       const mesh = o as Mesh;
@@ -344,7 +350,8 @@ export class Beast {
     this.leapTo.copy(spot);
     this.afterLeap = this.task.length > 0 ? 'task' : 'idle';
     this.faceTowards(spot, 1);
-    this.play('Gallop_Jump', false, 0.15, 1.1);
+    this.leapTime = LEAP_TIME;
+    this.play('Gallop_Jump', false, 0.15, this.clipLength('Gallop_Jump', 0.9) / this.leapTime);
     this.setState('leaping');
   }
 
@@ -365,9 +372,28 @@ export class Beast {
 
   /** Shadow Pets care (see pet-care.ts): where its mouth and back are, and how wide it is. */
   mouth(out: Vector3): Vector3 {
-    if (this.head) return this.head.getWorldPosition(out);
-    this.tmp.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    return out.copy(this.position).addScaledVector(this.tmp, this.length * 0.5).addScaledVector(UP, this.height * 0.8);
+    this.tmp3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    if (this.head) {
+      // The head bone sits at the skull; the mouth is a little ahead of it and lower, at the muzzle.
+      return this.head.getWorldPosition(out).addScaledVector(this.tmp3, this.height * 0.2).addScaledVector(UP, -this.height * 0.07);
+    }
+    return out.copy(this.position).addScaledVector(this.tmp3, this.length * 0.5).addScaledVector(UP, this.height * 0.75);
+  }
+
+  /** A berry or the ball held out to it: it turns its head to look. */
+  notice(at: Vector3): void {
+    this.lookAt(at, 1);
+    if (this.state === 'idle' && this.oneShot <= 0) this.faceTowards(at, 0.05);
+  }
+
+  /** Takes a bite: head down, chewing, for a moment (the berry is in its mouth). */
+  chew(): void {
+    if (this.state !== 'idle') return;
+    this.play('Eating', true, 0.15);
+    this.oneShot = 1.1;
+    this.mood = 'graze';
+    this.moodTime = 0;
+    this.moodLength = 2;
   }
 
   back(out: Vector3): Vector3 {
@@ -388,8 +414,9 @@ export class Beast {
     this.happiness = 1;
     this.sleepFor = 0;
     for (let i = 0; i < 3; i++) this.fx.heart(this.back(this.tmp2));
-    if (this.state === 'idle') this.setMood('graze', 2.5);
-    this.call(0.7);
+    if (this.state === 'idle') this.setMood('stand', 2.5);
+    playContent(0.05);
+    window.setTimeout(() => this.call(0.6), 450);
   }
 
   /** Your palm over its back: it lowers its head and dozes, with sleepy Zs, until you lift or poke it. */
@@ -423,6 +450,7 @@ export class Beast {
 
   update(dt: number, time: number, ground: BeastGround, hands: HandState[]): void {
     this.stateTime += dt;
+    this.surface = ground.center.y;
     this.feelings.kind = this.kind;
     this.feelings.tick(dt);
     petNow.mood = this.feelings;
@@ -456,7 +484,7 @@ export class Beast {
           const next = this.afterLeap;
           this.setState(next);
           this.afterLeap = 'idle';
-          if (next === 'idle') this.playOnce('Jump_toIdle');
+          if (next === 'idle') this.play('Idle', true, 0.25);
         }
         break;
       }
@@ -467,15 +495,29 @@ export class Beast {
         this.live(dt, ground, hands);
         break;
       case 'held':
-        this.carried(dt, hands);
+        this.carried(dt, hands, ground);
         break;
       case 'thrown':
         this.tumble(dt, ground);
         break;
     }
 
-    // A trick interrupted (picked up, thrown): its body language goes with it.
-    if (this.state !== 'task') this.actPitch = this.actRoll = this.actLift = this.actYaw = this.actSpin = 0;
+    // A trick interrupted (picked up, thrown): its body language goes with it, eased away, not snapped.
+    if (this.state !== 'task') {
+      const k = Math.min(1, dt * 10);
+      this.actPitch -= this.actPitch * k;
+      this.actRoll -= this.actRoll * k;
+      this.actLift -= this.actLift * k;
+      this.actYaw -= this.actYaw * k;
+      this.actSpin = 0;
+    }
+    // Landed from a tumble: it rights itself over a moment, the nearer way round.
+    if (this.state !== 'thrown' && this.state !== 'held') {
+      this.roll = Math.atan2(Math.sin(this.roll), Math.cos(this.roll));
+      const k = Math.min(1, dt * 7);
+      this.roll -= this.roll * k;
+      if (this.state !== 'task') this.lean -= this.lean * k;
+    }
     this.restoreLook();
     this.mixer.update(dt);
     this.place();
@@ -666,7 +708,7 @@ export class Beast {
     this.happiness = Math.min(1, this.happiness + 0.2);
   }
 
-  private carried(dt: number, hands: HandState[]): void {
+  private carried(dt: number, hands: HandState[], ground: BeastGround): void {
     const hand = hands[this.holder];
     if (!hand || !hand.tracked || !hand.pinching) {
       // Let go: it flies with the hand's speed and tumbles.
@@ -681,8 +723,9 @@ export class Beast {
       this.feelings.released(speed);
       return;
     }
-    // Hanging below the pinch, swinging with the hand.
+    // Hanging below the pinch, swinging with the hand; lowered onto the table, it stands on it, not in it.
     this.position.copy(hand.hold).addScaledVector(UP, -this.height * 0.75);
+    if (this.onTable(this.position, ground) && this.position.y < ground.center.y) this.position.y = ground.center.y;
     const swing = Math.max(-0.6, Math.min(0.6, hand.pinchVelocity.x * 0.35));
     this.roll += (swing - this.roll) * Math.min(1, dt * 8);
     this.lean = Math.max(-0.4, Math.min(0.4, -hand.pinchVelocity.y * 0.2));
@@ -696,7 +739,12 @@ export class Beast {
     this.position.addScaledVector(this.flight, dt);
     this.roll += this.rollSpeed * dt;
     this.yaw += this.rollSpeed * 0.15 * dt;
-    const overTable = this.tmp.copy(this.position).sub(ground.center).setY(0).length() < ground.radius;
+    // A pet stays on its table: thrown at the edge, it bumps back in (no falling to the floor and through it).
+    if (ground.keepOn && ground.keepOn(this.position)) {
+      this.flight.x *= -0.3;
+      this.flight.z *= -0.3;
+    }
+    const overTable = this.onTable(this.position, ground);
     const surface = overTable && this.position.y > ground.center.y - 0.06 ? ground.center.y : FLOOR_Y;
     if (this.position.y > surface && this.stateTime < 6) return;
     this.position.y = surface;
@@ -734,8 +782,12 @@ export class Beast {
     this.leapTime = 1.4;
     this.afterLeap = 'idle';
     this.yaw = Math.atan2(this.leapTo.x - this.position.x, this.leapTo.z - this.position.z);
-    this.play('Gallop_Jump', false, 0.1);
+    this.play('Gallop_Jump', false, 0.1, this.clipLength('Gallop_Jump', 0.9) / this.leapTime);
     this.setState('leaping');
+  }
+
+  private onTable(p: Vector3, ground: BeastGround): boolean {
+    return ground.table ? ground.table(p) : this.tmp.copy(p).sub(ground.center).setY(0).length() < ground.radius;
   }
 
   private poked(at: Vector3, forward: Vector3): void {
@@ -779,7 +831,7 @@ export class Beast {
         this.leapFrom.copy(this.position);
         this.leapTo.copy(step.to);
         this.faceTowards(step.to, 1);
-        this.play('Gallop_Jump', false, 0.15, 0.9 / step.time);
+        this.play('Gallop_Jump', false, 0.15, this.clipLength('Gallop_Jump', 0.9) / step.time);
       } else if (step.do === 'act') {
         if (step.clip) this.play(step.clip, !step.once, 0.25, step.rate ?? 1);
         step.sound?.();
@@ -802,7 +854,7 @@ export class Beast {
         this.nextStep();
         break;
       case 'walk':
-        if (this.walkTowards(step.to, dt, 0.004)) this.nextStep();
+        if (this.walkTowards(step.to, dt, 0.004, step.rush ?? 1)) this.nextStep();
         break;
       case 'leap': {
         const k = Math.min(1, this.taskTime / step.time);
@@ -869,7 +921,7 @@ export class Beast {
   // ------------------------------------------------------------- Movement
 
   /** Walk (or gallop when far) towards a point; true once there. */
-  private walkTowards(goal: Vector3, dt: number, stop: number): boolean {
+  private walkTowards(goal: Vector3, dt: number, stop: number, rush = 1): boolean {
     const dx = goal.x - this.position.x;
     const dz = goal.z - this.position.z;
     const distance = Math.hypot(dx, dz);
@@ -877,11 +929,11 @@ export class Beast {
       this.play('Idle');
       return true;
     }
-    const gallop = distance > this.length * 2.2;
-    const speed = this.spec.height * Math.sqrt(this.size) * (gallop ? this.spec.gallop : this.spec.walk);
-    this.play(gallop ? 'Gallop' : 'Walk', true, 0.3, 1 / Math.sqrt(this.size));
+    const gallop = distance > this.length * (rush > 1 ? 0.9 : 2.2);
+    const speed = this.spec.height * Math.sqrt(this.size) * (gallop ? this.spec.gallop : this.spec.walk) * rush;
+    this.play(gallop ? 'Gallop' : 'Walk', true, 0.3, Math.sqrt(rush) / Math.sqrt(this.size));
     // Turn first, then go: a sharp turn slows the stride.
-    const turn = this.faceTowards(goal, Math.min(1, dt * 3.5));
+    const turn = this.faceTowards(goal, Math.min(1, dt * 3.5 * rush));
     const pace = speed * Math.max(0.2, Math.cos(Math.min(Math.PI / 2, Math.abs(turn))));
     const move = Math.min(distance - stop * 0.5, pace * dt);
     this.position.x += Math.sin(this.yaw) * move;
@@ -915,6 +967,36 @@ export class Beast {
     this.root.position.copy(this.position);
     this.root.position.y += this.actLift * this.height;
     this.root.rotation.set(this.lean + this.actPitch, this.yaw + this.actYaw + this.actSpin, this.roll + this.actRoll, 'YXZ');
+    // Rolled, rearing, lying down or sitting: the body turns about its hooves, so lift it until
+    // nothing is under the table's top (its back when rolled over, its flank when lying on its side).
+    const grounded = this.state === 'idle' || this.state === 'task' || this.state === 'thrown' || this.state === 'leaping';
+    if (!grounded || this.position.y < this.surface - 0.05) return;
+    const lowest = this.lowestPoint();
+    if (lowest < this.surface) this.root.position.y += this.surface - lowest;
+  }
+
+  /** World height of the body's lowest point: its hooves (the box's bottom corners) or its rounded body. */
+  private lowestPoint(): number {
+    const q = this.root.quaternion;
+    const h = this.height;
+    const halfW = this.width * 0.4;
+    const halfL = this.length * 0.4;
+    let lowest = Infinity;
+    for (let c = 0; c < 4; c++) {
+      const y = this.tmp.set((c & 1 ? 1 : -1) * halfW, 0, (c & 2 ? 1 : -1) * halfL).applyQuaternion(q).y;
+      if (y < lowest) lowest = y;
+    }
+    // The body as an ellipsoid about its middle: how far it reaches straight down.
+    const centreY = this.tmp.set(0, h * 0.5, 0).applyQuaternion(q).y;
+    const down = this.tmp2.set(0, -1, 0).applyQuaternion(this.quat.copy(q).invert());
+    const reach = Math.hypot(down.x * this.width * 0.45, down.y * h * 0.5, down.z * this.length * 0.45);
+    lowest = Math.min(lowest, centreY - reach);
+    return this.root.position.y + lowest;
+  }
+
+  /** A clip's length in seconds (or a fallback when the model has none). */
+  private clipLength(name: string, fallback: number): number {
+    return this.action(name)?.getClip().duration ?? fallback;
   }
 
   /** Whether the model has a clip of its own for this (a trick may pose its way round a missing one). */
