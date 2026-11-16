@@ -5,31 +5,32 @@ import { FONT } from './ui-theme.js';
 /**
  * Quick Tour: the best of Shadowplay in about ten minutes, one stop after
  * another, for anyone short of time (a judge, a friend). Each stop moves on
- * when it is finished, when Skip is pushed, or when its time is up. Fights
- * are shorter on the tour, and the story's saved place is left alone.
+ * only when it is finished or when Skip is pushed: never on a timer, so no
+ * one is cut off mid-play. Fights are shorter on the tour, and the story's
+ * saved place is left alone.
  */
 export interface TourStop {
   /** A level id, or 'intro' (the film), 'pets' or 'training' (side games). */
   id: string;
   name: string;
-  /** Seconds before the tour moves on by itself. */
-  limit: number;
+  /** Has no end of its own (play as long as you like): Skip moves on. */
+  open?: boolean;
 }
 
 export const TOUR: TourStop[] = [
-  { id: 'intro', name: 'The story', limit: 95 },
-  { id: 'pets', name: 'Shadows come alive', limit: 60 },
-  { id: 'run-bridge', name: 'A spark on your shadow', limit: 75 },
-  { id: 'shadow-slingshot', name: 'The Shadow Slingshot', limit: 75 },
-  { id: 'training', name: 'Shadow weapons', limit: 100 },
-  { id: 'fight-rook', name: 'Captain Rook', limit: 100 },
-  { id: 'shadow-dragon', name: 'The Shadow Dragon', limit: 130 },
+  { id: 'intro', name: 'The story' },
+  { id: 'pets', name: 'Shadows come alive', open: true },
+  { id: 'run-bridge', name: 'A spark on your shadow' },
+  { id: 'shadow-slingshot', name: 'The Shadow Slingshot' },
+  { id: 'training', name: 'Shadow weapons', open: true },
+  { id: 'fight-rook', name: 'Captain Rook' },
+  { id: 'shadow-dragon', name: 'The Shadow Dragon' },
 ];
 
 /** The Training Arena's lessons on the tour: the fist's Shadow Ball, then a drawn ball. */
 export const TOUR_LESSONS = [0, 11];
 
-/** A small badge above the screen: which stop, its name, and time left. */
+/** A small badge above the screen: which stop and its name (no clock: take your time). */
 export class TourBadge {
   private readonly canvas = document.createElement('canvas');
   private readonly texture: CanvasTexture;
@@ -49,9 +50,9 @@ export class TourBadge {
     parent.add(this.mesh);
   }
 
-  show(step: number, name: string, left: number, limit: number): void {
+  show(step: number, name: string, open: boolean): void {
     this.mesh.visible = true;
-    const key = `${step}|${Math.ceil(left)}`;
+    const key = `${step}|${open}`;
     if (key === this.key) return;
     this.key = key;
     const g = this.canvas.getContext('2d')!;
@@ -68,16 +69,15 @@ export class TourBadge {
     const head = `QUICK TOUR ${step + 1}/${TOUR.length}`;
     g.font = `900 50px ${FONT}`;
     g.fillStyle = '#ffd84a';
-    g.fillText(head, 34, 62);
+    g.fillText(head, 34, 56);
     const after = 34 + g.measureText(head).width + 26;
     g.fillStyle = '#ffffff';
     g.font = `800 50px ${FONT}`;
-    g.fillText(name, after, 62, 1024 - after - 30);
-    // Time left on this stop, as a bar along the bottom.
-    g.fillStyle = 'rgba(255,255,255,0.18)';
-    g.fillRect(34, 108, 956, 14);
-    g.fillStyle = '#49d17d';
-    g.fillRect(34, 108, 956 * Math.max(0, Math.min(1, left / limit)), 14);
+    g.fillText(name, after, 56, 1024 - after - 30);
+    // How it moves on: no timer, it waits for you.
+    g.fillStyle = '#c2d0ec';
+    g.font = `700 30px ${FONT}`;
+    g.fillText(open ? 'Play as long as you like · push Skip for the next stop' : 'Finish it to move on, or push Skip', 34, 112, 956);
     this.texture.needsUpdate = true;
   }
 

@@ -70,3 +70,10 @@ Legend: [x] done and checked · [ ] not done yet
   - Arena rivals: about 15% less health, since they now use their whole move book
 - [x] Checked in the emulator: training card, and the YOU LOSE card after losing to Captain Rook
 - [x] Pushed and live
+
+## 10. Nov 16: after the first Quest test
+- [x] **Move the screen to suit how you sit:** wrist menu **Move** (or Settings → Move screen), then pinch anywhere in the air and drag. The screen and its whole world follow your hand (twice as far as the hand moves) and keep facing you; a gold frame shows while moving and the game pauses. Let go for a moment and it stays. Distance and height are remembered for next time, and Recenter keeps them
+- [x] **Screen blinking fixed:** the painted backdrops (title, levels) sat under a millimetre in front of the white screen and fought it for the depth buffer in the headset; they now draw strictly in order with nothing to fight over. The film's flickering lamp is now a steady glow
+- [x] **Quick Tour: Captain Rook is the real 3D character.** The flat shadow puppet only stood in because his model took over 20 s to download on the headset; now the fight waits for him (and the tour fetches him while the film plays). The puppet appears only if every download try fails
+- [x] **Quick Tour never leaves a stop on a timer:** each stop moves on only when you finish it or push Skip. The badge says so (Pets and Training: "play as long as you like · push Skip for the next stop")
+- [x] Checked in the emulator: move mode (frame, caption, 20 cm drag, settles and saves, game resumes), tour badge; typecheck and all tests pass

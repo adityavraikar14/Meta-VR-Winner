@@ -34,7 +34,7 @@ import { Doodle, type DoodleWorld, isClosedLoop } from './doodle.js';
 import { FlatRival } from './flat-rival.js';
 import { disposeHerb, herbSprig } from './herb.js';
 import { LifeBar } from './life-bar.js';
-import { NamePlate, preloadRival, Rival3D, rivalLoadState } from './rival3d.js';
+import { NamePlate, preloadRival, Rival3D, rivalLoadFailed, rivalLoadState } from './rival3d.js';
 import { currentRival, recordWin, type RivalMove, type RivalSpec, type Shot } from './rivals.js';
 import { MOVEMENT, type Move, shuffledMoves, type Technique } from './movebook.js';
 import { ARMS, type ArmShot, planVolley, ShadowArms, type ShadowShape, shadowMaterial } from './shadow-arms.js';
@@ -85,8 +85,6 @@ const RIVAL_OUT = 0.3;
 /** Seconds to walk out of the screen, then a breath before the fight. */
 const WALK_TIME = 2.6;
 const READY_TIME = WALK_TIME + 1.8;
-/** The flat puppet stands in only if the 3D rival never arrives. */
-const FLAT_AFTER = 20;
 /** Living drawings at once, and head-butts each gets before it pops. */
 const MAX_DOODLES = 3;
 const DOODLE_BONKS = 3;
@@ -488,7 +486,9 @@ export class InkDuel {
     if (!this.foe && !this.flat) {
       this.foe = Rival3D.create(this.spec);
       if (this.foe) this.place(this.foe);
-      else if (this.time > FLAT_AFTER) this.flat = true;
+      // The real character always fights: a slow download is waited for (the caption
+      // says someone stirs). The flat puppet only if every try to fetch them failed.
+      else if (rivalLoadFailed(this.spec)) this.flat = true;
     }
     const foe = this.foe;
     const live = stage.playing || this.mode === 'won' || this.mode === 'lost';

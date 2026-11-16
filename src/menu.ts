@@ -280,6 +280,13 @@ export class MainMenu {
           return null;
         },
       },
+      {
+        label: 'Move screen',
+        run: () => {
+          stage.command = 'move';
+          return null;
+        },
+      },
     ];
   }
 

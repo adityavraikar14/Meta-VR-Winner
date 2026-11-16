@@ -1,4 +1,15 @@
-import { CanvasTexture, SRGBColorSpace } from '@iwsdk/core';
+import { CanvasTexture, MeshBasicMaterial, SRGBColorSpace } from '@iwsdk/core';
+
+/**
+ * The material for a painting laid on the screen. It is drawn after the white
+ * screen, strictly by render order, and never writes depth: the painting and
+ * the screen sit under a millimetre apart, and in the headset two opaque
+ * layers that close fight over the depth buffer, so the whole screen blinks
+ * between them. This way there is nothing to fight over.
+ */
+export function paintingMaterial(map: CanvasTexture): MeshBasicMaterial {
+  return new MeshBasicMaterial({ map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+}
 
 /**
  * The painted world behind each Shadow Run course: a calm, painterly

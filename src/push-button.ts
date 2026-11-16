@@ -744,6 +744,7 @@ const ICONS: Partial<Record<string, Icon>> = {
   locked: lock,
   around: globe,
   recenter: target,
+  'move screen': target,
   relaxed: gauge,
   'full speed': gauge,
   table,

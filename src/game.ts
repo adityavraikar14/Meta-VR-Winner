@@ -29,7 +29,7 @@ import { add as addResource, RESOURCE_ORDER } from './bag.js';
 import { diagnoseDragon } from './fight/dragon3d.js';
 import { installLevelTester, levelKeys } from './level-tester.js';
 import { PAPER_BOUNDS } from './run/run-sim.js';
-import { sceneryTexture } from './run/scenery.js';
+import { paintingMaterial, sceneryTexture } from './run/scenery.js';
 import { drawInventory } from './inventory-art.js';
 import { drawJournal } from './journal-art.js';
 import { installMouseHands } from './mouse-hands.js';
@@ -73,7 +73,8 @@ import { TOUR, TourBadge } from './tour.js';
 import { drawArmsChart } from './fight/arms-art.js';
 import { petNow } from './creatures/mood.js';
 import { INVENTORY, JOURNAL_PAGE, MainMenu, type MenuAction, resumeIndex } from './menu.js';
-import { currentRival } from './fight/rivals.js';
+import { currentRival, RIVALS } from './fight/rivals.js';
+import { preloadRival } from './fight/rival3d.js';
 import { PushButton, rayPressButtons } from './push-button.js';
 import { ShadowWorld } from './shadow-world.js';
 import { installWebcamPanel } from './webcam.js';
@@ -694,6 +695,9 @@ export class ShadowGameSystem extends createSystem({
   /** The Quick Tour starts: the first stop. */
   private beginTour(): void {
     stage.tour = true;
+    // Captain Rook is fetched now, while the film plays, so he is ready in person at his stop.
+    const rook = RIVALS.find((r) => r.id === 'rook');
+    if (rook) void preloadRival(rook);
     this.tourStep = -1;
     this.menu.close();
     this.nextTourStop();
@@ -733,16 +737,12 @@ export class ShadowGameSystem extends createSystem({
     this.setCaption('Quick Tour complete! Push Play for the full story, or try the side games');
   }
 
-  /** Each frame on the tour: the badge, and moving on when a stop's time is up. */
+  /** Each frame on the tour: the badge. A stop moves on only when finished or skipped, never on a timer. */
   private runTour(dt: number): void {
     if (this.tourStep < 0) return;
     const stop = TOUR[this.tourStep];
     this.tourTime += dt;
-    this.tourBadge.show(this.tourStep, stop.name, stop.limit - this.tourTime, stop.limit);
-    if (this.tourTime > stop.limit && this.phase !== 'cleared') {
-      if (this.phase === 'intro') this.leaveIntro();
-      else this.nextTourStop();
-    }
+    this.tourBadge.show(this.tourStep, stop.name, stop.open === true);
   }
 
   update(delta: number): void {
@@ -1567,7 +1567,7 @@ export class ShadowGameSystem extends createSystem({
     if (!this.titlePainting && show && stage.paper) {
       const w = PAPER_BOUNDS.hw * 2;
       const h = PAPER_BOUNDS.hh * 2;
-      this.titlePainting = new Mesh(new PlaneGeometry(w, h), new MeshBasicMaterial({ map: sceneryTexture(0, 'title', 1024, h / w) }));
+      this.titlePainting = new Mesh(new PlaneGeometry(w, h), paintingMaterial(sceneryTexture(0, 'title', 1024, h / w)));
       // Just behind a level's own painting, should both be there for a moment.
       this.titlePainting.position.z = 0.0006;
       this.titlePainting.renderOrder = 1;
@@ -2121,6 +2121,8 @@ export class ShadowGameSystem extends createSystem({
       const controllers = !!sources && Array.from(sources).some((s) => !s.hand && !!s.gamepad);
       hint = controllers ? '🎮 Put the controllers down: this game is played with your hands' : '✋ Hold your hands up in front of you, in good light';
     }
+    // Moving the screen: the caption says how.
+    if (stage.moving) hint = stage.moveCaption || hint;
     if (hint === this.handsHint) return;
     this.handsHint = hint;
     this.paintCaption(hint ?? this.wantedCaption);

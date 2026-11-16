@@ -30,9 +30,10 @@ import {
   PAPER_WIDTH,
   stage,
 } from './stage-state.js';
-import { devInfo } from './dev-tools.js';
+import { devActions, devInfo } from './dev-tools.js';
 import { webcam } from './webcam.js';
 import { HandSkeleton } from './yash/sim-hands.js';
+import { loadSeat, ScreenMover, type Seat } from './screen-mover.js';
 
 /** WebXR hand joint order: wrist, thumb (4), then index/middle/ring/pinky (5 each). */
 const JOINT_COUNT = 25;
@@ -63,9 +64,8 @@ const MASK_LAYER = 1;
 /** Read the mask back every N frames. */
 const MASK_INTERVAL = 3;
 
-/** Paper sits this far in front of the eyes, and this far below them. */
-const PAPER_DISTANCE = 1.0;
-const PAPER_DROP = 0.12;
+// How far the paper sits in front of the eyes and below them is the player's
+// seat (screen-mover.ts): 1 m and 12 cm until they move it to suit themselves.
 /**
  * The lantern sits just behind and below the eyes. Low enough that a hand's
  * shadow lands well above the hand in view, high enough that hands held
@@ -109,6 +109,9 @@ export class ShadowStageSystem extends createSystem({}) {
   private poses!: Float32Array;
   private radii!: Float32Array;
   private needsLayout = true;
+  /** Where the screen sits for this player (moved by hand, remembered). */
+  private seat: Seat = loadSeat();
+  private mover!: ScreenMover;
   private frameCount = 0;
   private readPending = false;
   /** The mask still shows hands that have since left; clear it once they go. */
@@ -173,6 +176,13 @@ export class ShadowStageSystem extends createSystem({}) {
     this.maskCamera.layers.set(MASK_LAYER);
     this.paper.add(this.maskCamera);
     this.layoutLantern();
+    this.mover = new ScreenMover(this.paper, this.player, (seat) => {
+      this.seat = seat;
+      this.layoutLantern();
+    });
+    devInfo.seat = () => ({ ...this.seat, moving: stage.moving, paper: this.paper.position.toArray().map((n) => Number(n.toFixed(3))) });
+    // Dev: End starts (or ends) moving the screen, like the wrist menu's Move.
+    devActions.end = () => (stage.command = 'move');
 
     devInfo.render = () => {
       const info = this.renderer.info;
@@ -215,11 +225,21 @@ export class ShadowStageSystem extends createSystem({}) {
       stage.command = null;
       this.needsLayout = true;
     }
+    if (stage.command === 'move') {
+      stage.command = null;
+      this.player.head.getWorldPosition(this.headPos);
+      if (stage.moving) this.mover.finish(this.headPos);
+      else if (!stage.arena) this.mover.start();
+    }
     if (this.needsLayout) this.layoutPaper();
     // In the fights, webcam hands (dev only) stand in for the headset's.
     const camera = webcam.poll(Math.min(delta, 0.1)) && stage.fight;
     if (camera) this.updateWebcamHands();
     else this.updateHands();
+    if (stage.moving) {
+      this.player.head.getWorldPosition(this.headPos);
+      this.mover.update(Math.min(delta, 0.1), this.headPos);
+    }
     if (!camera) for (const skeleton of this.skeletons) skeleton.root.visible = false;
     this.frameCount++;
     if (
@@ -385,8 +405,8 @@ export class ShadowStageSystem extends createSystem({}) {
 
     this.paper.position
       .copy(this.headPos)
-      .addScaledVector(this.headDir, PAPER_DISTANCE);
-    this.paper.position.y -= PAPER_DROP;
+      .addScaledVector(this.headDir, this.seat.distance);
+    this.paper.position.y -= this.seat.drop;
     this.paper.rotation.set(0, Math.atan2(-this.headDir.x, -this.headDir.z), 0);
     this.paper.updateMatrixWorld(true);
     this.needsLayout = false;
@@ -395,8 +415,8 @@ export class ShadowStageSystem extends createSystem({}) {
   /** Lantern and mask camera live in paper space, behind the viewer. */
   private layoutLantern(): void {
     const lx = 0;
-    const ly = PAPER_DROP - LANTERN_DROP;
-    const d = PAPER_DISTANCE + LANTERN_BACK;
+    const ly = this.seat.drop - LANTERN_DROP;
+    const d = this.seat.distance + LANTERN_BACK;
     this.lantern.position.set(lx, ly, d);
     stage.lantern = [lx, ly, d];
     this.lantern.target.position.set(0, 0, 0);

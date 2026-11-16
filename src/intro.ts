@@ -523,15 +523,15 @@ export class IntroShow {
   }
 
   /** The screen lit from behind: bright in the middle, warm at the edges, with paper fibres. */
-  private backdrop(ctx: CanvasRenderingContext2D, tint: Tint, k: number): void {
+  private backdrop(ctx: CanvasRenderingContext2D, tint: Tint, _k: number): void {
     const light = ctx.createRadialGradient(W / 2, H * 0.42, 40, W / 2, H * 0.45, W * 0.62);
     light.addColorStop(0, tint[0]);
     light.addColorStop(0.55, tint[0]);
     light.addColorStop(1, tint[1]);
     ctx.fillStyle = light;
     ctx.fillRect(0, 0, W, H);
-    // The lamp behind the screen flickers a little.
-    ctx.fillStyle = `rgba(255, 220, 150, ${0.06 + 0.04 * Math.sin(this.time * 7 + k)})`;
+    // The lamp behind the screen: a steady warm glow (a flicker made the whole screen blink in the headset).
+    ctx.fillStyle = `rgba(255, 220, 150, 0.08)`;
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 0.9;
     const pattern = ctx.createPattern(paperFibres(), 'repeat');
@@ -547,7 +547,7 @@ export class IntroShow {
     for (let i = 0; i < 26; i++) {
       const x = (i * 157 + this.time * (8 + (i % 5) * 4)) % W;
       const y = (i * 89 + Math.sin(this.time * 0.6 + i) * 24 + 40) % (top - 20);
-      ctx.fillStyle = `rgba(255, 244, 210, ${0.25 + 0.2 * Math.sin(this.time * 2 + i)})`;
+      ctx.fillStyle = `rgba(255, 244, 210, ${0.3 + 0.08 * Math.sin(this.time * 0.5 + i)})`;
       ctx.beginPath();
       ctx.arc(x, y, 1.6 + (i % 3), 0, Math.PI * 2);
       ctx.fill();

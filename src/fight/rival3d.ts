@@ -63,6 +63,11 @@ export function preloadRival(spec: RivalSpec): Promise<void> {
   return entry.promise;
 }
 
+/** Every try to fetch this rival's model has failed (only then may a flat puppet stand in). */
+export function rivalLoadFailed(spec: RivalSpec): boolean {
+  return models.get(spec.url)?.state === 'gave up';
+}
+
 /** For dev info: how a rival's model is getting on. */
 export function rivalLoadState(spec: RivalSpec): string {
   return models.get(spec.url)?.state ?? 'not asked';
@@ -81,6 +86,7 @@ async function load(url: string, entry: Loaded): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 3000 * (attempt + 1)));
     }
   }
+  entry.state = 'gave up';
 }
 
 interface Release {

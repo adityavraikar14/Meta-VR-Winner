@@ -4,7 +4,7 @@ import { Confetti } from './confetti.js';
 import { shadowBox } from './shadow-box.js';
 import { Group, type InstancedMesh, type Material, Matrix4, Mesh, MeshBasicMaterial, type MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion, Vector3 } from '@iwsdk/core';
 import { PAPER_BOUNDS } from '../run/run-sim.js';
-import { sceneryTexture } from '../run/scenery.js';
+import { paintingMaterial, sceneryTexture } from '../run/scenery.js';
 import { stage, PAPER_HEIGHT, PAPER_WIDTH } from '../stage-state.js';
 import { animateNature, forgetWater, grassTouch, nature } from './nature.js';
 import { playAwaken, playRustle, playUnfold, setAmbience, tickAmbience } from '../audio.js';
@@ -224,9 +224,10 @@ export class Diorama {
     if (!paper || !puzzle?.handsOn || puzzle.painted || puzzle.fight || puzzle.id === 'duel') return;
     const w = PAPER_BOUNDS.hw * 2;
     const h = PAPER_BOUNDS.hh * 2;
-    this.backdrop = new Mesh(new PlaneGeometry(w, h), new MeshBasicMaterial({ map: sceneryTexture(puzzle.world, puzzle.id, 1024, h / w) }));
+    this.backdrop = new Mesh(new PlaneGeometry(w, h), paintingMaterial(sceneryTexture(puzzle.world, puzzle.id, 1024, h / w)));
     this.backdrop.position.z = 0.0008;
-    this.backdrop.renderOrder = 1;
+    // Over the title's painting, should both be there for a moment.
+    this.backdrop.renderOrder = 1.1;
     this.backdrop.name = 'ScreenPainting';
     paper.add(this.backdrop);
   }

@@ -45,7 +45,7 @@ const REARM_DEPTH = 0.02;
 
 const BUTTONS: Array<{ command: MenuCommand; label: string }> = [
   { command: 'drink', label: 'Drink' },
-  { command: 'recenter', label: 'Recenter' },
+  { command: 'move', label: 'Move' },
   { command: 'restart', label: 'Restart' },
   { command: 'skip', label: 'Skip' },
   { command: 'menu', label: 'Menu' },
@@ -166,7 +166,8 @@ export class HandMenuSystem extends createSystem({}) {
       }
     }
 
-    stage.menuOpen = this.owner >= 0;
+    // Moving the screen pauses the game the same way the open menu does.
+    stage.menuOpen = this.owner >= 0 || stage.moving;
     if (!this.animate(dt) || this.owner < 0) return;
     this.layout();
     this.place(dt);
@@ -381,6 +382,19 @@ function drawButton(canvas: HTMLCanvasElement, command: MenuCommand, label: stri
   ctx.lineJoin = 'round';
   ctx.beginPath();
   switch (command) {
+    case 'move':
+      // Four arrows out from the middle.
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ex = cx + dx * 34;
+        const ey = cy + dy * 34;
+        ctx.moveTo(cx + dx * 8, cy + dy * 8);
+        ctx.lineTo(ex, ey);
+        ctx.moveTo(ex - dx * 10 + dy * 9, ey - dy * 10 + dx * 9);
+        ctx.lineTo(ex, ey);
+        ctx.lineTo(ex - dx * 10 - dy * 9, ey - dy * 10 - dx * 9);
+      }
+      ctx.stroke();
+      break;
     case 'recenter':
       // A target: ring with four ticks.
       ctx.arc(cx, cy, 20, 0, Math.PI * 2);

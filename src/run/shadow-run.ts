@@ -23,7 +23,7 @@ import { HandShadows } from './hand-shadows.js';
 import type { RunLevel } from './run-levels.js';
 import { GATE_RADIUS, PAPER_BOUNDS, RunSim, THORN_RADIUS } from './run-sim.js';
 import { ShardSet } from './shards.js';
-import { hashString, mistTexture, sceneryTexture } from './scenery.js';
+import { hashString, mistTexture, paintingMaterial, sceneryTexture } from './scenery.js';
 import { Comic } from '../fight/comic.js';
 import { pickSpark, SparkFace, type SparkMood } from './spark-face.js';
 import { ADD_ORDER, currentSlot, DEMO, MAX_PIECES, nextSlot, resetWorkshop, saveWorkshop, shelfSpot } from './workshop.js';
@@ -531,17 +531,17 @@ export class ShadowRun {
     this.face = new SparkFace(pickSpark(level.id, day), 10);
     this.sim.power = this.face.info.power;
 
-    // The painted world behind the course: opaque and drawn first, so hand shadows fall across it.
-    const scenery = new Mesh(new PlaneGeometry(W, H), new MeshBasicMaterial({ map: sceneryTexture(level.world ?? 0, level.id, 1024, H / W) }));
+    // The painted world behind the course: drawn right after the screen, so hand shadows fall across it.
+    const scenery = new Mesh(new PlaneGeometry(W, H), paintingMaterial(sceneryTexture(level.world ?? 0, level.id, 1024, H / W)));
     scenery.position.z = 0.0008;
-    scenery.renderOrder = 1;
+    scenery.renderOrder = 1.1;
     this.paper.add(scenery);
     // Slow mist drifting low across the land: the painting breathes, quietly.
     const mist = mistTexture();
     for (let i = 0; i < 2; i++) {
       const mesh = new Mesh(new PlaneGeometry(0.62, 0.15), new MeshBasicMaterial({ map: mist, transparent: true, depthWrite: false, opacity: 0.8 }));
       mesh.position.set(-W / 2 + i * 0.55, -0.07 - i * 0.09, 0.0011);
-      mesh.renderOrder = 1;
+      mesh.renderOrder = 1.2;
       this.paper.add(mesh);
       this.clouds.push({ mesh, speed: 0.004 + i * 0.003 });
     }

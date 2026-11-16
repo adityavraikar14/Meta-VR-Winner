@@ -43,6 +43,10 @@ export const stage = {
   command: null as MenuCommand | null,
   /** The hand menu is open: the game pauses judging so the menu hand is not scored. */
   menuOpen: false,
+  /** Moving the screen with a pinch (wrist menu Move): the game pauses meanwhile. */
+  moving: false,
+  /** What the caption says while moving the screen. */
+  moveCaption: '',
   /** World height of the player's real table, once they have laid a hand on it. */
   tableHeight: null as number | null,
   /** The world is not here yet: the player hasn't shown us their table. */
@@ -91,4 +95,4 @@ export const stage = {
   grow: null as { from: Vector3 | null } | null,
 };
 
-export type MenuCommand = 'recenter' | 'restart' | 'skip' | 'menu' | 'drink';
+export type MenuCommand = 'recenter' | 'move' | 'restart' | 'skip' | 'menu' | 'drink';
