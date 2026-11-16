@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Quaternion,
   Pressed,
   Raycaster,
   Vector2,
@@ -66,7 +67,8 @@ import {
   MaskChannel,
   normalizeMask,
 } from './matcher.js';
-import { IntroShow } from './intro.js';
+import { IntroShow, type Reel } from './intro.js';
+import { StudioIdent } from './studio-ident.js';
 import { howTo } from './howto.js';
 import { FpsMeter, TEST_MODE } from './test-mode.js';
 import { TOUR, TourBadge } from './tour.js';
@@ -304,6 +306,10 @@ export class ShadowGameSystem extends createSystem({
   private homeClick = false;
   private homeArmed = 0;
   /** Exit (leave the headset view, on the title) and Adjust (move the screen to suit how you sit). */
+  /** The team's ident as the headset view opens. */
+  private ident!: StudioIdent;
+  private readonly identEye = new Vector3();
+  private readonly identTurn = new Quaternion();
   private exitButton!: PushButton;
   private exitEntity!: Entity;
   private exitClick = false;
@@ -501,6 +507,7 @@ export class ShadowGameSystem extends createSystem({
     });
     this.addDesktopPress();
     this.intro = new IntroShow(paper);
+    this.ident = new StudioIdent(this.scene);
     this.shadowWorld = new ShadowWorld(paper);
     devInfo.shadowWorld = () => ({
       mood: this.shadowWorld.mood,
@@ -585,6 +592,9 @@ export class ShadowGameSystem extends createSystem({
     devInfo.hint = () => ({ left: Number(this.hintLeft.toFixed(2)), opacity: Number(this.hintMaterial.opacity.toFixed(2)), shown: this.hintButton.visible, stuck: Math.round(this.stuckTime), phase: this.phase });
     // Dev: N jumps the opening film to its next scene.
     devActions.n = () => this.intro.skipScene();
+    // Dev: F2 plays the story's closing films and the credits.
+    devActions.f2 = () => this.startFilms(['dragon', 'witch', 'credits'], () => this.showTitle());
+    devInfo.film = () => ({ phase: this.phase, queue: this.filmQueue.join(','), after: this.afterFilms !== null, active: this.intro.active, leaving: this.introLeaving });
     // Dev: I plays the opening film from the title, as the Story button does.
     devActions.i = () => {
       if (this.phase === 'title') this.menuAction({ do: 'story' });
@@ -837,6 +847,9 @@ export class ShadowGameSystem extends createSystem({
     stage.titleMenu = this.phase === 'title';
     // Music only in the headset; the Arena keeps Yash's own soundscape.
     const inHeadset = this.visibilityState.peek() === VisibilityState.Visible;
+    this.player.head.getWorldPosition(this.identEye);
+    this.player.head.getWorldQuaternion(this.identTurn);
+    this.ident.update(dt, inHeadset, this.identEye, this.identTurn);
     // The menu has its theme, each world its own, the duel a lively one; scenes can ask for battle music.
     const worldMusic = this.puzzle?.id === 'duel' || this.puzzle?.id.startsWith('fight-') ? 'duel' : WORLDS[this.puzzle?.world ?? 0]?.music ?? 'explore';
     const menuMusic = this.phase === 'title' || this.phase === 'table' || this.phase === 'growing' || this.phase === 'intro';
@@ -868,7 +881,19 @@ export class ShadowGameSystem extends createSystem({
           // The film fades out first; only then does what comes next appear behind it.
           if (this.intro.active) break;
           this.introLeaving = false;
+          const reel = this.filmQueue.shift();
+          if (reel) {
+            this.playButton.show(true);
+            this.intro.start(reel);
+            break;
+          }
           this.placePlayButton(PLAY_BUTTON);
+          if (this.afterFilms) {
+            const then = this.afterFilms;
+            this.afterFilms = null;
+            then();
+            break;
+          }
           if (this.tourStep >= 0) this.nextTourStop();
           else if (this.introToTitle) {
             this.introToTitle = false;
@@ -904,6 +929,7 @@ export class ShadowGameSystem extends createSystem({
         if (this.phaseTime >= OOPS_TIME) this.beginMatching();
         break;
       case 'cleared':
+        if (this.phaseTime >= CLEAR_TIME && this.storyFilm()) break;
         if (this.phaseTime >= CLEAR_TIME) {
           if (this.tourStep >= 0) this.nextTourStop();
           else if (isSideGame(this.puzzleIndex)) this.showTitle();
@@ -989,6 +1015,23 @@ export class ShadowGameSystem extends createSystem({
   }
 
   private introLeaving = false;
+  /** Films still to show after this one (the end credits after the last story scene), and what then. */
+  private filmQueue: Reel[] = [];
+  private afterFilms: (() => void) | null = null;
+
+  /** Story films over a cleared stage: Skip moves on to the next one. */
+  private startFilms(reels: Reel[], then: () => void): void {
+    this.filmQueue = reels.slice(1);
+    this.afterFilms = then;
+    this.clearScreen();
+    this.introLeaving = false;
+    this.bannerShown = false;
+    this.playButton.setText('Skip');
+    this.placePlayButton(INTRO_SKIP);
+    this.playButton.show(true);
+    this.intro.start(reels[0]);
+    this.setPhase('intro');
+  }
 
   /** Nothing of a level (its shape cards, outline, ghost hand) behind the film or the title card. */
   private clearScreen(): void {
@@ -996,6 +1039,33 @@ export class ShadowGameSystem extends createSystem({
     this.outline.visible = false;
     this.ring.visible = false;
     this.ghost.show(null);
+  }
+
+  /**
+   * The story's turning points get a film: the dragon freed (on the Quick
+   * Tour, then the credits), and after Morwen the ending and the credits.
+   * True when one has started.
+   */
+  private storyFilm(): boolean {
+    const id = this.puzzle?.id;
+    const touring = this.tourStep >= 0;
+    if (id === 'shadow-dragon') {
+      const next = Math.min(this.puzzleIndex + 1, PUZZLES.length);
+      this.showTitle();
+      if (touring) {
+        this.startFilms(['dragon', 'credits'], () => {
+          this.showTitle();
+          this.setCaption('Quick Tour complete! Push Play for the full story, or try the side games');
+        });
+      } else this.startFilms(['dragon'], () => this.startPuzzle(next));
+      return true;
+    }
+    if (id === 'fight-morwen' && !touring) {
+      this.showTitle();
+      this.startFilms(['witch', 'credits'], () => this.showTitle());
+      return true;
+    }
+    return false;
   }
 
   private startIntro(): void {
@@ -1073,6 +1143,11 @@ export class ShadowGameSystem extends createSystem({
       this.startPuzzle(WORKSHOP_INDEX);
     } else if (action.do === 'tour') {
       this.beginTour();
+    } else if (action.do === 'credits') {
+      this.startFilms(['credits'], () => {
+        this.showTitle();
+        this.menu.open('credits');
+      });
     } else if (action.do === 'training') {
       playAwaken();
       this.startPuzzle(TRAINING_INDEX);

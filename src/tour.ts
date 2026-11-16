@@ -3,7 +3,7 @@ import { CanvasTexture, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, S
 import { FONT } from './ui-theme.js';
 
 /**
- * Quick Tour: the best of Shadowplay in about ten minutes, one stop after
+ * Quick Tour: the best of Shadowplay in about fifteen minutes, one stop after
  * another, for anyone short of time (a judge, a friend). Each stop moves on
  * only when it is finished or when Skip is pushed: never on a timer, so no
  * one is cut off mid-play. Fights are shorter on the tour, and the story's
@@ -21,6 +21,9 @@ export const TOUR: TourStop[] = [
   { id: 'intro', name: 'The story' },
   { id: 'pets', name: 'Shadows come alive', open: true },
   { id: 'run-bridge', name: 'A spark on your shadow' },
+  { id: 'run-ramp', name: 'Tilt your shadow into a ramp' },
+  { id: 'run-kick', name: 'Kick with your shadow' },
+  { id: 'run-long', name: 'Stretch your shadow' },
   { id: 'shadow-slingshot', name: 'The Shadow Slingshot' },
   { id: 'training', name: 'Shadow weapons', open: true },
   { id: 'fight-rook', name: 'Captain Rook' },

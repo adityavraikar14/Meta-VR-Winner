@@ -50,6 +50,8 @@ interface Scene {
   line: string;
   seconds: number;
   tint: Tint;
+  /** No storyteller on this one (the credits). */
+  silent?: boolean;
   /** Plays when the scene starts. */
   sound?: () => void;
   draw(ctx: CanvasRenderingContext2D, t: number, k: number): void;
@@ -286,8 +288,253 @@ export const SCENES: Scene[] = [
   },
 ];
 
+/** After the Shadow Dragon: the trance breaks, and the witch knows. */
+const DRAGON_SCENES: Scene[] = [
+  {
+    line: 'The light of the Great Lantern poured over the dragon, and Morwen’s spell cracked like old ink and fell away.',
+    seconds: 9,
+    tint: GOLD,
+    sound: playTinkle,
+    draw(ctx, t, k) {
+      lantern(ctx, 200, 50, 1.0, Math.sin(t * 1.3) * 0.06, 1);
+      glow(ctx, W / 2 + 80, GROUND - 120, 120 + 140 * ease(k * 1.5), 0.5);
+      grass(ctx);
+      dragon(ctx, W / 2 + 80, GROUND, 1.2, 0);
+      trance(ctx, W / 2 + 80, GROUND - 120, 190, t, 0.7 * (1 - ease(k * 1.4)));
+      // Flakes of the spell falling away.
+      ctx.fillStyle = INK;
+      for (let i = 0; i < 14; i++) {
+        const fall = ease(k * 1.6 - 0.2) * (60 + (i % 5) * 40);
+        ctx.globalAlpha = Math.max(0, 1 - ease(k * 1.6 - 0.5));
+        ctx.fillRect(W / 2 - 60 + ((i * 53) % 280), GROUND - 230 + ((i * 37) % 120) + fall, 8, 5);
+      }
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    line: 'The Shadow Dragon remembered who it was: the guardian of the Great Lantern. It bowed its great head to you.',
+    seconds: 9,
+    tint: DAWN,
+    sound: () => playRoar(0.05),
+    draw(ctx, t, k) {
+      grass(ctx);
+      dragon(ctx, W / 2 + 140, GROUND, 1.15, 0);
+      hand(ctx, 260, H + 60 - ease(k * 2) * 230, 1.3, Math.sin(t * 2) * 0.05);
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 214, 130, 0.95)';
+      ctx.shadowBlur = 24;
+      ctx.fillStyle = '#fff3c4';
+      star(ctx, 300 + 380 * ease(k * 1.5), 150 - 40 * Math.sin(k * Math.PI), 12, t * 2);
+      ctx.restore();
+    },
+  },
+  {
+    line: 'High in her tower, Morwen felt her spell break. She screamed, and her ink spilled across the sky.',
+    seconds: 9,
+    tint: VIOLET,
+    sound: playPrompt,
+    draw(ctx, t, k) {
+      grass(ctx);
+      // Her tower, and the witch on top of it.
+      ctx.fillStyle = INK;
+      ctx.fillRect(W / 2 - 60, GROUND - 260, 120, 260);
+      ctx.beginPath();
+      ctx.moveTo(W / 2 - 80, GROUND - 260);
+      ctx.lineTo(W / 2, GROUND - 340);
+      ctx.lineTo(W / 2 + 80, GROUND - 260);
+      ctx.fill();
+      witch(ctx, W / 2 + 110, GROUND - 250, 0.8, Math.sin(t * 6) * 0.8);
+      inkFlood(ctx, ease(k * 1.4), t);
+      ctx.fillStyle = `rgba(30, 10, 50, ${0.35 * ease(k * 1.5 - 0.3)})`;
+      ctx.fillRect(0, 0, W, H);
+    },
+  },
+  {
+    line: 'The dragon spread its wings beside you. Only one fight remains: Morwen, the Ink Witch herself.',
+    seconds: 9,
+    tint: DUSK,
+    sound: () => playRoar(0.07),
+    draw(ctx, t, k) {
+      grass(ctx);
+      dragon(ctx, 300, GROUND, 1.0, 0);
+      hand(ctx, 120, H + 40 - ease(k * 2) * 200, 1.0, 0);
+      ctx.globalAlpha = ease(k * 2 - 0.3);
+      witch(ctx, W - 170, GROUND, 0.75, Math.sin(t * 2) * 0.5);
+      ctx.globalAlpha = 1;
+    },
+  },
+];
+
+/** After Morwen: the ink goes home, and the light comes back. */
+const WITCH_SCENES: Scene[] = [
+  {
+    line: 'Morwen fell, and all her ink ran back into the old storybooks it had come from.',
+    seconds: 8,
+    tint: VIOLET,
+    sound: playPrompt,
+    draw(ctx, t, k) {
+      grass(ctx);
+      glow(ctx, W / 2 + 160, GROUND - 40, 140, 0.5);
+      book(ctx, W / 2 + 160, GROUND - 8, 1.5, 0.5 + 0.5 * Math.sin(t * 2));
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, GROUND - 14);
+      ctx.clip();
+      witch(ctx, W / 2 - 160, GROUND - 14 + ease(k * 1.4) * 260, 1.2, Math.sin(t * 5) * 0.5);
+      ctx.restore();
+      inkFlood(ctx, 1 - ease(k * 1.3), t);
+    },
+  },
+  {
+    line: 'Her three captains faded back into their pages, and the book closed on them for good.',
+    seconds: 8,
+    tint: TEAL,
+    sound: playTinkle,
+    draw(ctx, t, k) {
+      grass(ctx);
+      glow(ctx, W / 2, GROUND - 40, 160 * (1 - ease(k * 1.5 - 0.5)), 0.6);
+      book(ctx, W / 2, GROUND - 8, 1.5, Math.max(0, 1 - ease(k * 1.4)));
+      const sink = (i: number) => ease((k - i * 0.15) * 2.2);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, GROUND - 14);
+      ctx.clip();
+      corsair(ctx, W / 2 - 150, GROUND - 14 + sink(0) * 240, 1.0, 0);
+      mage(ctx, W / 2, GROUND - 14 + sink(1) * 240, 1.0, 1, t);
+      hooded(ctx, W / 2 + 150, GROUND - 14 + sink(2) * 240, 1.0, 1, t);
+      ctx.restore();
+    },
+  },
+  {
+    line: 'The dragon carried the Great Lantern back to the top of the world, and its light shone over the land once more.',
+    seconds: 10,
+    tint: DAWN,
+    sound: playAwaken,
+    draw(ctx, t, k) {
+      ctx.fillStyle = INK;
+      SKY.forEach((s, i) => {
+        ctx.globalAlpha = ease(k * 2 - i * 0.08) * (0.4 + 0.3 * Math.sin(t * 3 + i));
+        star(ctx, s.x, s.y, s.r * 0.6, 0);
+      });
+      ctx.globalAlpha = 1;
+      const rise = ease(k * 1.2);
+      lantern(ctx, W / 2 + 40, 220 - rise * 180, 1.0, Math.sin(t * 1.2) * 0.05, 1);
+      dragon(ctx, W / 2 - 180, GROUND - rise * 60, 1.0, 0);
+      grass(ctx);
+    },
+  },
+  {
+    line: 'So when the light falls just right, look at your shadow. It remembers what you did. The end.',
+    seconds: 9,
+    tint: GOLD,
+    sound: playTinkle,
+    draw(ctx, t, k) {
+      lantern(ctx, W / 2 - 220, 70, 0.85, Math.sin(t * 1.4) * 0.06, 1);
+      grass(ctx);
+      hand(ctx, W / 2 + 200, H + 60 - ease(k * 2) * 220, 1.3, Math.sin(t * 3) * 0.1);
+      ctx.save();
+      ctx.globalAlpha = ease(k * 2.5 - 1.2);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `900 84px ${FONT}`;
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = 'rgba(255, 210, 120, 0.55)';
+      ctx.strokeText('THE END', W / 2 - 40, 250);
+      ctx.fillStyle = INK;
+      ctx.fillText('THE END', W / 2 - 40, 250);
+      ctx.restore();
+    },
+  },
+];
+
+/** The team. */
+export const TEAM_NAME = 'Four Lanterns';
+const MADE_BY = ['Aditya Raikar', 'Yash Ammanavar', 'Sairohita Balam', 'Rajeshwari Patil'];
+
+/** The rolling credits, line by line: [text, size] (0 is a gap). */
+const CREDIT_LINES: Array<[string, number]> = [
+  ['SHADOWPLAY', 72],
+  ['Escape the Lantern', 34],
+  ['', 0],
+  ['a game by', 26],
+  [TEAM_NAME.toUpperCase(), 54],
+  ['', 0],
+  ['Made by', 28],
+  ...MADE_BY.map((name): [string, number] => [name, 44]),
+  ['', 0],
+  ['The Arsenal (hand-sign fights)', 28],
+  ['Yash Ammanavar', 36],
+  ['', 0],
+  ['Built with', 28],
+  ['Meta Immersive Web SDK  ·  three.js', 32],
+  ['', 0],
+  ['3D models', 28],
+  ['European Dragon by Regina Cachoa (CC BY 4.0)', 26],
+  ['Witch by LxNazarov (CC BY 4.0)', 26],
+  ['Phoenix bird by NORBERTO-3D (CC BY 4.0)', 26],
+  ['Realistic Animated Elk by WildMesh 3D (CC BY 4.0)', 26],
+  ['Fox by pxltiger (CC BY 4.0)', 26],
+  ['Animated Wizard by Quaternius (CC BY 3.0)', 26],
+  ['Characters and horse by Quaternius (CC0)', 26],
+  ['Plants, rocks, textures and sky: Poly Haven (CC0)', 26],
+  ['Leaves: ambientCG (CC0)', 26],
+  ['', 0],
+  ['Music', 28],
+  ['Kevin MacLeod (incompetech.com), CC BY 4.0', 26],
+  ['Our Story Begins  ·  Equatorial Complex  ·  Morning', 24],
+  ['Tabuk  ·  Call to Adventure', 24],
+  ['Final Battle of the Dark Wizards  ·  Heroic Age', 24],
+  ['', 0],
+  ['Sounds', 28],
+  ['Horse neigh: Hü, Wikimedia Commons (public domain)', 24],
+  ['Horse whinny: Briefer et al. 2015, Scientific Reports (CC BY 4.0)', 24],
+  ['Red fox: Aubrey John Williams, British Library (CC BY-SA 4.0)', 24],
+  ['Stag roar: Jugrü, Wikimedia Commons (CC BY-SA 3.0)', 24],
+  ['Witch laughs: AntumDeluge, Nocturnal_Vanguard (CC0)', 24],
+  ['Every other sound, and the storyteller, made for this game', 24],
+  ['', 0],
+  ['Full credits and links: CREDITS.md', 24],
+  ['', 0],
+  ['', 0],
+  ['Thank you for playing', 44],
+];
+const CREDIT_GAP = 30;
+
+const CREDITS_SCENES: Scene[] = [
+  {
+    line: `Shadowplay  ·  a ${TEAM_NAME} game  ·  Thank you for playing`,
+    seconds: 52,
+    tint: GOLD,
+    silent: true,
+    draw(ctx, _t, k) {
+      // The whole list, rising slowly from below the ground to above the top.
+      let height = 0;
+      for (const [, size] of CREDIT_LINES) height += (size || CREDIT_GAP) * 1.45;
+      let y = GROUND + 30 - k * (height + GROUND + 60);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = INK;
+      for (const [text, size] of CREDIT_LINES) {
+        const step = (size || CREDIT_GAP) * 1.45;
+        if (size && y > -60 && y < GROUND + 80) {
+          ctx.font = `${size >= 40 ? 900 : 700} ${size}px ${FONT}`;
+          ctx.fillText(text, W / 2, y, W - 80);
+        }
+        y += step;
+      }
+    },
+  },
+];
+
+export type Reel = 'intro' | 'dragon' | 'witch' | 'credits';
+const REELS: Record<Reel, Scene[]> = { intro: SCENES, dragon: DRAGON_SCENES, witch: WITCH_SCENES, credits: CREDITS_SCENES };
+
 // Each scene lasts at least as long as its line takes to say.
-SCENES.forEach((scene, i) => (scene.seconds = Math.max(scene.seconds, lineSeconds(scene.line, `intro-${i + 1}`) + 1)));
+for (const [reel, scenes] of Object.entries(REELS)) {
+  scenes.forEach((scene, i) => {
+    if (!scene.silent) scene.seconds = Math.max(scene.seconds, lineSeconds(scene.line, `${reel}-${i + 1}`) + 1);
+  });
+}
 
 /** Paper fibres, made once: the backlit screen of a shadow theatre. */
 let fibres: HTMLCanvasElement | null = null;
@@ -337,6 +584,8 @@ export class IntroShow {
   private wallMaterial: MeshBasicMaterial;
   private scene = -1;
   private sceneTime = 0;
+  private reel: Reel = 'intro';
+  private scenes: Scene[] = SCENES;
   private time = 0;
   private sinceDraw = 1;
   private playing = false;
@@ -413,8 +662,10 @@ export class IntroShow {
     return this.playing || this.material.opacity > 0.01;
   }
 
-  start(): void {
+  start(reel: Reel = 'intro'): void {
     preloadNarration();
+    this.reel = reel;
+    this.scenes = REELS[reel];
     this.playing = true;
     this.scene = -1;
     this.time = 0;
@@ -423,7 +674,7 @@ export class IntroShow {
 
   /** Dev: straight on to the next scene. */
   skipScene(): void {
-    if (this.playing && this.scene < SCENES.length - 1) this.next();
+    if (this.playing && this.scene < this.scenes.length - 1) this.next();
   }
 
   stop(): void {
@@ -441,9 +692,9 @@ export class IntroShow {
     if (!this.playing) return null;
     this.time += dt;
     this.sceneTime += dt;
-    const scene = SCENES[this.scene];
+    const scene = this.scenes[this.scene];
     if (this.sceneTime >= scene.seconds) {
-      if (this.scene === SCENES.length - 1) {
+      if (this.scene === this.scenes.length - 1) {
         this.playing = false;
         return null;
       }
@@ -454,19 +705,21 @@ export class IntroShow {
       this.sinceDraw = 0;
       this.draw();
     }
-    return SCENES[this.scene].line;
+    return this.scenes[this.scene].line;
   }
 
   private next(): void {
     this.scene++;
     this.sceneTime = 0;
-    SCENES[this.scene].sound?.();
-    narrate(`intro-${this.scene + 1}`, SCENES[this.scene].line);
+    const scene = this.scenes[this.scene];
+    scene.sound?.();
+    if (scene.silent) stopNarration();
+    else narrate(`${this.reel}-${this.scene + 1}`, scene.line);
     this.draw();
   }
 
   private draw(): void {
-    const scene = SCENES[this.scene];
+    const scene = this.scenes[this.scene];
     const ctx = this.canvas.getContext('2d')!;
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
     // Every frame starts from a clean pen: fully opaque, painting normally.

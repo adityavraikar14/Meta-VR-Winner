@@ -1,5 +1,13 @@
 # Credits
 
+**Shadowplay: Escape the Lantern** is a game by **Four Lanterns**:
+Aditya Raikar, Yash Ammanavar, Sairohita Balam and Rajeshwari Patil.
+The Arsenal (hand-sign boss fights) is by Yash Ammanavar.
+
+Built with the Meta Immersive Web SDK and three.js (MIT). The project scaffold
+(`src/assets.ts`, `public/ui/welcome.uikitml`, `public/gltf/webxr-banner/`) comes
+from the IWSDK project template (MIT, Meta Platforms).
+
 Third-party assets are public domain (CC0 1.0) or Creative Commons Attribution
 (CC BY 4.0), credited below and on the in-game Credits page.
 
@@ -8,8 +16,6 @@ Third-party assets are public domain (CC0 1.0) or Creative Commons Attribution
 | File | Source | Author | License |
 |---|---|---|---|
 | `public/gltf/horse.glb` | [Horse](https://poly.pizza/m/qvTrSG9pZF) via Poly Pizza | Quaternius | CC0 |
-| `public/gltf/stag.glb` | [Stag](https://poly.pizza/m/tQdzbZ1Cmw) via Poly Pizza | Quaternius | CC0 |
-| `public/gltf/fox.glb` | [Fox](https://poly.pizza/m/Bc97C66HKi) via Poly Pizza | Quaternius | CC0 |
 | `public/gltf/dragon.glb` | [European Dragon](https://sketchfab.com/models/82f393a2e6c048ad80c171ce3b3a7b87) | Regina Cachoa | CC BY 4.0 |
 | `public/gltf/witch.glb` | [Witch](https://sketchfab.com/models/fd9a39890fc64ae8bb3cad97e4a2d4f3) | LxNazarov | CC BY 4.0 |
 | `public/gltf/phoenix.glb` | [phoenix bird](https://sketchfab.com/models/844ba0cf144a413ea92c779f18912042) | NORBERTO-3D | CC BY 4.0 |
@@ -64,6 +70,9 @@ Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution
 | `public/textures/leaf*.{png,jpg}` | [Leaf 001](https://ambientcg.com/view?id=Leaf001), ambientCG | CC0 |
 | `public/textures/sky.hdr` | [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky), Poly Haven | CC0 |
 | `public/textures/studio.hdr` | [Brown Photostudio 02](https://polyhaven.com/a/brown_photostudio_02), Poly Haven (no longer used) | CC0 |
+
+The storyteller's narration (`public/audio/voice/`) was made for this game with
+the speech synthesizer built into Windows, then pitched and given a little room echo.
 
 Everything else (sounds, grass, water, bamboo, vines, giant leaves, fireflies,
 shadow puppets, driftwood, mine timbers, crystals, the earth slab, and the horse whim's

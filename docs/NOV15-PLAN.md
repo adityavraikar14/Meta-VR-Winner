@@ -127,3 +127,11 @@ Legend: [x] done and checked · [ ] not done yet
 - [x] **Everything you draw comes alive:** circle / triangle / box are weapons; any other stroke (a line, a squiggle, an open shape) comes alive as an ink creature (lines are thickened into a body). A dot vanishes at once with a puff; with three alive, the oldest makes room
 - [x] **Captain Rook relaxed:** attacks every 5.2 s (was 3.5), 3.8 s when hurt (was 2.5), health 75 (was 90)
 - [x] **Dragon choice explained, and it waits:** a big card says what Shadow (your Training powers) and Arsenal (the Arena's signs) give you; touch and hold a stone; nothing starts until you choose (the Quick Tour no longer skips it)
+
+## 16. Nov 17: the ending, credits, a studio name, tidy for submission
+- [x] **Quick Tour: 3 more shadow levels** (10 stops): The Climb (tilt your hand into a ramp), The Kick (swing your hand to kick the spark), Long Shadow (hand towards the lantern stretches the shadow)
+- [x] **Beaten fighters don't just vanish:** they fall (death clip), their body drains to black ink, they sink into a spreading ink puddle and dissolve with ink rising off them; "Rook is defeated!" then "melts back into the ink". Every captain, Morwen and every Arena rival (src/fight/ink-death.ts)
+- [x] **Story films:** after the Shadow Dragon, 4 narrated scenes (the trance breaks, the dragon bows, Morwen screams, one fight left); after Morwen, 4 more (her ink drains into the storybooks, the captains sink into their pages, the dragon carries the Lantern home, THE END), then the rolling credits. On the Quick Tour, the dragon's film and the credits close the tour. Narration recorded like the prologue
+- [x] **Team name: Four Lanterns.** A calm studio ident in the headset (four lanterns light one by one over the name, fade in and out once), and "A Four Lanterns game" on the start page
+- [x] **Rolling credits** (end of the story, and Settings → Credits → Roll): the team (Aditya Raikar, Yash Ammanavar, Sairohita Balam, Rajeshwari Patil), the Arsenal by Yash, IWSDK and three.js, every model, the music and every sound with its licence
+- [x] **Licences audited:** every third-party file credited in CREDITS.md and in the game (the fox and stag recordings' CC BY-SA, which were missing in the game, added). Unused files removed: an uncredited chime sound and two old animal models. Planning notes moved to docs/

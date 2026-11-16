@@ -549,19 +549,19 @@ export class InkDuel {
         if (this.trainer && this.noteTime <= 0) this.caption = this.trainer.caption;
         break;
       case 'won':
-        this.caption = foe ? `You win the duel! ${this.spec.name} melts back into ink.` : 'You win the duel! Your ink flew true.';
+        this.caption = foe ? (this.modeTime < 2.4 ? `${this.spec.name} is defeated!` : `${this.spec.name} melts back into the ink they came from.`) : 'You win the duel! Your ink flew true.';
         this.rival.fall = Math.min(1, this.modeTime / 1.2);
         if (foe) {
           // They fall, then dissolve into a cloud of ink.
-          foe.melt = Math.min(1, Math.max(0, (this.modeTime - 1.8) / 1.4));
-          if (foe.melt > 0 && foe.melt < 1 && Math.random() < dt * 40) {
+          foe.melt = Math.min(1, Math.max(0, (this.modeTime - 2.4) / 2.4));
+          if (foe.melt > 0.15 && foe.melt < 1 && Math.random() < dt * 70) {
             foe.chestAt(this.v);
             this.v.x += (Math.random() - 0.5) * 0.1;
             this.v.y += (Math.random() - 0.6) * 0.2;
             this.splashes.emit(this.v, this.w.set(0, 0.15 + Math.random() * 0.2, 0), { life: 0.9, gravity: -0.3, drag: 0.5, size: [0.014, 0.03], from: this.spec.glow, alpha: 0.8 });
           }
         }
-        if (this.modeTime > (foe ? 4.2 : 3.5)) this.done = true;
+        if (this.modeTime > (foe ? 5.6 : 3.5)) this.done = true;
         break;
       case 'lost':
         this.caption = `Splat! ${foe ? this.spec.name : 'The Rival'} wins this one. Rematch from the menu!`;

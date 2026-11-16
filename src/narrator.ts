@@ -13,7 +13,8 @@ import { isMuted } from './audio.js';
 /**
  * Line ids that have a recorded file in public/audio/voice/, with its length
  * in seconds. The Quest has no speech voice of its own, so the prologue is
- * recorded; device speech is only the fallback.
+ * recorded (the story's films after the dragon and the witch too); device
+ * speech is only the fallback.
  */
 const RECORDED = new Map<string, number>([
   ['intro-1', 5.44],
@@ -25,6 +26,14 @@ const RECORDED = new Map<string, number>([
   ['intro-7', 14.13],
   ['intro-8', 15.78],
   ['intro-9', 11.47],
+  ['dragon-1', 8.44],
+  ['dragon-2', 10.55],
+  ['dragon-3', 10.65],
+  ['dragon-4', 11.16],
+  ['witch-1', 7.57],
+  ['witch-2', 7.49],
+  ['witch-3', 8.79],
+  ['witch-4', 11.19],
 ]);
 const cache = new Map<string, HTMLAudioElement>();
 

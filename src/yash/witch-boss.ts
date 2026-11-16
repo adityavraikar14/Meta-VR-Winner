@@ -43,9 +43,9 @@ const WALK_IN = 1.6;
 const WAIT_CLOSE = 2.2;
 const WALK_OUT = 1.6;
 /** Beaten: she falls, then melts away; the level moves on after this long. */
-const MELT_AFTER = 1.4;
-const MELT_TIME = 2;
-const FINISH_TIME = 6;
+const MELT_AFTER = 2.2;
+const MELT_TIME = 2.6;
+const FINISH_TIME = 6.6;
 const LOAD_TIMEOUT = 30;
 const PLATE_WIDTH = 0.9;
 const PLATE_RISE = 0.32;
@@ -264,6 +264,8 @@ export class WitchBoss implements Boss {
         break;
       case 'defeated':
         if (FINISH_TIME - this.timer > MELT_AFTER) model.melt = Math.min(1, model.melt + dt / MELT_TIME);
+        // Ink rising off them as they go.
+        if (model.melt > 0.15 && model.melt < 1 && Math.random() < dt * 10) this.bursts.spawn(this.center, 0x6a20a8, 0.18 + Math.random() * 0.15, 0.6);
         if (this.timer <= 0) this.finished = true;
         break;
     }

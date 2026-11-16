@@ -19,7 +19,7 @@ import { ABILITY_NAME, rivalIndex, RIVALS, setRivalIndex, winsAgainst } from './
 export type MenuPage = 'home' | 'chapters' | 'settings' | 'credits' | 'bag' | 'battles' | 'journal' | 'rivals';
 
 /** What the menu asks the game to do. */
-export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'training' } | { do: 'tour' } | { do: 'arena'; boss?: string };
+export type MenuAction = { do: 'play' } | { do: 'story' } | { do: 'chapter'; index: number } | { do: 'table' } | { do: 'duel' } | { do: 'daily' } | { do: 'workshop' } | { do: 'pets' } | { do: 'training' } | { do: 'tour' } | { do: 'credits' } | { do: 'arena'; boss?: string };
 
 type Draw = (kicker: string, title: string, body: string, footer?: string) => void;
 
@@ -473,6 +473,7 @@ export class MainMenu {
       { label: 'Back', run: () => this.go('settings'), primary: true },
       { label: 'Prev', run: step(-1) },
       { label: 'Next', run: step(1) },
+      { label: 'Roll', run: () => ({ do: 'credits' }) },
     ];
   }
 
@@ -503,14 +504,16 @@ const ARENA: Array<{ id: string; name: string; title: string; style: string }> =
 
 /** Who made what (full list with links in CREDITS.md). */
 const CREDITS: Array<[string, string]> = [
+  ['A Four Lanterns game', 'Made by Aditya Raikar · Yash Ammanavar · Sairohita Balam · Rajeshwari Patil. Push Roll to watch the credits'],
   ['The Dragon, the Phoenix, the Witch', 'European Dragon by Regina Cachoa · phoenix bird by NORBERTO-3D · Witch by LxNazarov (Sketchfab, CC BY 4.0)'],
   ['The Duel Rivals', 'Captain Rook, Vex, Mako, Sable, Sgt. Vance and Kai: animated characters by Quaternius (CC0); Thorne: Animated Wizard by Quaternius (CC-BY); via Poly Pizza'],
   ['Animals', 'Elk by WildMesh 3D · Fox by pxltiger (Sketchfab, CC BY 4.0) · Horse by Quaternius (CC0)'],
   ['Animal sounds', 'Horse neigh: Hü, Wikimedia Commons (public domain) · Horse whinny: Briefer, Maigrot, Mandel, Freymond, Bachmann & Hillmann 2015, Scientific Reports (CC BY 4.0)'],
+  ['More sounds', 'Red fox: Aubrey John Williams, British Library, Wikimedia Commons (CC BY-SA 4.0) · Stag roar: Jugrü, Wikimedia Commons (CC BY-SA 3.0) · Witch laughs: AntumDeluge, Nocturnal_Vanguard, OpenGameArt (CC0)'],
   ['Music', 'Kevin MacLeod (incompetech.com), CC BY 4.0: Our Story Begins · Equatorial Complex · Morning · Tabuk · Final Battle of the Dark Wizards · Heroic Age · Call to Adventure'],
   ['The World', 'Plants, rocks, textures and the daylight sky: Poly Haven (CC0) · Leaves: ambientCG (CC0)'],
   ['The Arena', 'The Arsenal, a hand-sign fight with sword, spear, power ball, wall and blaster, by Yash Ammanavar'],
-  ['Made With', 'Meta Immersive Web SDK and three.js · Machines, forge, brewing, sounds and shadows made in code'],
+  ['Made With', 'Meta Immersive Web SDK and three.js (MIT) · Machines, forge, brewing, sounds, shadows and the storyteller’s voice made for this game'],
 ]
 
 /** Where the story picks up: the saved level, or the end once everything is played. */

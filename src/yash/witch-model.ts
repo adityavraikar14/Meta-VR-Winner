@@ -28,6 +28,7 @@ import {
 } from '@iwsdk/core';
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { makePuddle, meltLook, puddleLook } from '../fight/ink-death.js';
 
 const WITCH_URL = 'gltf/witch.glb';
 /** The height her ward size was tuned for, metres. */
@@ -91,6 +92,8 @@ export class WitchModel {
   released: Object3D | null = null;
   /** 0 → 1 as she melts away, beaten. */
   melt = 0;
+  /** The ink she melts into. */
+  private readonly puddle: Mesh;
 
   constructor(gltf: GLTF, private readonly height: number) {
     const model = cloneRig(gltf.scene);
@@ -98,6 +101,8 @@ export class WitchModel {
     this.root.name = 'WitchBoss';
     this.body.add(model);
     this.root.add(this.body);
+    this.puddle = makePuddle(0.18 * (this.height / ORIGINAL_HEIGHT));
+    this.root.add(this.puddle);
     model.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;
@@ -266,9 +271,11 @@ export class WitchModel {
     for (const { material, color } of this.materials) {
       material.color.copy(color).lerp(STRUCK, h * 0.7);
       material.transparent = this.melt > 0;
-      material.opacity = 1 - this.melt;
-      material.depthWrite = this.melt < 0.5;
+      if (this.melt <= 0) material.opacity = 1;
+      meltLook(material, this.melt);
     }
+    if (this.melt > 0) this.body.position.y = -this.melt * this.height * 0.22;
+    puddleLook(this.puddle, this.melt);
 
     const warded = this.warded;
     this.wardMaterial.opacity += ((warded ? 0.95 : 0) - this.wardMaterial.opacity) * Math.min(1, dt * 8);

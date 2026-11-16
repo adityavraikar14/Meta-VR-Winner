@@ -66,9 +66,9 @@ const LOB_TIME = 1.2;
 const LOB_GRAVITY = 2;
 /** Seconds between reactions (a roll, a duck) to what the player is doing. */
 const REACT_EVERY = 2.4;
-const MELT_AFTER = 1.4;
-const MELT_TIME = 2;
-const FINISH_TIME = 5.5;
+const MELT_AFTER = 2.2;
+const MELT_TIME = 2.6;
+const FINISH_TIME = 6.4;
 const LOAD_TIMEOUT = 30;
 /** A move's name stays over them this long. */
 const SHOUT_TIME = 2.2;
@@ -360,6 +360,8 @@ export class RivalBoss implements Boss {
         break;
       case 'defeated':
         if (FINISH_TIME - this.timer > MELT_AFTER) model.melt = Math.min(1, model.melt + dt / MELT_TIME);
+        // Ink rising off them as they go.
+        if (model.melt > 0.15 && model.melt < 1 && Math.random() < dt * 10) this.bursts.spawn(model.chestAt(this.tmp), this.spec.glow, 0.18 + Math.random() * 0.15, 0.6);
         if (this.timer <= 0) this.finished = true;
         break;
     }

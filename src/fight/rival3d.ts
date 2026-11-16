@@ -24,6 +24,7 @@ import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { RivalMove, RivalSpec } from './rivals.js';
 import { cry } from '../voices.js';
+import { makePuddle, meltLook, puddleLook } from './ink-death.js';
 
 /**
  * A duel rival in 3D: any of the roster's rigged, animated models. They walk
@@ -124,6 +125,8 @@ export class Rival3D {
   releasedBy: RivalMove | null = null;
   /** 0 → 1 as they melt away, beaten. */
   melt = 0;
+  /** The ink they melt into. */
+  private readonly puddle: Mesh;
   /** Seconds of freeze on a big hit (hit-stop). */
   freeze = 0;
 
@@ -141,6 +144,8 @@ export class Rival3D {
     this.root.name = 'Rival3D';
     this.body.add(model);
     this.root.add(this.body);
+    this.puddle = makePuddle(this.spec.girth * 2.2);
+    this.root.add(this.puddle);
     model.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;
@@ -455,12 +460,11 @@ export class Rival3D {
     this.body.position.z = -0.03 * h;
     for (const { material, color } of this.materials) {
       material.color.copy(color).lerp(STRUCK, h * 0.7);
-      if (this.melt > 0) {
-        material.transparent = true;
-        material.opacity = 1 - this.melt;
-        material.depthWrite = this.melt < 0.5;
-      }
+      meltLook(material, this.melt);
     }
+    // Beaten: down into the spreading ink.
+    if (this.melt > 0) this.body.position.y = -this.melt * this.spec.height * 0.22;
+    puddleLook(this.puddle, this.melt);
 
     if (this.ward && this.wardMaterial) {
       const warded = this.warded;
