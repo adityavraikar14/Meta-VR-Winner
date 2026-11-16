@@ -1,3 +1,4 @@
+import { shadowOnScreen } from './shadow-arms.js';
 import { AirSketch, type SketchHand } from './air-sketch.js';
 import type { Sketch } from './sketch.js';
 import { Group, type Mesh, type MeshBasicMaterial, Quaternion, Vector3 } from '@iwsdk/core';
@@ -22,10 +23,10 @@ import { devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
 
 /**
- * The Arsenal's way of fighting, in Story mode's Shadow Dragon battle: hold
- * an invisible ball to arm, then sign for a sword, spear, power ball, wall,
- * blaster, shield or slingshot (src/yash/gestures.ts and arsenal.ts, used
- * as they are). Hands come from stage.joints, so headset, emulator and
+ * The Arsenal's way of fighting, in Story mode's Shadow Dragon battle: one
+ * sign, its shadow on the screen, and the weapon comes straight away (a
+ * sword, power ball, shield, blaster or slingshot; see src/yash/gestures.ts
+ * and arsenal.ts). Hands come from stage.joints, so headset, emulator and
  * webcam hands all work; everything runs in the battle group's own space.
  */
 
@@ -95,6 +96,7 @@ export class ArsenalPlayer implements Foe {
   private armedLabel = new Label(0.04);
   private icons = {} as Record<Item, Label>;
   private v = new Vector3();
+  private onPage = new Vector3();
 
   constructor(
     parent: Group,
@@ -108,7 +110,7 @@ export class ArsenalPlayer implements Foe {
     this.ring = makeRing(0.07, 0x9fe8ff);
     this.ringMaterial = this.ring.material as MeshBasicMaterial;
     this.ring.visible = false;
-    this.armedLabel.set('Armed! Make a sign:', '#bff0ff');
+    this.armedLabel.set('Make a sign:', '#bff0ff');
     this.armedLabel.sprite.visible = false;
     this.root.add(this.ring, this.armedLabel.sprite);
     for (const item of ITEMS) {
@@ -154,9 +156,13 @@ export class ArsenalPlayer implements Foe {
 
     const anyHand = this.hands.left.tracked || this.hands.right.tracked;
     if (anyHand && this.target.fighting) {
-      classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
-      this.recognizer.update(dt, this.reading, this.events);
-      this.sketch.update(dt, sketchHands(this.hands, this.sketchSlots), () => this.recognizer.phase === 'armed' || this.arsenal.held?.item === 'sling');
+      // A sign counts only with its shadow on the screen (the hand up in the lantern's light).
+      classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate, (hand) =>
+        shadowOnScreen(group.localToWorld(this.onPage.copy(hand.palm))),
+      );
+      this.recognizer.update(dt, this.reading, this.events, (item) => this.arsenal.allows(item));
+      // Draw in the air with any hand (not while aiming the slingshot).
+      this.sketch.update(dt, sketchHands(this.hands, this.sketchSlots), () => this.arsenal.held?.item === 'sling');
     }
     for (const event of this.events) {
       if (event.type === 'armed') {

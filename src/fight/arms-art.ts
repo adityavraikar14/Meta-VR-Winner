@@ -115,7 +115,8 @@ export function drawSketch(g: CanvasRenderingContext2D, cx: number, cy: number, 
 
 /** Which weapon each drawing becomes (in the story's fights). */
 export const DRAWN_WEAPON: Record<Sketch, ShadowShape> = { sword: 'blade', star: 'vee', triangle: 'point', circle: 'fist', zigzag: 'horns', spiral: 'shaka', box: 'palm' };
-export const SKETCH_ORDER: Sketch[] = ['sword', 'circle', 'triangle', 'star', 'zigzag', 'spiral', 'box'];
+/** The drawings that become weapons in the story's fights (the same three the hand signs make). */
+export const SKETCH_ORDER: Sketch[] = ['circle', 'triangle', 'box'];
 
 /** Short names for each hand shape, for the chart. */
 export const SHAPE_LABEL: Record<ShadowShape, string> = {
@@ -147,7 +148,7 @@ export const SHAPE_USE: Record<ShadowShape, string> = {
 
 /**
  * The whole chart, on a canvas already set up at layout size w × h (about
- * 1024 × 512): ten hand shapes in two rows, then the seven drawings.
+ * 1024 × 512): the three hand shapes, then the three drawings, then drawing ink.
  */
 export function drawArmsChart(g: CanvasRenderingContext2D, w: number, h: number): void {
   g.clearRect(0, 0, w, h);
@@ -166,13 +167,13 @@ export function drawArmsChart(g: CanvasRenderingContext2D, w: number, h: number)
   const after = 26 + g.measureText('SHADOW WEAPONS').width + 22;
   g.fillStyle = '#c9d4ec';
   g.font = `700 15px ${FONT}`;
-  g.fillText('Hold a hand shape a moment: the weapon forms. Punch towards them to throw it.', after, 32, w - after - 24);
+  g.fillText('Hold a sign up in the light (its shadow on the screen): the weapon forms. Punch to throw.', after, 32, w - after - 24);
 
-  const cellW = (w - 40) / 5;
-  const rowH = 158;
+  const cellW = (w - 40) / SHAPES.length;
+  const rowH = 200;
   SHAPES.forEach((shape, i) => {
-    const col = i % 5;
-    const row = Math.floor(i / 5);
+    const col = i;
+    const row = 0;
     const x = 20 + col * cellW + cellW / 2;
     const y = 58 + row * rowH;
     const spec = ARMS[shape];
@@ -181,21 +182,21 @@ export function drawArmsChart(g: CanvasRenderingContext2D, w: number, h: number)
     g.beginPath();
     g.roundRect(x - cellW / 2 + 5, y, cellW - 10, rowH - 8, 14);
     g.fill();
-    drawHand(g, x, y + 62, 38, shape, color);
+    drawHand(g, x, y + 72, 48, shape, color);
     g.textAlign = 'center';
     g.fillStyle = '#ffffff';
-    g.font = `800 16px ${FONT}`;
-    g.fillText(SHAPE_LABEL[shape], x, y + 112, cellW - 16);
+    g.font = `800 20px ${FONT}`;
+    g.fillText(SHAPE_LABEL[shape], x, y + 138, cellW - 16);
     g.fillStyle = color;
-    g.font = `900 15px ${FONT}`;
-    g.fillText(spec.name, x, y + 130, cellW - 16);
+    g.font = `900 20px ${FONT}`;
+    g.fillText(spec.name, x, y + 162, cellW - 16);
     g.fillStyle = '#9fb3d9';
-    g.font = `600 13px ${FONT}`;
-    g.fillText(SHAPE_USE[shape], x, y + 146, cellW - 16);
+    g.font = `600 15px ${FONT}`;
+    g.fillText(SHAPE_USE[shape], x, y + 184, cellW - 16);
   });
 
   // The drawings.
-  const y = 58 + rowH * 2 + 8;
+  const y = 58 + rowH + 14;
   g.textAlign = 'left';
   g.fillStyle = '#9fe8ff';
   g.font = `900 16px ${FONT}`;
@@ -209,4 +210,8 @@ export function drawArmsChart(g: CanvasRenderingContext2D, w: number, h: number)
     g.font = `700 13px ${FONT}`;
     g.fillText(ARMS[DRAWN_WEAPON[sketch]].name, x, y + 56, each - 6);
   });
+  g.textAlign = 'left';
+  g.fillStyle = '#c9d4ec';
+  g.font = `700 15px ${FONT}`;
+  g.fillText('Pinch and draw: a line is ink to grab and throw; any other closed shape comes alive.', 26, y + 96, w - 52);
 }

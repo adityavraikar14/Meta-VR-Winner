@@ -218,6 +218,8 @@ export class DragonBattle {
     this.arms = new ShadowArms(this.group);
     this.arms.exclude = new Set<ShadowShape>(['palm']);
     this.sketch = new AirSketch(this.group, (sketch, h) => {
+      // As in every fight: a circle is a Shadow Ball, a triangle a Shadow Spear (and the open palm is the shield).
+      if (sketch !== 'circle' && sketch !== 'triangle' && sketch !== 'box') return;
       const shape = DRAWN_WEAPON[sketch];
       if (shape === 'palm') {
         this.flash('A shield! Here your open palm is your shield: raise it against the fire', 2);
@@ -225,7 +227,7 @@ export class DragonBattle {
       }
       this.arms.give(h, shape);
       sfx.armed();
-      this.flash(`You drew your ${ARMS[shape].name}! ${shape === 'blade' ? 'Swing it to slash, and cut the fire' : 'Punch towards the dragon to throw it'}`, 2.2);
+      this.flash(`You drew your ${ARMS[shape].name}! Punch towards the dragon to throw it`, 2.2);
     });
 
     devInfo.battle = () => this.state;

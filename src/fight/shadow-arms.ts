@@ -17,29 +17,29 @@ import {
 } from '@iwsdk/core';
 
 import type { HandState } from '../creatures/hand-input.js';
+import { PAPER_HEIGHT, PAPER_WIDTH, stage } from '../stage-state.js';
 
 /**
- * Shadow Arms: in the story's fights, the shape your hand makes (the shadow
- * it casts) becomes a weapon of shadow in that hand. Hold the shape for a
- * moment and the weapon forms; punch towards your foe to let it fly (swing,
- * for the sword). The Arsenal's signs stay in the Arsenal: here it is all
- * hand shadows.
+ * Shadow Arms: in the story's fights, the shadow your hand casts on the
+ * screen becomes a weapon of shadow in that hand. Three signs, each one
+ * clearly different, and nothing else, so play stays clear:
  *
- *   Fist                      Shadow Ball      a heavy ball: punch to throw
- *   Flat hand, thumb in       Shadow Sword     cuts ink out of the air; swing it to send a slash
- *   Open palm, thumb out      Shadow Shield    hold it up: ink stops on it
- *   Index finger              Shadow Spear     a fast, straight throw
- *   Peace sign                Twin Stars       two shuriken bending in from both sides
- *   Three fingers             Shadow Claw      three slashes at once
- *   Index and pinky (horns)   Lightning        punch, and a bolt falls on them from above
- *   Thumb and pinky           Boomerang        swings wide and comes in from the side
- *   Thumb and index (an L)    Fire Bolt        the fastest of all, light damage
- *   Thumb up                  Shadow Hammer    a slow, heavy lob that hits hardest
+ *   Fist (thumb any way)      Shadow Ball      punch towards your foe to throw it
+ *   One finger pointing       Shadow Spear     punch: a fast, straight throw
+ *   Open palm, towards them   Shadow Shield    hold it up: ink stops on it
+ *
+ * Pinch to draw instead (ink, or a drawing that comes alive): a pinching
+ * hand never makes a sign. A sign only counts when its shadow is on the
+ * screen (the hand up in the lantern's light), and only one weapon to throw
+ * is held at a time, so two hands never fill with weapons at once.
+ *
+ * (The other shapes below are kept for the art and old code paths, but no
+ * hand makes them any more.)
  */
 export type ShadowShape = 'fist' | 'blade' | 'palm' | 'point' | 'vee' | 'three' | 'horns' | 'shaka' | 'ell' | 'thumb';
 
-/** Every shape, in teaching order. */
-export const SHAPES: ShadowShape[] = ['fist', 'blade', 'palm', 'point', 'vee', 'three', 'horns', 'shaka', 'ell', 'thumb'];
+/** The shapes a hand can make, in teaching order. */
+export const SHAPES: ShadowShape[] = ['fist', 'point', 'palm'];
 
 /** Each shape's fingers (thumb, index, middle, ring, pinky): 1 straight, 0 curled. */
 export const POSES: Record<ShadowShape, readonly [number, number, number, number, number]> = {
@@ -81,28 +81,60 @@ export const ARMS: Record<ShadowShape, ArmSpec> = {
 
 /** Out: straight; in: curled. Between the two, a finger counts as neither. */
 const OUT = 0.72;
-const IN = 0.5;
-const THUMB_OUT = 0.8;
-const THUMB_IN = 0.62;
+const IN = 0.55;
+/** A fist is generous: real fists rarely close fully, and the ring finger lags... */
+const FIST_IN = 0.6;
+/** ...but its index is curled right in, unlike a pinch (where the index only bends to meet the thumb). */
+const FIST_INDEX = 0.3;
+/** The open palm's thumb only has to be away from the hand a little. */
+const THUMB_OPEN = 0.55;
+/** Thumb and index this close: a pinch (drawing), never a sign. */
+const PINCHING = 0.045;
 
-/** Which shape a hand is making, if any. */
+/** A fist: all four fingers curled in, the index right in (the thumb may wrap round or rest on top). */
+export function isFist(hand: HandState): boolean {
+  const e = hand.ext;
+  return e.index < FIST_INDEX && e.middle < FIST_IN && e.ring < FIST_IN && e.pinky < FIST_IN;
+}
+
+/** Drawing: thumb and index pinched together, and not a fist (a fist's thumb can rest near the index). */
+export function isDrawing(hand: HandState): boolean {
+  return hand.tracked && (hand.pinching || hand.pinchGap < PINCHING) && !isFist(hand);
+}
+
+/** Which shape a hand is making, if any: a fist, one finger, or an open palm. */
 export function classifyShape(hand: HandState): ShadowShape | null {
   if (!hand.tracked) return null;
+  if (isFist(hand)) return 'fist';
+  // A pinching hand is drawing.
+  if (isDrawing(hand)) return null;
   const e = hand.ext;
-  const o = (v: number) => v > OUT;
-  const i = (v: number) => v < IN;
-  const thumbOut = e.thumb > THUMB_OUT;
-  const thumbIn = e.thumb < THUMB_IN;
   const [ix, mi, ri, pi] = [e.index, e.middle, e.ring, e.pinky];
-  if (o(ix) && o(mi) && o(ri) && o(pi)) return thumbOut ? 'palm' : thumbIn ? 'blade' : null;
-  if (i(ix) && i(mi) && i(ri) && i(pi)) return thumbOut ? 'thumb' : thumbIn ? 'fist' : null;
-  if (o(ix) && o(mi) && o(ri) && i(pi)) return 'three';
-  if (o(ix) && o(mi) && i(ri) && i(pi)) return 'vee';
-  if (o(ix) && i(mi) && i(ri) && o(pi)) return 'horns';
-  if (i(ix) && i(mi) && i(ri) && o(pi) && thumbOut) return 'shaka';
-  if (o(ix) && i(mi) && i(ri) && i(pi)) return thumbOut ? 'ell' : 'point';
+  // One finger: the index straight, the others curled (the thumb any way).
+  if (ix > OUT && mi < IN && ri < IN && pi < IN) return 'point';
+  // Open palm: every finger straight.
+  if (ix > OUT && mi > OUT && ri > OUT && pi > OUT && e.thumb > THUMB_OPEN) return 'palm';
   return null;
 }
+
+/**
+ * Is the hand in the lantern's light, its shadow on the screen? `palm` is in
+ * world space. With no screen (tests), always.
+ */
+export function shadowOnScreen(palm: Vector3): boolean {
+  const paper = stage.paper;
+  if (!paper) return true;
+  const p = paper.worldToLocal(onScreenTmp.copy(palm));
+  const [lx, ly, lz] = stage.lantern;
+  // Between the screen and the lantern...
+  if (p.z <= 0.01 || p.z >= lz - 0.02) return false;
+  // ...and its shadow (from the lantern, through the palm, onto the screen) lands on the screen.
+  const t = lz / (lz - p.z);
+  const x = lx + (p.x - lx) * t;
+  const y = ly + (p.y - ly) * t;
+  return Math.abs(x) < PAPER_WIDTH / 2 + 0.02 && Math.abs(y) < PAPER_HEIGHT / 2 + 0.02;
+}
+const onScreenTmp = new Vector3();
 
 /** A shot leaving a hand: what, from where (stage-local), and the hand's swing. */
 export interface ArmShot {
@@ -187,6 +219,8 @@ const SWING = 1.5;
 const COOLDOWN = 0.5;
 /** A formed weapon waits this long unused, then fades. */
 const IDLE_LIMIT = 8;
+/** After a pinch (drawing) ends, that hand makes no sign for this long, so letting go of a line can't form a weapon. */
+const QUIET_AFTER_PINCH = 0.45;
 
 interface HandArm {
   shape: ShadowShape | null;
@@ -203,6 +237,14 @@ interface HandArm {
   seen: boolean;
   /** Given by a drawing, not a hand shape: it stays until thrown (or left too long). */
   drawn: boolean;
+  /** Seconds left in which this hand makes no sign (it was just drawing). */
+  quiet: number;
+  /** The hand's shadow is on the screen (it can make a sign). */
+  onScreen: boolean;
+  /** Making a fist now (so a pinch it seems to make is not drawing). */
+  fist: boolean;
+  /** Seconds a sign has been made with no shadow on the screen. */
+  offTime: number;
 }
 
 export class ShadowArms {
@@ -212,7 +254,7 @@ export class ShadowArms {
   /** Shapes this fight handles itself (the dragon fight keeps its own palm mirror). */
   exclude: ReadonlySet<ShadowShape> = new Set();
   private readonly hands: HandArm[] = [0, 1].map(() => ({
-    shape: null, forming: null, formTime: 0, lost: 0, idle: 0, cooldown: 0, model: null, prev: new Vector3(), vel: new Vector3(), seen: false, drawn: false,
+    shape: null, forming: null, formTime: 0, lost: 0, idle: 0, cooldown: 0, model: null, prev: new Vector3(), vel: new Vector3(), seen: false, drawn: false, quiet: 0, onScreen: false, fist: false, offTime: 0,
   }));
   private readonly v = new Vector3();
   private readonly w = new Vector3();
@@ -248,10 +290,20 @@ export class ShadowArms {
     return Math.max(...this.hands.map((arm) => (arm.forming && arm.forming !== arm.shape ? Math.min(1, arm.formTime / FORM_TIME) : 0)));
   }
 
+  /** Seconds either hand has been making a sign out of the light (its shadow off the screen). */
+  offScreenSign(): number {
+    return Math.max(this.hands[0].offTime, this.hands[1].offTime);
+  }
+
+  /** Is this hand's shadow on the screen (so a sign it makes counts)? */
+  onScreen(h: number): boolean {
+    return this.hands[h].onScreen;
+  }
+
   /** This hand is making (or holding) a shadow weapon: no drawing with it. */
   busy(h: number): boolean {
     const arm = this.hands[h];
-    return arm.shape !== null || (arm.forming !== null && arm.formTime > 0.12);
+    return arm.shape !== null || arm.fist || (arm.forming !== null && arm.formTime > 0.12);
   }
 
   /** Does a held sword or shield stand in the way of this point? */
@@ -291,7 +343,17 @@ export class ShadowArms {
       arm.seen = true;
       arm.cooldown = Math.max(0, arm.cooldown - dt);
 
-      let now = classifyShape(hand);
+      // Drawing comes first: a pinch drops a hand-made weapon from that hand at once.
+      const drawing = isDrawing(hand);
+      arm.fist = isFist(hand);
+      if (drawing && arm.shape && !arm.drawn) this.disarm(arm);
+      arm.quiet = drawing ? QUIET_AFTER_PINCH : Math.max(0, arm.quiet - dt);
+      // Only a hand up in the light, its shadow on the screen, makes a sign.
+      arm.onScreen = shadowOnScreen(hand.palm);
+      const raw = arm.quiet > 0 ? null : classifyShape(hand);
+      // A sign made out of the light: noted, so the fight can say where to hold it.
+      arm.offTime = raw && !arm.onScreen ? arm.offTime + dt : 0;
+      let now = arm.onScreen ? raw : null;
       // An open hand is only a shield when its palm faces your foe (a relaxed hand does not count).
       if (now === 'palm' && toward) {
         const normal = this.space.worldToLocal(new Vector3().copy(hand.palm).add(hand.palmNormal)).sub(palm).normalize();
@@ -306,7 +368,12 @@ export class ShadowArms {
           arm.forming = now;
           arm.formTime = 0;
         }
-        if (arm.formTime >= FORM_TIME && arm.cooldown <= 0 && (!arm.shape || arm.lost > 0.15)) {
+        // One weapon to throw at a time: while the other hand holds one, this hand only makes a shield.
+        const other = this.hands[1 - h];
+        const otherHolds = other !== arm && other.shape !== null && !ARMS[other.shape].held;
+        const blocked = otherHolds && !ARMS[now].held;
+        if (blocked) arm.formTime = 0;
+        if (!blocked && arm.formTime >= FORM_TIME && arm.cooldown <= 0 && (!arm.shape || arm.lost > 0.15)) {
           this.disarm(arm);
           arm.shape = now;
           arm.idle = 0;

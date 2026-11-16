@@ -5,12 +5,11 @@
  */
 
 const DUEL_STEPS = [
-  'Draw: pinch and draw in the air. A line is ink to grab and throw; a closed shape comes alive',
-  'Draw a weapon and it is yours: a long blade = sword, star = twin stars, triangle = spear, circle = ball, zigzag = lightning, spiral = boomerang, box = shield',
-  'Shadow weapons: hold a hand shape for a moment and a weapon of shadow forms in that hand',
-  'Fist: ball · flat hand: sword · open palm: shield · one finger: spear · peace sign: twin stars',
-  'Three fingers: claw · horns: lightning · thumb and pinky: boomerang · L: fire bolt · thumbs-up: hammer',
-  'Punch towards them to throw it (swing the sword). A shield or sword held up stops their ink',
+  'Three signs, held up in the light so their shadow is on the screen: ✊ fist = Shadow Ball · ☝ one finger = Shadow Spear · ✋ open palm towards them = Shield',
+  'Hold the sign a moment and the weapon forms in your hand; punch towards them to throw it. One weapon at a time',
+  'Or pinch and draw in the air: a circle = ball, a triangle = spear, a box = shield',
+  'Any other closed shape comes alive and fights beside you; a line is ink to grab and throw',
+  'Hold the shield up to stop their ink. Hurt? Touch a herb',
 ];
 
 export const HOW_TO: Record<string, string[]> = {
@@ -140,8 +139,9 @@ export const HOW_TO: Record<string, string[]> = {
   ],
   'shadow-dragon': [
     'Choose your powers: Shadow (hand shadows and drawings) or the Arsenal (hand-sign weapons)',
-    'Shadow: hold a hand shape (fist, flat hand, one finger…) or draw one, then punch towards the dragon. Hint in the fight shows every weapon',
-    'Its fire: raise an open palm to bounce it back, or cut it with a Shadow Sword (flat hand)',
+    'Arsenal: one sign up in the light and its weapon comes: ✊ sword · 🫴 ball · ✋ shield · 👉 blaster · ✌️ sling',
+    'Shadow: hold a fist (ball) or one finger (spear) up in the light, then punch towards the dragon. Or draw a circle or a triangle',
+    'Its fire: raise an open palm to bounce it back',
     'Strike its head or its glowing heart',
     'Hurt? Turn a palm to your face and push Drink',
   ],
@@ -151,9 +151,9 @@ export const HOW_TO: Record<string, string[]> = {
   'fight-morwen': DUEL_STEPS,
   duel: DUEL_STEPS,
   training: [
-    'Read the lesson card beside Sgt. Vance: it shows the hand shape to make, and your hand as it is now',
-    'Hold the shape still: the ring fills and the weapon forms in your hand',
-    'Use it on Vance as the card says: punch to throw, swing the sword, hold the shield up',
+    'Read the lesson card: it shows the sign to make, and your hand as it is now',
+    'Hold the sign up in the light (its shadow on the screen): the ring fills and the weapon forms in your hand',
+    'Use it on Vance as the card says: punch to throw, or hold the shield up',
     'Each lesson passes by itself; Back and Next pick any lesson. Vance cannot hurt you here',
   ],
   pets: [

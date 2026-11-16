@@ -32,15 +32,9 @@ const summoned = (item: Item) => (e: TutorialEvent) => e.type === 'summon' && e.
 
 const STEPS: Step[] = [
   {
-    text: 'Hold an invisible ball',
-    hint: '🤲 Palms facing each other, hands apart. Hold still.',
-    demo: { poses: ['arm'] },
-    done: (e) => e.type === 'armed',
-  },
-  {
     text: 'Summon a sword',
-    hint: '🤲 Hold a ball, then ✊ make a fist',
-    demo: { poses: ['arm', 'sword'] },
+    hint: '✊ Make a fist in front of you and hold it',
+    demo: { poses: ['sword'] },
     done: summoned('sword'),
   },
   {
@@ -50,21 +44,9 @@ const STEPS: Step[] = [
     done: (e) => e.type === 'swing' && e.item === 'sword',
   },
   {
-    text: 'Summon a spear',
-    hint: '🤲 Hold a ball, then ✊✊ one fist above the other',
-    demo: { poses: ['arm', 'spear'] },
-    done: summoned('spear'),
-  },
-  {
-    text: 'Throw the spear',
-    hint: '🫸 Push forward and open your hands',
-    demo: { poses: ['spear'], move: 'push' },
-    done: (e) => e.type === 'launch' && e.item === 'spear',
-  },
-  {
     text: 'Summon a power ball',
-    hint: '🤲 Hold a ball, then 🫴 turn your palm up',
-    demo: { poses: ['arm', 'ball'] },
+    hint: '🫴 Open your hand, palm up, and hold it',
+    demo: { poses: ['ball'] },
     done: summoned('ball'),
   },
   {
@@ -74,14 +56,14 @@ const STEPS: Step[] = [
     done: (e) => e.type === 'launch' && e.item === 'ball',
   },
   {
-    text: 'Raise a wall',
-    hint: '🤲 Hold a ball, then 🙌 push both palms forward',
-    demo: { poses: ['arm', 'wall'] },
-    done: summoned('wall'),
+    text: 'Raise a shield',
+    hint: '✋ Push one open palm forward and hold it',
+    demo: { poses: ['shield'] },
+    done: summoned('shield'),
   },
   {
-    text: 'Block the orb with your wall',
-    hint: 'Stay behind it. Wall gone? 🤲 then 🙌 again',
+    text: 'Block the orb with your shield',
+    hint: 'Keep your palm up between you and the orb',
     demo: null,
     done: (e) => e.type === 'blocked',
     orbs: true,

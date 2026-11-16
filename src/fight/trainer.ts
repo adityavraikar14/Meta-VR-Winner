@@ -32,7 +32,7 @@ const LESSONS: Lesson[] = [
   ...SHAPES.map((shape): Lesson => ({
     title: ARMS[shape].name,
     shape,
-    use: shape === 'palm' ? 'Hold it up, palm towards Vance: block his ink twice' : shape === 'blade' ? 'Swing your hand fast: a slash flies at Vance' : 'Punch towards Vance: it flies at him',
+    use: shape === 'palm' ? 'Hold it up in the light, palm towards Vance: block his ink twice' : 'Hold it up in the light (its shadow on the screen), then punch towards Vance',
     goal: shape === 'palm' ? 'block' : 'hit',
     times: shape === 'palm' ? 2 : 1,
   })),

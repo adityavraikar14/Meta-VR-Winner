@@ -4,16 +4,17 @@
  * Every frame `classify` names the sign the hands are making right now. The
  * `GestureRecognizer` then turns that noisy per-frame answer into events: a
  * sign only counts once it has been held for a moment, short tracking dropouts
- * are forgiven, and an item can only be summoned while armed.
+ * are forgiven. One sign, one item, straight away: no charging first.
  *
- *   arm   both open palms facing each other, as if holding a ball
- *   sword one fist (the other hand anything else)
- *   spear two fists, one above the other (or together side by side), as if gripping a pole
- *   ball  one open hand, palm up
- *   wall  both open palms pushed forward, side by side
- *   gun   a finger gun: index pointing, the other three fingers curled
- *   shield one open palm pushed forward (two palms is the wall)
- *   sling a V sign: index and middle up, the other two curled; they are the fork
+ *   sword  a fist
+ *   ball   an open hand, palm up
+ *   shield an open palm pushed forward
+ *   gun    a finger gun: index pointing, the other three fingers curled
+ *   sling  a V sign: index and middle up, the other two curled; they are the fork
+ *
+ * One hand each, so two hands never make two things by accident. A hand that
+ * is pinching (drawing in the air) makes no sign. The spear and the wall are
+ * drawn in the air (see air-sketch.ts) rather than signed.
  */
 import { Vector3 } from '@iwsdk/core';
 import type { HandState, Side } from './hands.js';
@@ -45,15 +46,15 @@ export const ITEM_LABELS: Record<Item, string> = {
   sling: '🎯 Slingshot',
 };
 
-/** The signs that summon each item, in order. */
+/** The sign that summons each item (one sign, no charging first; the spear and wall are drawn). */
 export const RECIPES: Record<Item, readonly Exclude<Sign, 'none'>[]> = {
-  sword: ['arm', 'sword'],
-  spear: ['arm', 'spear'],
-  ball: ['arm', 'ball'],
-  wall: ['arm', 'wall'],
-  gun: ['arm', 'gun'],
-  shield: ['arm', 'shield'],
-  sling: ['arm', 'sling'],
+  sword: ['sword'],
+  spear: ['spear'],
+  ball: ['ball'],
+  wall: ['wall'],
+  gun: ['gun'],
+  shield: ['shield'],
+  sling: ['sling'],
 };
 
 /** Finger straightness (see HandState.straight) above which a finger is straight… */
@@ -88,8 +89,12 @@ const STICKY = 0.12;
 
 /** Seconds the arm sign must be held. */
 export const ARM_HOLD = 0.5;
-/** Seconds an item sign must be held once armed. */
-export const ITEM_HOLD = 0.35;
+/** Seconds an item sign must be held. */
+export const ITEM_HOLD = 0.4;
+/** Thumb and index this close: a pinch (drawing), not a sign. */
+const DRAWING_GAP = 0.04;
+/** A pinching index is straighter than this; a fist's index is curled in below it. */
+const PINCH_INDEX = 0.0;
 /** Seconds you stay armed before the charge fizzles. */
 export const ARMED_WINDOW = 3.5;
 /** Wobbles out of a sign shorter than this don't reset a hold. */
@@ -137,6 +142,15 @@ export function isFist(hand: HandState, slack = 0): boolean {
   return curled >= 3;
 }
 
+/**
+ * A hand pinching to draw: thumb and index together, the index only bent to
+ * meet the thumb. (In a fist the index is curled right in, below 0, though
+ * the thumb may rest near its tip.)
+ */
+function drawing(hand: HandState): boolean {
+  return hand.pinch < DRAWING_GAP && hand.straight[0] > PINCH_INDEX;
+}
+
 export interface Reading {
   sign: Sign;
   /** The hand that holds the item, when that matters. */
@@ -156,10 +170,20 @@ export function classify(
   forward: Vector3,
   out: Reading,
   keep: Sign = 'none',
+  /** Which hands may sign (on the page, in front of you); default all. */
+  usable: (hand: HandState) => boolean = () => true,
 ): Reading {
   out.sign = 'none';
   out.hand = null;
   out.paused = false;
+  // Hands drawing in the air, or out of place, sign nothing: treat them as not there.
+  const ok = (h: HandState) => h.tracked && !drawing(h) && usable(h);
+  if (!ok(left) || !ok(right)) {
+    const l = ok(left) ? left : NOT_SIGNING;
+    const r = ok(right) ? right : NOT_SIGNING;
+    classifySign(l, r, forward, out, keep);
+    return out;
+  }
   const blip = (h: HandState) => !h.tracked && h.lostFor < LOST_PAUSE;
   const handBlipped = blip(left) || blip(right);
   // Mid two-handed sign with one hand briefly gone: wait for it rather than
@@ -173,7 +197,9 @@ export function classify(
   return out;
 }
 
-const TWO_HANDED: readonly Sign[] = ['arm', 'spear', 'wall'];
+const TWO_HANDED: readonly Sign[] = [];
+/** Stands in for a hand that is drawing or out of place. */
+const NOT_SIGNING = { tracked: false } as HandState;
 
 function classifySign(
   left: HandState,
@@ -183,7 +209,8 @@ function classifySign(
   keep: Sign,
 ): Reading {
   const slack = (sign: Sign) => (sign === keep ? STICKY : 0);
-  const both = left.tracked && right.tracked;
+  // One-handed signs only now (no charging sign, no two-handed spear or wall).
+  const both = false;
 
   if (both) {
     if (isOpen(left, STICKY) && isOpen(right, STICKY)) {
@@ -288,7 +315,10 @@ export type Phase = 'idle' | 'armed';
  * passed through on the way to another one.
  */
 export class GestureRecognizer {
+  /** Always idle now: a sign summons straight away (kept for the HUD and tutorial). */
   phase: Phase = 'idle';
+  /** The sign just used: it must be let go before it summons again. */
+  private spent: Sign = 'none';
   /** The sign currently being held towards a trigger. */
   candidate: Sign = 'none';
   /** 0 → 1 while the candidate is held. */
@@ -299,20 +329,21 @@ export class GestureRecognizer {
   private miss = 0;
   private hand: Side | null = null;
 
-  update(dt: number, reading: Reading, events: GestureEvent[]): void {
-    // A hand just dropped out of tracking: freeze everything, including the armed countdown.
+  /**
+   * `allow(item)`: may this item come now (not while another is in hand,
+   * not straight after a throw); a sign for one that may not is ignored.
+   */
+  update(dt: number, reading: Reading, events: GestureEvent[], allow: (item: Item) => boolean = () => true): void {
+    // A hand just dropped out of tracking: freeze everything.
     if (reading.paused) return;
-    if (this.phase === 'armed') {
-      this.armedLeft -= dt;
-      if (this.armedLeft <= 0) {
-        this.reset();
-        events.push({ type: 'fizzle' });
-        return;
-      }
+    let sign = reading.sign;
+    // The sign that just summoned must be let go first.
+    if (this.spent !== 'none') {
+      if (sign === this.spent) sign = 'none';
+      else this.spent = 'none';
     }
-
-    const sign = reading.sign;
-    const wanted = this.phase === 'idle' ? sign === 'arm' : sign !== 'none' && sign !== 'arm';
+    if (sign !== 'none' && sign !== 'arm' && !allow(sign)) sign = 'none';
+    const wanted = sign !== 'none' && sign !== 'arm';
     if (wanted) {
       if (sign !== this.candidate) this.held = 0;
       this.candidate = sign;
@@ -327,23 +358,15 @@ export class GestureRecognizer {
       }
     }
 
-    const need = this.phase === 'idle' ? ARM_HOLD : ITEM_HOLD;
+    const need = ITEM_HOLD;
     this.progress = Math.min(1, this.held / need);
     if (this.held < need) return;
 
-    if (this.phase === 'idle') {
-      this.phase = 'armed';
-      this.armedLeft = ARMED_WINDOW;
-      this.held = 0;
-      this.candidate = 'none';
-      this.progress = 0;
-      events.push({ type: 'armed' });
-    } else {
-      const item = this.candidate as Item;
-      const hand = this.hand;
-      this.reset();
-      events.push({ type: 'summon', item, hand });
-    }
+    const item = this.candidate as Item;
+    const hand = this.hand;
+    this.reset();
+    this.spent = item;
+    events.push({ type: 'summon', item, hand });
   }
 
   reset(): void {

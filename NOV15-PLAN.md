@@ -85,3 +85,15 @@ Legend: [x] done and checked · [ ] not done yet
 - [x] **Wrist menu no longer pops up during play:** it opens only when you look straight at your open palm, held close to your face, for a full second while playing (half a second elsewhere). Palms raised for shadows no longer open it
 - [x] **Big leaves:** the giant leaf plants stand further out to the sides and lower, so they don't arch over the screen; a hand (fingers or palm) anywhere on a big plant pushes it; push firmly and it stays parted out of your way, like real foliage
 - [x] Typecheck and all tests pass
+
+## 12. Nov 16: fights made clear and smooth
+- [x] **Story fights (captains, Morwen, Ink Duel, the dragon, Training): three signs only.** ✊ Fist = Shadow Ball · ☝ one finger = Shadow Spear · ✋ open palm towards them = Shield. Punch to throw. The other seven shapes (flat-hand sword, peace sign, claw, horns, boomerang, L, thumbs-up) are gone: a relaxed flat hand no longer makes swords
+- [x] **A sign counts only on the page:** its shadow must fall on the screen (the hand up in the lantern's light). Hands resting low do nothing; a sign out of the light gets a gentle "lift your hand into the light" hint
+- [x] **One weapon at a time:** two hands never fill with two weapons (the other hand can still raise a shield)
+- [x] **Fist recognised reliably:** thumb tucked, wrapped across, sticking up or resting by the index all count
+- [x] **Drawing always works:** a pinch is drawing, never a sign; pinching drops a half-made weapon from that hand at once; a line can start in the first moments of a pinch (not only the exact frame); for a moment after drawing that hand makes no sign
+- [x] **Drawn weapons match the signs:** circle = ball, triangle = spear, box = shield (a hand-drawn circle is recognised more easily); any other closed shape comes alive; a line is ink to throw
+- [x] **Arsenal (Arena and the Arsenal dragon): no more charging.** The "hold an invisible ball" step is gone: one sign and its weapon comes straight away. One-hand signs only: ✊ sword · 🫴 ball (palm up) · ✋ shield (palm forward) · 👉 blaster · ✌️ sling (spear and wall can still be drawn). A pinching hand makes no sign; a sign held on summons once; a different sign swaps what you hold; nothing new in the moment after a throw (so throwing the ball can't summon a shield)
+- [x] **Arsenal signs count on the page** in the dragon fight, and **in front of you** in the Arena (it has no screen)
+- [x] Training: 6 lessons (3 signs, then draw a circle, triangle, box); the Arena tutorial teaches sword, ball and shield with no charging step; How to play cards and the weapons chart updated
+- [x] Tests: new sign tests for both systems (45 + 15 checks); all suites pass. Emulator: a fist low in the lap makes nothing, the same fist raised into the light forms the Shadow Ball; in the Arena a fist gives the sword straight away

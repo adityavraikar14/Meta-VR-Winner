@@ -176,6 +176,8 @@ export function recognise(points: readonly Vector3[], closed: boolean): Sketch |
     if (aspect > 3 && roundness < 0.6) return 'sword';
     if (solidity < 0.72 && sharp >= 6) return 'star';
     if (roundness > 0.8 && sharp <= 1) return 'circle';
+    // A hand-drawn circle in the air is rarely perfect: round enough, no real corners, not long and thin.
+    if (roundness > 0.7 && sharp <= 2 && aspect < 1.6 && solidity > 0.9 && corners(t, true, 1.4).length === 0) return 'circle';
     if (sharp >= 3 && sharp <= 4 && solidity > 0.85 && roundness < 0.72 && roundness > 0.45) {
       // Three clear corners (a fourth is often where the pen started).
       const strong = corners(t, true, 1.4).length;

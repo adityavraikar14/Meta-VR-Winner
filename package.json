@@ -19,7 +19,8 @@
     "test:daily": "esbuild scripts/daily-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/daily-test.mjs --log-level=error && node .iwsdk/daily-test.mjs",
     "test:workshop": "esbuild scripts/workshop-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/workshop-test.mjs --log-level=error && node .iwsdk/workshop-test.mjs",
     "test:sketch": "esbuild scripts/sketch-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/sketch-test.mjs --log-level=error && node .iwsdk/sketch-test.mjs",
-    "test:arms": "esbuild scripts/arms-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/arms-test.mjs --log-level=error && node .iwsdk/arms-test.mjs"
+    "test:arms": "esbuild scripts/arms-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/arms-test.mjs --log-level=error && node .iwsdk/arms-test.mjs",
+    "test:signs": "esbuild scripts/signs-test.ts --bundle --platform=node --format=esm --outfile=.iwsdk/signs-test.mjs --log-level=error && node .iwsdk/signs-test.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

@@ -222,6 +222,8 @@ interface Projectile {
 
 export class Arsenal {
   held: Held | null = null;
+  /** Seconds since something was thrown (the hand pushing forward to throw is no new sign). */
+  sinceLaunch = 99;
   /** Worn on one hand; only a sword may be held alongside it. */
   shield: Shield | null = null;
   readonly projectiles: Projectile[] = [];
@@ -287,6 +289,18 @@ export class Arsenal {
     this.tracer = makeBeam(0.006, 0xbff8ff, 0.9);
     this.crosshair.visible = this.laser.visible = this.tracer.visible = false;
     root.add(this.crosshair, this.laser, this.tracer);
+  }
+
+  /**
+   * May a sign summon `item` now? Not in the moment just after a throw (the
+   * throwing hand passes through other signs), not the thing already in hand,
+   * and no shield while holding the power ball (pushing the palm forward is
+   * how the ball is thrown). Any other sign swaps what you hold.
+   */
+  allows(item: Item): boolean {
+    if (this.sinceLaunch < 0.7) return false;
+    if (item === 'shield') return !this.shield && this.held?.item !== 'ball';
+    return this.held?.item !== item;
   }
 
   summon(item: Item, side: Side | null, head: Vector3, forward: Vector3): void {
@@ -420,6 +434,7 @@ export class Arsenal {
 
   update(dt: number, forward: Vector3, head: Vector3): void {
     this.clock += dt;
+    this.sinceLaunch += dt;
     this.head.copy(head);
     this.lastForward.copy(forward);
     if (this.held) this.updateHeld(this.held, dt, forward);
@@ -640,6 +655,7 @@ export class Arsenal {
     });
     if (item === 'ball') held.object.scale.setScalar(1);
     this.held = null;
+    this.sinceLaunch = 0;
     sfx.throw();
     this.onEvent?.({ type: 'launch', item });
   }

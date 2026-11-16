@@ -29,8 +29,8 @@ import { Dragon3D, dragonLoad, Phoenix, preloadDragon } from './dragon3d.js';
  * The last chapter: the Shadow Dragon guards the Great Lantern.
  *
  * In the Arsenal's copy of Shadowplay the player fights it with the
- * Arsenal (see arsenal-player.ts): hold an invisible ball to arm, then sign
- * for a sword, spear, power ball, wall, blaster, shield or slingshot. The
+ * Arsenal (see arsenal-player.ts): one sign, up in the light, and its
+ * weapon comes: a sword, power ball, shield, blaster or slingshot. The
  * dragon fights as before: it breathes fire out of the screen at you, and
  * dives in close to bite. A shield or the wall stops its fire and its bite;
  * a sword or spear cuts fireballs out of the air.
@@ -263,10 +263,8 @@ export class ArsenalDragonBattle {
   }
 
   private say(): void {
-    let text = 'Hold an invisible ball to arm, then make a weapon sign';
-    if (this.player.armed) {
-      text = 'Armed! ✊ sword · ✊✊ spear · 🫴 power ball · 🙌 wall · 👉 blaster · ✋ shield · ✌️ slingshot';
-    } else {
+    let text = 'Make a sign up in the light (its shadow on the screen): ✊ sword · 🫴 ball · ✋ shield · 👉 blaster · ✌️ sling';
+    {
       switch (this.player.arsenal.held?.item) {
         case 'sword':
           text = 'Swing your sword through the head or the glowing heart';

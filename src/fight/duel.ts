@@ -308,6 +308,8 @@ export class InkDuel {
   private readonly v = new Vector3();
   private readonly w = new Vector3();
   private readonly u = new Vector3();
+  /** Frames each hand's pinch has lasted (0: not pinching). */
+  private readonly pinchFrames = [0, 0];
 
   constructor(
     root: Group,
@@ -740,12 +742,16 @@ export class InkDuel {
   private draw(hands: readonly HandState[]): void {
     hands.forEach((hand, h) => {
       const current = this.drawing[h];
+      // How many frames this pinch has lasted: a line may start in its first moments, not only
+      // on the very frame it closed (a weapon that hand held is dropped for the pinch meanwhile).
+      this.pinchFrames[h] = hand.tracked && hand.pinching ? this.pinchFrames[h] + 1 : 0;
       if (!hand.tracked) {
         if (current) this.finish(h);
         return;
       }
       const p = this.group.worldToLocal(this.v.copy(hand.pinch));
-      if (hand.pinchStarted && !current && !this.arms.busy(h) && !this.nearInk(p) && !this.nearDoodle(p)) {
+      const fresh = hand.pinching && this.pinchFrames[h] > 0 && this.pinchFrames[h] <= 18;
+      if (fresh && !current && !this.arms.busy(h) && !this.nearInk(p) && !this.nearDoodle(p)) {
         const ink = this.newInk(false, p);
         ink.points.push(new Vector3());
         this.drawing[h] = ink;
@@ -779,7 +785,9 @@ export class InkDuel {
     ink.pos.add(centre);
     // A drawing of a weapon becomes that weapon, in the hand that drew it.
     const closed = isClosedLoop(ink.points);
-    const sketch = this.mode === 'fight' ? recognise(ink.points, closed) : null;
+    // Only the three weapons the hand signs make can be drawn too: circle = ball, triangle = spear, box = shield.
+    const seen = this.mode === 'fight' ? recognise(ink.points, closed) : null;
+    const sketch = seen === 'circle' || seen === 'triangle' || seen === 'box' ? seen : null;
     if (sketch) {
       this.drawnWeapon(ink, h, sketch);
       return;
@@ -1492,11 +1500,15 @@ export class InkDuel {
         playWhoosh(0.35);
         if (!this.armsTold.has(shape)) {
           this.armsTold.add(shape);
-          this.flash(spec.held ? `${spec.name}! Hold it up: their ink stops on it` : shape === 'blade' ? `${spec.name}! Swing it fast to send a slash; it cuts their ink too` : `${spec.name}! Punch towards ${this.foe ? this.spec.name : 'them'} to throw it`, 2.2);
+          this.flash(spec.held ? `${spec.name}! Hold it up: their ink stops on it` : `${spec.name}! Punch towards ${this.foe ? this.spec.name : 'them'} to throw it`, 2.2);
         }
       },
       (shot) => this.fireArm(shot),
     );
+    // A sign held where the lantern can't see it: say where it works (now and then, not every frame).
+    if (this.arms.offScreenSign() > 0.7 && this.noteTime <= 0) {
+      this.flash('Lift your hand into the light: a sign works when its shadow is on the screen', 2.2);
+    }
   }
 
   private readonly armsTold = new Set<string>();

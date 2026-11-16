@@ -242,9 +242,10 @@ export class ArsenalLevelSystem extends createSystem({}) {
     const anyHand = this.hands.left.tracked || this.hands.right.tracked;
     // Lost tracking pauses the sign timers instead of failing them.
     if (anyHand) {
-      classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate);
-      this.recognizer.update(dt, this.reading, this.events);
-      this.sketch.update(dt, sketchHands(this.hands, this.sketchSlots), () => this.recognizer.phase === 'armed' || this.arsenal.held?.item === 'sling');
+      // No screen in the Arena: a sign counts held up in front of you, where you can see it.
+      classify(this.hands.left, this.hands.right, this.forward, this.reading, this.recognizer.candidate, (hand) => this.inFront(hand.palm));
+      this.recognizer.update(dt, this.reading, this.events, (item) => this.arsenal.allows(item));
+      this.sketch.update(dt, sketchHands(this.hands, this.sketchSlots), () => this.arsenal.held?.item === 'sling');
     } else {
       this.reading.sign = 'none';
       this.reading.hand = null;
@@ -375,6 +376,15 @@ export class ArsenalLevelSystem extends createSystem({}) {
     }
   }
 
+  /** A hand up in front of you: ahead of the eyes and no lower than the chest. */
+  private inFront(palm: Vector3): boolean {
+    this.toPalm.subVectors(palm, this.head);
+    const ahead = this.toPalm.dot(this.forward);
+    return ahead > 0.12 && this.toPalm.y > -0.45;
+  }
+
+  private readonly toPalm = new Vector3();
+
   private handleEvents(): void {
     for (const event of this.events) {
       this.tutorial.notify(event);
@@ -395,11 +405,11 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.ringMaterial = this.ring.material as MeshBasicMaterial;
     this.ring.visible = false;
     this.armedLabel = new Label(0.05);
-    this.armedLabel.set('Armed! Make a sign:', '#bff0ff');
+    this.armedLabel.set('Make a sign:', '#bff0ff');
     this.handsLabel = new Label(0.07);
     this.handsLabel.set('✋ Show your hands', '#ffe9b0');
     this.armHint = new Label(0.045);
-    this.armHint.set('🤲 Hold an invisible ball to arm, then make a sign', '#ffe9b0');
+    this.armHint.set('Make a sign in front of you: ✊ sword · 🫴 ball · ✋ shield · 👉 blaster · ✌️ sling', '#ffe9b0');
     this.armHint.sprite.visible = false;
     this.root.add(this.armHint.sprite);
     this.statusLabel = new Label(0.12);
@@ -766,7 +776,6 @@ export class ArsenalLevelSystem extends createSystem({}) {
       case 'recipe':
         this.recognizer.reset();
         this.sim.play([
-          { pose: 'arm', seconds: ARM_HOLD },
           { pose: command.item, seconds: ITEM_HOLD },
         ]);
         break;
