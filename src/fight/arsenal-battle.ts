@@ -42,7 +42,7 @@ const PLAYER_HEALTH = 6;
  * On the Arsenal's damage scale (sword 2, power ball 3, spear 5, blaster 1;
  * half that on the body): a fight of a minute or so.
  */
-const DRAGON_HEALTH = 30;
+const DRAGON_HEALTH = 22;
 const FIRE_SPEED = 0.75;
 const HEAD_RADIUS = 0.16;
 const BREATH_TIME = 1.2;
@@ -263,7 +263,7 @@ export class ArsenalDragonBattle {
   }
 
   private say(): void {
-    let text = 'Make a sign up in the light (its shadow on the screen): ✊ sword · 🫴 ball · ✋ shield · 👉 blaster · ✌️ sling';
+    let text = 'Make a sign up in the light (its shadow on the screen): ✊ sword · 🫴 ball · ✋ shield · 🙌 two palms: wall · 👉 blaster · ✌️ sling';
     {
       switch (this.player.arsenal.held?.item) {
         case 'sword':

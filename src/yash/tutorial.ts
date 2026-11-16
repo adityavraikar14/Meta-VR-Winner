@@ -68,6 +68,12 @@ const STEPS: Step[] = [
     done: (e) => e.type === 'blocked',
     orbs: true,
   },
+  {
+    text: 'Raise a defence wall',
+    hint: '🙌 Push BOTH open palms forward, side by side',
+    demo: { poses: ['wall'] },
+    done: summoned('wall'),
+  },
 ];
 
 /** Seconds each demo pose is shown, and between demo moves. */

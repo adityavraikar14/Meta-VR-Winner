@@ -19,7 +19,7 @@ const DISTANCE = 3.0;
 const HOVER_DROP = 0.9;
 /** The health bar floats this far above its chest, clear of the wings. */
 const BAR_RISE = 1.45;
-const MAX_HP = 60;
+const MAX_HP = 32;
 /** Seconds between attacks, calm and enraged, and how long it draws breath. */
 const REST = 2.4;
 const ENRAGED_REST = 1.5;

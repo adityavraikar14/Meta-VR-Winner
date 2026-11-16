@@ -39,14 +39,15 @@ const FEET_DROP = 1.25;
 /** Life-size heights and Arena health, by rival. */
 const SIZE: Record<string, { height: number; girth: number; hp: number }> = {
   // Medium: with their whole move book they attack more, so they take fewer blows to beat.
-  vance: { height: 1.75, girth: 0.24, hp: 110 },
-  rook: { height: 1.55, girth: 0.3, hp: 100 },
-  vex: { height: 1.68, girth: 0.22, hp: 95 },
-  mako: { height: 1.95, girth: 0.36, hp: 150 },
-  kai: { height: 1.78, girth: 0.24, hp: 120 },
-  thorne: { height: 1.7, girth: 0.25, hp: 120 },
-  sable: { height: 1.72, girth: 0.22, hp: 115 },
-  morwen: { height: 1.6, girth: 0.22, hp: 135 },
+  // On the Arsenal's damage scale (sword 2, ball 3, spear 5; head ×2, legs ×0.7): about nine body blows each.
+  vance: { height: 1.75, girth: 0.24, hp: 28 },
+  rook: { height: 1.55, girth: 0.3, hp: 26 },
+  vex: { height: 1.68, girth: 0.22, hp: 24 },
+  mako: { height: 1.95, girth: 0.36, hp: 32 },
+  kai: { height: 1.78, girth: 0.24, hp: 28 },
+  thorne: { height: 1.7, girth: 0.25, hp: 28 },
+  sable: { height: 1.72, girth: 0.22, hp: 27 },
+  morwen: { height: 1.6, girth: 0.22, hp: 30 },
 };
 /** The arc they roam: this far either side of straight ahead, between these distances. */
 const ARC = 1.0;
@@ -144,7 +145,7 @@ export class RivalBoss implements Boss {
     private bursts: Bursts,
     onPlayerHit: () => void,
   ) {
-    const size = SIZE[spec.id] ?? { height: 1.7, girth: 0.24, hp: 60 };
+    const size = SIZE[spec.id] ?? { height: 1.7, girth: 0.24, hp: 26 };
     // The same fighter, at life size.
     this.spec = { ...spec, height: size.height, girth: size.girth };
     this.name = spec.id;
@@ -251,10 +252,15 @@ export class RivalBoss implements Boss {
       sfx.block();
       return;
     }
+    // Where it lands: the head takes double, the legs less.
+    const head = at.distanceTo(model.headAt(this.tmp)) < 0.16;
+    const legs = !head && at.y < model.root.position.y + this.spec.height * 0.42;
+    amount = head ? amount * 2 : legs ? amount * 0.7 : amount;
     const wasEnraged = this.enraged;
     this.hp = Math.max(0, this.hp - amount);
-    model.flinch(amount >= 3);
-    this.bursts.spawn(at, 0xffffff, 0.3);
+    model.flinch(amount >= 3 || head);
+    this.bursts.spawn(at, head ? 0xffd23a : 0xffffff, head ? 0.6 : 0.3);
+    if (head) sfx.block();
     sfx.hit();
     if (this.hp === 0) {
       this.mood = 'defeated';

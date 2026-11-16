@@ -678,7 +678,7 @@ export class DragonBattle {
     if (this.mode !== 'fight') return;
     let damage = 0;
     if (dHead < 0.075 || dHeart < 0.08) damage = power;
-    else if (onBody) damage = power * 0.4;
+    else if (onBody) damage = power * 0.6;
     if (damage === 0) {
       this.flash('Missed! Aim for the head or the glowing heart');
       return;

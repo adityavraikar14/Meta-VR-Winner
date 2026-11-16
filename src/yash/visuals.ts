@@ -538,11 +538,12 @@ export function makeSlingshot(): SlingRig {
   const pouch = new Mesh(new SphereGeometry(0.022, 10, 6), new MeshBasicMaterial({ color: 0x6b4426 }));
   pouch.scale.set(1.3, 0.7, 1);
   const stone = makeStone();
-  const dotMaterial = glow(0xffe2a0, 0.6);
-  const dotGeometry = new SphereGeometry(0.008, 6, 4);
+  const dotMaterial = new MeshBasicMaterial({ color: 0xd2380c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false });
+  const dotGeometry = new SphereGeometry(0.011, 8, 6);
   const dots: Mesh[] = [];
   for (let i = 0; i < 14; i++) {
     const dot = new Mesh(dotGeometry, dotMaterial);
+    dot.renderOrder = 40;
     dot.visible = false;
     dots.push(dot);
   }

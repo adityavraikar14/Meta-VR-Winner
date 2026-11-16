@@ -87,10 +87,11 @@ export const HOW_TO: Record<string, string[]> = {
     'Keep both shadows level and above the thorny brambles in the gaps, then push Drop',
   ],
   'shadow-slingshot': [
-    'Make a V with your index and middle fingers, other fingers curled',
-    'Hold it still: the V shadow becomes a real slingshot',
-    'Pinch the pouch, pull it back toward you, and let go',
-    'Knock down all three targets',
+    'Goal: knock down Rook’s 3 targets: the rope holding the caged shard (left), his flag (middle), his bell (right)',
+    'Make a V with your index and middle fingers, others folded: the slingshot appears in that hand',
+    'With your OTHER hand, pinch the pouch between the fork and pull it back towards you',
+    'Dots show the stone’s path; the ring shows where it lands: GREEN means it will hit a target',
+    'Let go to shoot. Missed? Pull again: you have as many stones as you like'
   ],
   'broken-bridge': [
     'Pinch a glowing gold anchor ring on the riverbank',
@@ -139,7 +140,7 @@ export const HOW_TO: Record<string, string[]> = {
   ],
   'shadow-dragon': [
     'Choose your powers: Shadow (hand shadows and drawings) or the Arsenal (hand-sign weapons)',
-    'Arsenal: one sign up in the light and its weapon comes: ✊ sword · 🫴 ball · ✋ shield · 👉 blaster · ✌️ sling',
+    'Arsenal: one sign up in the light and its weapon comes: ✊ sword · 🫴 ball · ✋ shield · 🙌 two palms: wall · 👉 blaster · ✌️ sling',
     'Shadow: hold a fist (ball) or one finger (spear) up in the light, then punch towards the dragon. Or draw a circle or a triangle',
     'Its fire: raise an open palm to bounce it back',
     'Strike its head or its glowing heart',

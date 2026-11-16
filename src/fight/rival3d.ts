@@ -612,6 +612,9 @@ export class NamePlate {
       roundRect(g, 62, 78, 388 * k, 22, 11);
       g.fill();
     }
+    // Health marks: a notch every tenth, so each hit can be read off the bar.
+    g.fillStyle = 'rgba(20,10,30,0.75)';
+    for (let i = 1; i < 10; i++) g.fillRect(62 + (388 * i) / 10 - 1.5, 76, 3, 26);
     this.texture.needsUpdate = true;
   }
 }

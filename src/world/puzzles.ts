@@ -556,8 +556,8 @@ const shadowSlingshot: Puzzle = {
   id: 'shadow-slingshot',
   world: 1,
   title: 'The Shadow Slingshot',
-  story: 'Captain Rook’s lookout guards the river: a caged lantern shard on a rope, his flag, and an alarm bell. A shadow can be more than ground. Shape one well enough and it comes alive.',
-  ask: 'Make a V with two fingers to cast a slingshot; when it comes alive, pinch the pouch, pull back and knock down all three targets',
+  story: 'Captain Rook’s lookout guards the river: a lantern shard locked in a cage hanging from a rope, his flag, and his alarm bell. Knock all three down and the shard is yours. Your shadow can be more than ground: shape a slingshot, and it comes alive in your hand.',
+  ask: 'Make a V with two fingers: a slingshot appears in that hand. Pinch the pouch with your other hand, pull back until the ring turns green on a target, and let go',
   handsOn: true,
   solved: 'The shard is free, the flag is down, and the bell rings out. Your shadow became a real slingshot.',
   build(root, kit) {

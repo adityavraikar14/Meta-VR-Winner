@@ -166,6 +166,8 @@ const STUCK_AFTER = 40;
 const HOME_AT = new Vector3(0.42, 0.17, 0.6);
 /** Seconds the Home button waits for its second push. */
 const HOME_CONFIRM = 3;
+/** Adjust (move the screen) sits under Home, on the same side. */
+const ADJUST_DROP = 0.17;
 /** Phases in which a level is under way and can be skipped. */
 const SKIPPABLE: ReadonlySet<Phase> = new Set(['story', 'matching', 'awakening', 'solving', 'oops']);
 const VIEWER = new Vector3(0, 0.12, 1.0);
@@ -303,6 +305,15 @@ export class ShadowGameSystem extends createSystem({
   private homeEntity!: Entity;
   private homeClick = false;
   private homeArmed = 0;
+  /** Exit (leave the headset view, on the title) and Adjust (move the screen to suit how you sit). */
+  private exitButton!: PushButton;
+  private exitEntity!: Entity;
+  private exitClick = false;
+  private exitArmed = 0;
+  private adjustButton!: PushButton;
+  private adjustEntity!: Entity;
+  private adjustClick = false;
+  private readonly roomSpot = new Vector3();
   private readonly homeEye = new Vector3();
   private buttonEntity!: Entity;
   private intro!: IntroShow;
@@ -474,11 +485,21 @@ export class ShadowGameSystem extends createSystem({
     this.homeButton.size = 0.7;
     this.homeEntity = this.world.createTransformEntity(this.homeButton.root);
     this.homeEntity.addComponent(RayInteractable);
+    this.exitButton = new PushButton(this.scene, 'Exit');
+    this.exitButton.size = 0.7;
+    this.exitEntity = this.world.createTransformEntity(this.exitButton.root);
+    this.exitEntity.addComponent(RayInteractable);
+    this.adjustButton = new PushButton(this.scene, 'Adjust');
+    this.adjustButton.size = 0.62;
+    this.adjustEntity = this.world.createTransformEntity(this.adjustButton.root);
+    this.adjustEntity.addComponent(RayInteractable);
     this.queries.rayPressed.subscribe('qualify', (entity) => {
       if (entity === this.buttonEntity) this.rayClick = true;
       if (entity === this.skipEntity) this.skipClick = true;
       if (entity === this.hintEntity) this.hintClick = true;
       if (entity === this.homeEntity) this.homeClick = true;
+      if (entity === this.exitEntity) this.exitClick = true;
+      if (entity === this.adjustEntity) this.adjustClick = true;
     });
     this.addDesktopPress();
     this.intro = new IntroShow(paper);
@@ -804,6 +825,7 @@ export class ShadowGameSystem extends createSystem({
     }
     this.updateHint(dt);
     this.updateHome(dt);
+    this.updateRoomButtons(dt);
     this.paintTitle();
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
@@ -1099,7 +1121,7 @@ export class ShadowGameSystem extends createSystem({
           rayPressButtons(raycaster);
         }
       }
-      if (!this.playButton.visible && !this.skipButton.visible && !this.homeButton.visible && !this.hintButton.visible && this.menu.roots.length === 0) return;
+      if (!this.playButton.visible && !this.skipButton.visible && !this.homeButton.visible && !this.hintButton.visible && !this.exitButton.visible && !this.adjustButton.visible && this.menu.roots.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
       ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
@@ -1109,6 +1131,8 @@ export class ShadowGameSystem extends createSystem({
       if (this.skipButton.visible && raycaster.intersectObject(this.skipButton.root, true).length > 0) this.skipClick = true;
       if (this.hintButton.visible && raycaster.intersectObject(this.hintButton.root, true).length > 0) this.hintClick = true;
       if (this.homeButton.visible && raycaster.intersectObject(this.homeButton.root, true).length > 0) this.homeClick = true;
+      if (this.exitButton.visible && raycaster.intersectObject(this.exitButton.root, true).length > 0) this.exitClick = true;
+      if (this.adjustButton.visible && raycaster.intersectObject(this.adjustButton.root, true).length > 0) this.adjustClick = true;
       this.menu.roots.forEach((root, i) => {
         if (raycaster.intersectObject(root, true).length > 0) this.menuClick = i;
       });
@@ -1294,6 +1318,59 @@ export class ShadowGameSystem extends createSystem({
     this.homeArmed = HOME_CONFIRM;
     this.homeButton.setText('Leave?');
     if (!stage.arena) this.setCaption('Push Home again to leave this level (your stars are kept)');
+  }
+
+  /**
+   * Exit and Adjust, in the room beside the screen. Exit stands where Home
+   * does, on the title (two pushes end the headset session); Adjust stands
+   * under it everywhere but the Arena, and turns into Done while you move
+   * the screen.
+   */
+  private updateRoomButtons(dt: number): void {
+    const paper = stage.paper;
+    const title = this.phase === 'title' && !this.intro.active;
+    const place = (button: PushButton, y: number) => {
+      if (!paper) return;
+      this.roomSpot.copy(HOME_AT);
+      this.roomSpot.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
+      this.roomSpot.y = y;
+      paper.localToWorld(button.root.position.copy(this.roomSpot));
+      button.root.parent?.worldToLocal(button.root.position);
+      button.root.lookAt(paper.localToWorld(this.homeEye.copy(VIEWER)));
+    };
+    // Exit: only on the title menu (in a level, Home leads back to it).
+    const exitOn = title && !!paper && !stage.moving;
+    this.exitButton.show(exitOn);
+    place(this.exitButton, HOME_AT.y);
+    if (this.exitArmed > 0) {
+      this.exitArmed -= dt;
+      if (this.exitArmed <= 0) this.exitButton.setText('Exit');
+    }
+    if (this.exitButton.update(dt, this.liveTips, this.exitClick) && exitOn) {
+      playClick();
+      if (this.exitArmed > 0) {
+        this.exitArmed = 0;
+        this.exitButton.setText('Exit');
+        stopNarration();
+        this.world.exitXR();
+      } else {
+        this.exitArmed = HOME_CONFIRM;
+        this.exitButton.setText('Exit?');
+        this.setCaption('Push Exit again to leave the game (your progress is saved)');
+      }
+    }
+    this.exitClick = false;
+    // Adjust: move the screen and its world to suit how you sit.
+    const adjustOn = !!paper && !stage.arena && !this.intro.active && (title || (!stage.menuOpen || stage.moving));
+    this.adjustButton.show(adjustOn);
+    place(this.adjustButton, HOME_AT.y - ADJUST_DROP);
+    const label = stage.moving ? 'Done' : 'Adjust';
+    if (this.adjustButton.label !== label) this.adjustButton.setText(label);
+    if (this.adjustButton.update(dt, this.liveTips, this.adjustClick) && adjustOn) {
+      playClick();
+      stage.command = 'move';
+    }
+    this.adjustClick = false;
   }
 
   /**

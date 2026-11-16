@@ -76,7 +76,9 @@ check(hold(new GestureRecognizer(), none, hand('right', FIST, DOWN), 0.25).lengt
   const got = hold(new GestureRecognizer(), hand('left', FIST, DOWN), hand('right', FIST, DOWN), 0.6);
   check(got.length === 1 && got[0] === 'sword', `two fists: one sword (${got.join(',')})`);
   const two = hold(new GestureRecognizer(), hand('left', OPEN, forward), hand('right', OPEN, forward), 0.6);
-  check(two.length === 1 && two[0] === 'shield', `two palms forward: one shield, no wall (${two.join(',')})`);
+  check(two.length === 1 && two[0] === 'wall', `two palms forward: the defence wall (${two.join(',')})`);
+  const one = hold(new GestureRecognizer(), none, hand('right', OPEN, forward), 0.6);
+  check(one.length === 1 && one[0] === 'shield', `one palm forward: the shield (${one.join(',')})`);
 }
 
 // Drawing: a pinching hand makes no sign.

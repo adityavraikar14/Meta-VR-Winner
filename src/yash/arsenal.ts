@@ -300,6 +300,7 @@ export class Arsenal {
   allows(item: Item): boolean {
     if (this.sinceLaunch < 0.7) return false;
     if (item === 'shield') return !this.shield && this.held?.item !== 'ball';
+    if (item === 'wall') return this.wallLeft <= 0;
     return this.held?.item !== item;
   }
 

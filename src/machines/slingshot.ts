@@ -2,15 +2,16 @@ import {
   AdditiveBlending,
   BoxGeometry,
   CanvasTexture,
-  Color,
   CylinderGeometry,
   DodecahedronGeometry,
   DoubleSide,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  RingGeometry,
   SphereGeometry,
   SRGBColorSpace,
   Vector3,
@@ -19,36 +20,41 @@ import { playAwaken, playClang, playClunk, playTink, playTinkle, playWhoosh } fr
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
+import { makeSlingshot, SLING_TIP_SPREAD, SLING_TIP_UP, type SlingRig } from '../yash/visuals.js';
 import { hardwood, hemp, iron, RopeSpan } from './parts.js';
 import { ParticlePool } from './particles.js';
 
 /**
- * The Shadow Slingshot: a shadow that comes alive.
+ * The Shadow Slingshot: a shadow that comes alive, as a real slingshot in
+ * your hand (the same slingshot as the Arena's).
  *
- * Make a V with your index and middle fingers (the others folded): on the
- * screen your shadow is a slingshot's fork. Hold it, and a real slingshot
- * steps out of the screen onto the table. Pinch the pouch, pull back, aim,
- * let go: the stone flies on a real arc (an elastic band's launch speed grows
- * with the pull, v = ω·x; then gravity) at Captain Rook's three targets: the
- * rope holding a caged lantern shard, his flag, and his alarm bell.
+ *   1. Make a V with index and middle fingers: its shadow on the screen is a
+ *      slingshot's fork. Hold it, and the slingshot is in that hand.
+ *   2. With your other hand, pinch the pouch and pull it back towards you.
+ *      A bold line of dots shows the stone's path, and a ring marks where it
+ *      will land: green on a target, red when it would miss.
+ *   3. Let go. Knock down Captain Rook's three targets: the rope holding a
+ *      caged lantern shard, his flag, and his alarm bell.
+ *
+ * The stone flies on a real arc: the band's launch speed grows with the
+ * pull (v = ω·x), then gravity.
  */
 
-/** Stage-local layout (the table's earth is at `floor`; you sit at +z). */
-const SLING = new Vector3(0, 0, 0.16);
-const FORK_HALF = 0.03;
-const FORK_TOP = 0.12;
-const POUCH_REST = new Vector3(0, FORK_TOP - 0.004, 0.012);
-/** Pull limits, and launch speed per metre of pull (the band's ω): 0.15 m gives 3.3 m/s. */
-const MAX_PULL = 0.15;
-const MIN_PULL = 0.025;
-const OMEGA = 22;
+/** The V must be held this long to bring the slingshot to life. */
+const SHAPE_HOLD = 0.6;
+/** Launch speed per metre of pull (the band's ω), and the pull's limits. */
+const OMEGA = 16;
+const MAX_PULL = 0.22;
+const MIN_PULL = 0.03;
 const GRAVITY = 9.8;
 const STONE_R = 0.009;
-const GRAB_REACH = 0.055;
-/** The V must be held this long to bring the slingshot to life. */
-const SHAPE_HOLD = 0.8;
-const ALIVE_TIME = 1.3;
-const PREVIEW_DOTS = 9;
+/** A pinch this close to the pouch takes it. */
+const GRAB_REACH = 0.09;
+/** The slingshot leaves your hand if it is out of sight this long. */
+const LOST_DROP = 1.2;
+const RELOAD = 0.4;
+const PATH_DOTS = 18;
+const PATH_STEP = 0.03;
 
 type TargetKind = 'rope' | 'flag' | 'bell';
 
@@ -62,26 +68,41 @@ interface Target {
   group: Group;
 }
 
+const ORDER: Record<TargetKind, string> = {
+  rope: 'the rope holding the caged shard (left)',
+  flag: "Rook's flag (middle)",
+  bell: 'the alarm bell (right)',
+};
+
 export class ShadowSlingshot {
   readonly group = new Group();
   caption = '';
   done = false;
   mistakes = 0;
 
-  private phase: 'shape' | 'alive' | 'aim' | 'won' = 'shape';
+  private phase: 'shape' | 'aim' | 'won' = 'shape';
   private phaseTime = 0;
   private shapeTime = 0;
-  private readonly sling = new Group();
-  private readonly woodMaterial: MeshStandardMaterial;
-  private readonly bands = [new RopeSpan(0.0016), new RopeSpan(0.0016)];
-  private readonly pouch: Mesh;
+  /** The hand holding the slingshot (the V hand), and how long it has been out of sight. */
+  private holdHand = -1;
+  private lostFor = 0;
+  /** The other hand, pinching the pouch (-1: nobody). */
+  private puller = -1;
+  private reload = 0;
+  private readonly rig: SlingRig;
+  private readonly fork = new Vector3();
+  private readonly tipA = new Vector3();
+  private readonly tipB = new Vector3();
+  private readonly pouch = new Vector3();
   private readonly stoneMesh: Mesh;
-  private readonly pouchAt = new Vector3();
-  private holder = -1;
   private readonly flight = new Vector3();
   private flying = false;
   private flightTime = 0;
-  private readonly preview: Mesh[] = [];
+  /** The aim: bold dots along the path, and a ring where it lands. */
+  private readonly path: Mesh[] = [];
+  private readonly pathMaterial: MeshBasicMaterial;
+  private readonly landing: Mesh;
+  private readonly landingMaterial: MeshBasicMaterial;
   private readonly targets: Target[] = [];
   private readonly sparks = new ParticlePool({ count: 80, additive: true, soft: false });
   private cage!: Group;
@@ -96,57 +117,59 @@ export class ShadowSlingshot {
   private finishIn = -1;
   private readonly v = new Vector3();
   private readonly w = new Vector3();
+  private readonly up = new Vector3();
+  private readonly right = new Vector3();
+  private readonly back = new Vector3();
+  private readonly basis = new Matrix4();
+  private readonly sim = new Vector3();
+  private readonly simV = new Vector3();
 
   constructor(private readonly floor: number) {
     this.group.name = 'ShadowSlingshot';
     const f = floor;
 
-    // ---- The slingshot: a forked hardwood branch, rubber bands, a leather pouch and a stone.
-    this.woodMaterial = hardwood().clone();
-    this.woodMaterial.color = new Color(0x000000);
-    const handle = new Mesh(new CylinderGeometry(0.0065, 0.0075, 0.075, 10), this.woodMaterial);
-    handle.position.y = 0.0375;
-    this.sling.add(handle);
-    for (const side of [-1, 1]) {
-      const prong = new Mesh(new CylinderGeometry(0.0052, 0.0062, 0.058, 10), this.woodMaterial);
-      prong.position.set(side * FORK_HALF * 0.5, 0.075 + 0.024, 0);
-      prong.rotation.z = -side * 0.5;
-      this.sling.add(prong);
-    }
-    this.pouch = new Mesh(new BoxGeometry(0.018, 0.012, 0.006), new MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.9 }));
+    // The Arena's slingshot: a wooden Y frame, two bands of light, a pouch.
+    this.rig = makeSlingshot();
+    this.rig.root.visible = false;
+    this.rig.root.userData.keep = true;
+    for (const dot of this.rig.dots) dot.visible = false;
+    this.rig.stone.visible = false;
+    this.group.add(this.rig.root);
     this.stoneMesh = new Mesh(new DodecahedronGeometry(STONE_R, 0), new MeshStandardMaterial({ color: 0x8a8278, roughness: 0.95, flatShading: true }));
-    for (const band of this.bands) {
-      band.mesh.material = new MeshStandardMaterial({ color: 0x8a2a1a, roughness: 0.6 });
-      this.group.add(band.mesh);
-    }
-    this.sling.position.set(SLING.x, f + SLING.y, SLING.z);
-    this.sling.visible = false;
-    for (const o of [this.sling, this.pouch, this.stoneMesh]) o.userData.keep = true;
-    this.group.add(this.sling, this.pouch, this.stoneMesh, this.sparks.points);
-    this.pouch.visible = this.stoneMesh.visible = false;
+    this.stoneMesh.visible = false;
+    this.stoneMesh.userData.keep = true;
+    this.group.add(this.stoneMesh, this.sparks.points);
 
-    // The aiming arc: dots along the first part of the flight.
-    const dot = new SphereGeometry(0.0035, 8, 6);
-    for (let i = 0; i < PREVIEW_DOTS; i++) {
-      const mesh = new Mesh(dot, new MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 * (1 - i / PREVIEW_DOTS), depthWrite: false }));
+    // The aim: dark, solid dots drawn over everything, so the path reads against any background.
+    this.pathMaterial = new MeshBasicMaterial({ color: 0xd2380c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false });
+    const dot = new SphereGeometry(0.0055, 10, 8);
+    for (let i = 0; i < PATH_DOTS; i++) {
+      const mesh = new Mesh(dot, this.pathMaterial);
+      mesh.renderOrder = 40;
       mesh.visible = false;
       mesh.userData.keep = true;
-      this.preview.push(mesh);
+      this.path.push(mesh);
       this.group.add(mesh);
     }
+    this.landingMaterial = new MeshBasicMaterial({ color: 0xd2380c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: DoubleSide });
+    this.landing = new Mesh(new RingGeometry(0.016, 0.026, 28), this.landingMaterial);
+    this.landing.renderOrder = 41;
+    this.landing.visible = false;
+    this.landing.userData.keep = true;
+    this.group.add(this.landing);
 
     this.buildTargets(f);
 
     devInfo.slingshot = () => this.state;
-    // Dev: [ brings the slingshot to life; ] fires a perfect shot at the next target.
+    // Dev: [ puts the slingshot in your right hand; ] fires a perfect shot at the next target.
     devActions['['] = () => {
-      if (this.phase === 'shape') this.comeAlive();
+      if (this.phase === 'shape') this.comeAlive(1);
     };
     devActions[']'] = () => this.devShot();
   }
 
   get state(): string {
-    return `${this.phase} shots=${this.shots} hits=${this.hits} targets=${this.targets.map((t) => `${t.kind}:${t.hit ? 'hit' : '-'}`).join(',')} flying=${this.flying}`;
+    return `${this.phase} hand=${this.holdHand} shots=${this.shots} hits=${this.hits} targets=${this.targets.map((t) => `${t.kind}:${t.hit ? 'hit' : '-'}`).join(',')} flying=${this.flying}`;
   }
 
   /** For the Inventor's Journal. */
@@ -154,7 +177,7 @@ export class ShadowSlingshot {
     return [
       `${this.shots} stone${this.shots === 1 ? '' : 's'} fired, ${this.hits} on target`,
       `Launch speed grows with the pull: v = ω·x, with ω ≈ ${OMEGA} per second`,
-      'A shadow made real: the fork your fingers cast became the slingshot',
+      'A shadow made real: the fork your fingers cast became the slingshot in your hand',
     ];
   }
 
@@ -194,7 +217,7 @@ export class ShadowSlingshot {
       this.cage.userData.keep = true;
       g.add(this.cage);
       this.group.add(g);
-      this.targets.push({ kind: 'rope', at: new Vector3(x, f + 0.235, z), radius: 0.022, hit: false, time: 0, group: g });
+      this.targets.push({ kind: 'rope', at: new Vector3(x, f + 0.235, z), radius: 0.034, hit: false, time: 0, group: g });
     }
     // Rook's flag: a pole and a black flag with crossed white cutlasses.
     {
@@ -207,7 +230,7 @@ export class ShadowSlingshot {
       g.position.set(0.04, f, -0.5);
       g.userData.keep = true;
       this.group.add(g);
-      this.targets.push({ kind: 'flag', at: new Vector3(0.107, f + 0.27, -0.5), radius: 0.05, hit: false, time: 0, group: g });
+      this.targets.push({ kind: 'flag', at: new Vector3(0.107, f + 0.27, -0.5), radius: 0.056, hit: false, time: 0, group: g });
     }
     // The alarm bell: a frame and a bronze bell.
     {
@@ -230,7 +253,7 @@ export class ShadowSlingshot {
       g.position.set(0.27, f, -0.36);
       g.userData.keep = true;
       this.group.add(g);
-      this.targets.push({ kind: 'bell', at: new Vector3(0.27, f + 0.2, -0.36), radius: 0.032, hit: false, time: 0, group: g });
+      this.targets.push({ kind: 'bell', at: new Vector3(0.27, f + 0.2, -0.36), radius: 0.042, hit: false, time: 0, group: g });
     }
     // A halo on each target so it reads from the seat.
     for (const t of this.targets) {
@@ -247,12 +270,12 @@ export class ShadowSlingshot {
     if (!stage.playing) hands = [];
     this.phaseTime += dt;
     this.noteTime -= dt;
+    this.reload = Math.max(0, this.reload - dt);
     if (this.phase === 'shape') this.watchShape(dt, hands);
-    else if (this.phase === 'alive') this.bringToLife();
     else if (this.phase === 'aim') this.aim(dt, hands);
     if (this.flying) this.fly(dt);
     this.animateTargets(dt);
-    this.layout();
+    this.layoutRope();
     this.sparks.update(dt);
     if (this.finishIn > 0) {
       this.finishIn -= dt;
@@ -261,82 +284,165 @@ export class ShadowSlingshot {
     this.caption = this.noteTime > 0 ? this.note : this.prompt();
   }
 
-  /** A V of index and middle fingers, held, brings the slingshot to life. */
+  /** A V of index and middle fingers, held: the slingshot appears in that hand. */
   private watchShape(dt: number, hands: readonly HandState[]): void {
-    const vee = hands.some((h) => h.tracked && h.ext.index > 0.75 && h.ext.middle > 0.75 && h.ext.ring < 0.45 && h.ext.pinky < 0.45);
-    this.shapeTime = vee ? this.shapeTime + dt : Math.max(0, this.shapeTime - dt * 2);
-    if (this.shapeTime >= SHAPE_HOLD) this.comeAlive();
+    const vee = hands.findIndex((h) => h.tracked && h.ext.index > 0.72 && h.ext.middle > 0.72 && h.ext.ring < 0.5 && h.ext.pinky < 0.55 && !h.pinching);
+    this.shapeTime = vee >= 0 ? this.shapeTime + dt : Math.max(0, this.shapeTime - dt * 2);
+    if (vee >= 0 && this.shapeTime >= SHAPE_HOLD) this.comeAlive(vee);
   }
 
-  private comeAlive(): void {
-    this.phase = 'alive';
+  private comeAlive(hand: number): void {
+    this.phase = 'aim';
     this.phaseTime = 0;
-    this.sling.visible = true;
+    this.holdHand = hand;
+    this.lostFor = 0;
+    this.puller = -1;
+    this.rig.root.visible = true;
+    this.rig.frame.scale.setScalar(0.3);
     playAwaken();
-    this.burst(this.v.set(SLING.x, this.floor + FORK_TOP, SLING.z), 30, 0x2a2a3a);
+    this.say('Your shadow came alive: a slingshot in your hand! Now pinch the pouch with your OTHER hand and pull back', 4.5);
   }
 
-  /** It steps out of the screen as a shadow and takes on colour. */
-  private bringToLife(): void {
-    const k = Math.min(1, this.phaseTime / ALIVE_TIME);
-    const e = 1 - (1 - k) * (1 - k);
-    this.sling.scale.setScalar(0.4 + 0.6 * e);
-    this.woodMaterial.color.setHex(0x000000).lerp(new Color(0x8a5a34), e);
-    if (k >= 1) {
-      this.phase = 'aim';
-      this.phaseTime = 0;
-      this.reload();
-      this.say('It came alive! Pinch the pouch, pull it back towards you, aim, and let go', 4);
-    }
-  }
-
-  private reload(): void {
-    this.pouchAt.copy(POUCH_REST).add(this.v.set(SLING.x, this.floor + SLING.y, SLING.z));
-    this.pouch.visible = this.stoneMesh.visible = true;
-    this.stoneMesh.position.copy(this.pouchAt);
-  }
-
-  /** Pinch the pouch and pull: the stone follows; let go and it flies. */
+  /** The slingshot follows the V hand; the other hand pinches the pouch, pulls and lets go. */
   private aim(dt: number, hands: readonly HandState[]): void {
-    const rest = this.w.copy(POUCH_REST).add(this.v.set(SLING.x, this.floor + SLING.y, SLING.z));
-    if (this.holder < 0 && !this.flying) {
+    const holder = hands[this.holdHand];
+    if (!holder || !holder.tracked) {
+      this.lostFor += dt;
+      if (this.lostFor > LOST_DROP) {
+        // Out of sight too long: it fades back into shadow; make the V again.
+        this.phase = 'shape';
+        this.shapeTime = 0;
+        this.rig.root.visible = false;
+        this.puller = -1;
+        this.hideAim();
+        this.say('Your slingshot slipped away: make the V again', 2.5);
+      }
+      return;
+    }
+    this.lostFor = 0;
+    const frame = this.rig.frame;
+    frame.scale.setScalar(Math.min(1, frame.scale.x + dt * 3));
+    // Grip in the palm, fork up along the fingers (leaning towards upright), arms across your view.
+    const palm = this.group.worldToLocal(this.v.copy(holder.palm));
+    const tip = this.group.worldToLocal(this.w.copy(holder.indexTip));
+    this.up.subVectors(tip, palm).normalize().lerp(this.sim.set(0, 1, 0), 0.5).normalize();
+    this.right.set(1, 0, 0).addScaledVector(this.up, -this.up.x).normalize();
+    this.back.crossVectors(this.right, this.up).normalize();
+    this.basis.makeBasis(this.right, this.up, this.back);
+    frame.position.lerp(palm, frame.scale.x < 1 ? 1 : Math.min(1, dt * 20));
+    frame.quaternion.setFromRotationMatrix(this.basis);
+    const k = frame.scale.x;
+    this.tipA.set(-SLING_TIP_SPREAD * k, SLING_TIP_UP * k, 0).applyQuaternion(frame.quaternion).add(frame.position);
+    this.tipB.set(SLING_TIP_SPREAD * k, SLING_TIP_UP * k, 0).applyQuaternion(frame.quaternion).add(frame.position);
+    this.fork.copy(this.tipA).add(this.tipB).multiplyScalar(0.5);
+
+    // The other hand takes the pouch.
+    if (this.puller < 0 && !this.flying && this.reload === 0) {
       hands.forEach((hand, h) => {
-        if (this.holder >= 0 || !hand.tracked || !hand.pinchStarted) return;
-        const p = this.group.worldToLocal(this.v.copy(hand.pinch));
-        if (p.distanceTo(this.pouchAt) < GRAB_REACH) {
-          this.holder = h;
+        if (h === this.holdHand || this.puller >= 0 || !hand.tracked || !hand.pinchStarted) return;
+        const at = this.group.worldToLocal(this.v.copy(hand.pinch));
+        if (at.distanceTo(this.fork) < GRAB_REACH) {
+          this.puller = h;
           playTink(0.03);
         }
       });
     }
-    if (this.holder >= 0) {
-      const hand = hands[this.holder];
+    let pulling = false;
+    if (this.puller >= 0) {
+      const hand = hands[this.puller];
       if (!hand || !hand.tracked || !hand.pinching) {
-        this.holder = -1;
-        this.release(rest);
-        return;
+        this.puller = -1;
+        this.release();
+      } else {
+        const at = this.group.worldToLocal(this.v.copy(hand.hold));
+        const pull = at.sub(this.fork);
+        if (pull.length() > MAX_PULL) pull.setLength(MAX_PULL);
+        this.pouch.copy(this.fork).add(pull);
+        pulling = true;
       }
-      const p = this.group.worldToLocal(this.v.copy(hand.hold));
-      // The pouch follows the pinch, but the bands only stretch so far.
-      const pull = p.sub(rest);
-      if (pull.length() > MAX_PULL) pull.setLength(MAX_PULL);
-      this.pouchAt.copy(rest).add(pull);
-      this.stoneMesh.position.copy(this.pouchAt);
-    } else if (!this.flying) {
-      // Not held: the bands pull the pouch back to rest.
-      this.pouchAt.lerp(rest, Math.min(1, dt * 12));
-      this.stoneMesh.position.copy(this.pouchAt);
+    }
+    if (!pulling) this.pouch.lerp(this.fork, Math.min(1, dt * 14));
+    // Bands from the tips to the pouch, the stone in it.
+    this.stretch(this.rig.bands[0], this.tipA, this.pouch);
+    this.stretch(this.rig.bands[1], this.tipB, this.pouch);
+    this.rig.pouch.position.copy(this.pouch);
+    if (!this.flying) {
+      this.stoneMesh.visible = this.reload === 0;
+      this.stoneMesh.position.copy(this.pouch);
+    }
+    if (pulling) this.showAim();
+    else this.hideAim();
+  }
+
+  private stretch(beam: Mesh, from: Vector3, to: Vector3): void {
+    const d = this.sim.subVectors(to, from);
+    const length = d.length();
+    beam.position.copy(from);
+    beam.quaternion.setFromUnitVectors(this.simV.set(0, 1, 0), d.divideScalar(length || 1));
+    beam.scale.set(1, Math.max(0.001, length), 1);
+  }
+
+  /** Where the stone would go from here: dots along the arc, and a ring where it lands. */
+  private showAim(): void {
+    const pull = this.v.subVectors(this.pouch, this.fork);
+    if (pull.length() < MIN_PULL) {
+      this.hideAim();
+      return;
+    }
+    this.sim.copy(this.pouch);
+    this.simV.copy(pull).multiplyScalar(-OMEGA);
+    let landed: Target | null = null;
+    let ended = false;
+    let shown = 0;
+    const h = 0.01;
+    for (let step = 0, t = 0; step < 200 && !ended; step++, t += h) {
+      this.simV.y -= GRAVITY * h;
+      this.sim.addScaledVector(this.simV, h);
+      for (const target of this.targets) {
+        if (!target.hit && this.sim.distanceTo(target.at) < target.radius + STONE_R) {
+          landed = target;
+          ended = true;
+        }
+      }
+      if (this.sim.y <= this.floor + STONE_R || this.sim.z < -1 || Math.abs(this.sim.x) > 1) ended = true;
+      if (shown < PATH_DOTS && t >= (shown + 1) * PATH_STEP) {
+        this.path[shown].position.copy(this.sim);
+        this.path[shown].visible = true;
+        shown++;
+      }
+    }
+    for (let i = shown; i < PATH_DOTS; i++) this.path[i].visible = false;
+    // The ring: on the target it would hit (green), or on the ground where it would fall (red).
+    const color = landed ? 0x1fae3a : 0xd2380c;
+    this.pathMaterial.color.setHex(color);
+    this.landingMaterial.color.setHex(color);
+    this.landing.visible = true;
+    if (landed) {
+      this.landing.position.copy(landed.at);
+      this.landing.lookAt(this.fork);
+      this.landing.scale.setScalar(1.6);
+    } else {
+      this.landing.position.copy(this.sim).setY(Math.max(this.floor + 0.002, this.sim.y));
+      this.landing.rotation.set(-Math.PI / 2, 0, 0);
+      this.landing.scale.setScalar(1);
     }
   }
 
+  private hideAim(): void {
+    for (const dot of this.path) dot.visible = false;
+    this.landing.visible = false;
+  }
+
   /** Let go: launch at ω·(pull), opposite the pull. */
-  private release(rest: Vector3): void {
-    const pull = this.v.subVectors(this.pouchAt, rest);
+  private release(): void {
+    const pull = this.v.subVectors(this.pouch, this.fork);
+    this.hideAim();
     if (pull.length() < MIN_PULL) {
-      this.say('Pull it further back before you let go', 1.6);
+      this.say('Pull the pouch further back towards you before you let go', 1.8);
       return;
     }
     this.flight.copy(pull).multiplyScalar(-OMEGA);
+    this.stoneMesh.position.copy(this.pouch);
     this.launch();
   }
 
@@ -344,7 +450,7 @@ export class ShadowSlingshot {
     this.flying = true;
     this.flightTime = 0;
     this.shots++;
-    this.pouchAt.copy(POUCH_REST).add(this.v.set(SLING.x, this.floor + SLING.y, SLING.z));
+    this.stoneMesh.visible = true;
     playWhoosh(Math.min(1, this.flight.length() / 3.5));
   }
 
@@ -375,11 +481,12 @@ export class ShadowSlingshot {
 
   private endFlight(hit: boolean): void {
     this.flying = false;
+    this.reload = RELOAD;
+    this.stoneMesh.visible = false;
     if (!hit) {
       this.mistakes++;
-      this.say(['Missed! Watch the arc and adjust your aim', 'Close! Pull a little more or less', 'Aim at the glowing rings'][this.shots % 3], 1.8);
+      this.say('Missed! Pull again and move your hands until the ring turns GREEN on a target', 2.2);
     }
-    if (this.phase === 'aim') this.reload();
   }
 
   private hitTarget(t: Target): void {
@@ -404,7 +511,8 @@ export class ShadowSlingshot {
     }
     if (this.targets.every((x) => x.hit)) {
       this.phase = 'won';
-      this.pouch.visible = this.stoneMesh.visible = false;
+      this.rig.root.visible = false;
+      this.hideAim();
       this.finishIn = 2.6;
       playTinkle();
     }
@@ -438,49 +546,24 @@ export class ShadowSlingshot {
     }
   }
 
-  /** Bands, pouch, rope and the aiming arc where the state puts them. */
-  private layout(): void {
-    const base = this.v.set(SLING.x, this.floor + SLING.y, SLING.z);
-    const scale = this.sling.scale.x;
-    for (const [i, side] of [[0, -1], [1, 1]] as const) {
-      const tip = this.w.set(base.x + side * FORK_HALF * scale, base.y + FORK_TOP * scale, base.z);
-      this.bands[i].mesh.visible = this.phase === 'aim' || this.phase === 'won';
-      if (this.bands[i].mesh.visible) this.bands[i].set(tip, this.pouchAt);
-    }
-    this.pouch.position.copy(this.pouchAt);
-    // The rope: until it snaps, from the arm down to the cage.
+  /** The rope: until it snaps, from the arm down to the cage. */
+  private layoutRope(): void {
     const rope = this.targets[0];
     this.rope.mesh.visible = !rope.hit;
     if (!rope.hit) this.rope.set(this.ropeTop, this.w.copy(this.cage.position).setY(this.cage.position.y + 0.032));
-    // The arc while pulling: where the stone will start to go.
-    const pulling = this.holder >= 0;
-    const rest = this.w.copy(POUCH_REST).add(base);
-    const pull = this.v.subVectors(this.pouchAt, rest);
-    const show = pulling && pull.length() >= MIN_PULL;
-    for (let i = 0; i < PREVIEW_DOTS; i++) {
-      const dot = this.preview[i];
-      dot.visible = show;
-      if (!show) continue;
-      const t = (i + 1) * 0.035;
-      dot.position.set(
-        this.pouchAt.x - pull.x * OMEGA * t,
-        this.pouchAt.y - pull.y * OMEGA * t - 0.5 * GRAVITY * t * t,
-        this.pouchAt.z - pull.z * OMEGA * t,
-      );
-    }
   }
 
   private prompt(): string {
     if (this.phase === 'won') return 'All three targets down! Rook’s lookout is in chaos.';
     if (this.phase === 'shape') {
       return this.shapeTime > 0.1
-        ? 'Hold that V still… it is coming alive'
-        : 'Make a slingshot with your shadow: index and middle fingers up in a V, the others folded';
+        ? 'Hold that V still… your shadow is coming alive'
+        : 'Step 1: make a V with your index and middle fingers (others folded) up in the light';
     }
-    if (this.phase === 'alive') return 'Your shadow is stepping out of the screen…';
+    const next = this.targets.find((t) => !t.hit);
     const left = this.targets.filter((t) => !t.hit).length;
-    if (this.holder >= 0) return 'Aim with the dots, then let go';
-    return `Pinch the pouch, pull back and let go · ${left} target${left === 1 ? '' : 's'} left: the rope, the flag, the bell`;
+    if (this.puller >= 0) return 'Move until the ring turns GREEN on a target, then let go';
+    return `Step 2: pinch the pouch with your other hand and pull back · ${left} left · next: ${next ? ORDER[next.kind] : ''}`;
   }
 
   private say(text: string, seconds: number): void {
@@ -499,12 +582,15 @@ export class ShadowSlingshot {
 
   /** Dev: a perfect shot at the next target (the flight time fixed, the launch solved for it). */
   private devShot(): void {
-    if (this.phase === 'shape') this.comeAlive();
+    if (this.phase === 'shape') this.comeAlive(1);
     if (this.phase !== 'aim' || this.flying) return;
     const target = this.targets.find((t) => !t.hit);
     if (!target) return;
     const time = 0.45;
-    this.flight.subVectors(target.at, this.pouchAt).divideScalar(time);
+    // From where a seated player's hands are: above the table, in front of you.
+    const from = this.v.set(0, this.floor + 0.28, 0.22);
+    this.stoneMesh.position.copy(from);
+    this.flight.subVectors(target.at, from).divideScalar(time);
     this.flight.y += 0.5 * GRAVITY * time;
     this.launch();
   }

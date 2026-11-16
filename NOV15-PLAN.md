@@ -109,3 +109,11 @@ Legend: [x] done and checked · [ ] not done yet
 - [x] **Fetch:** starts at once, runs fast, follows the ball while it still rolls, stops it under its nose, picks it up into its mouth (no teleport), runs back
 - [x] **Wrist menu while playing:** never opens by looking at your palm (shadow poses for the stag or horse kept opening it). Tap your wrist with the other index finger instead; it stays until used, tapped again, or 4 s alone. Outside play, looking at the palm still works
 - [x] **Stag pose easier:** the pinky may do what it likes (holding it down alone is hard); "fingers up" is more forgiving
+
+## 14. Nov 16 night: exit, adjust, wall, fair bosses, slingshot (fourth Quest test)
+- [x] **Exit button:** on the title screen, where Home stands in a level (two pushes: Exit, then Exit? ends the headset session). From any level: Home, then Exit
+- [x] **Adjust button** beside the screen, under Home, on the title and in every level (not the Arena): a card on the screen shows the 3 steps (pinch, drag, Done); the button turns into Done while adjusting
+- [x] **Wrist menu: never by looking at the palm,** anywhere. Only a tap on the wrist with the other index finger
+- [x] **Arsenal defence wall back:** two open palms pushed forward side by side = wall; one palm = shield. No charging. Arena tutorial gains a wall step; signs texts updated
+- [x] **Fair bosses (easy to normal):** health marks (a notch every tenth) on every boss bar. Hits by body part: head ×2, legs ×0.7 (story duels show "HEAD −28"). Story duels: health ×1.0 (was 1.35), dodges/parries about half as often, shorter phase shield. Arena bosses: health on the Arsenal's own scale (24–32, was 95–150: about nine body blows). Morwen (Arena) 30 (was 80), Arena dragon 32 (was 60), Arsenal story dragon 22 (was 30), Shadow Dragon body hits count 0.6 (was 0.4)
+- [x] **Shadow Slingshot level remade** with the Arena's slingshot: make a V and it appears in that hand; pinch the pouch with the other hand, pull back; bold dark dots show the path and a ring shows where it lands (green = will hit a target, red = miss); let go. Clear steps and the next target named on the caption; how-to card rewritten (same in the Quick Tour). Arena slingshot aim dots made solid and dark too

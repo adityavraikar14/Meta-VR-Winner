@@ -145,6 +145,10 @@ export class PushButton {
   private armed = true;
   private color: number = JEWEL[DEFAULT_COLOR];
   private text = '';
+  /** The word on the button now. */
+  get label(): string {
+    return this.text;
+  }
   /** A colour set with setColor wins over the label's own. */
   private pinned = false;
   /** The lens's own colour, and a lighter one it glows towards as a finger nears. */
@@ -712,6 +716,10 @@ const ICONS: Partial<Record<string, Icon>> = {
   pets: paw,
   'quick tour': tourStar,
   'leave?': leave,
+  exit: leave,
+  'exit?': leave,
+  adjust: target,
+  done: play,
   play,
   continue: play,
   replay: loop,

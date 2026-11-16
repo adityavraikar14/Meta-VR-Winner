@@ -96,11 +96,11 @@ const GRACE = 0.9;
  * shadow weapon (about 11), Morwen about 12; head hits, the Hammer, Lightning and your super
  * make it quicker. You take 6 to 8 of their hits (see HIT_DAMAGE), and herbs heal 25.
  */
-const HEALTH_SCALE = 1.35;
+const HEALTH_SCALE = 1.0;
 /** No single hit can take more than this (a head hit can reach half again). */
 const MAX_HIT = 22;
 /** Seconds a rival is untouchable while powering up into a new phase. */
-const PHASE_SHIELD = 2.2;
+const PHASE_SHIELD = 1.4;
 /** Seconds between their ultimate, in phase 2 and phase 3. */
 const ULTIMATE_EVERY: [number, number] = [15, 10];
 /** Your super: how much of the rival's health you must deal to fill it, and what each bolt does. */
@@ -1185,20 +1185,21 @@ export class InkDuel {
     if (foe.busy) return;
     const r = Math.random();
     switch (this.spec.ability) {
+      // Now and then, not every time: most of your throws should land.
       case 'burst':
-        if (r < 0.35) this.roll(foe, pos);
+        if (r < 0.18) this.roll(foe, pos);
         break;
       case 'tumble':
-        if (r < 0.55) this.roll(foe, pos);
+        if (r < 0.25) this.roll(foe, pos);
         break;
       case 'duck':
-        if (r < 0.65 && foe.has('dodge')) foe.play('dodge');
+        if (r < 0.28 && foe.has('dodge')) foe.play('dodge');
         break;
       case 'parry':
-        if (r < 0.5) {
+        if (r < 0.22) {
           foe.play('skill');
           sfx.slice();
-        } else if (r < 0.65) this.roll(foe, pos);
+        } else if (r < 0.3) this.roll(foe, pos);
         break;
     }
   }
@@ -1593,16 +1594,27 @@ export class InkDuel {
     else playWhoosh(shot.shape === 'blade' ? 0.8 : 0.6);
   }
 
+  /** Which part of the rival a point (group space) is at: head, body or legs. */
+  private bodyPart(foe: Rival3D, at: Vector3): 'head' | 'body' | 'legs' {
+    if (at.distanceTo(foe.headAt(this.u)) < 0.075) return 'head';
+    return at.y < foe.root.position.y + this.spec.height * 0.42 ? 'legs' : 'body';
+  }
+
   /** A bolt of your super lands. */
   private superHit(foe: Rival3D, ink: Ink): 'hit' {
     if (ink.weaponShape) this.trainer?.hit(ink.weaponShape);
-    const damage = this.hurt(ink.power ?? 0, ink.pos, ink.weapon !== undefined);
+    // Where it lands matters: the head takes double, the legs less.
+    const part = ink.weapon ? this.bodyPart(foe, ink.pos) : 'body';
+    const scale = part === 'head' ? 2 : part === 'legs' ? 0.7 : 1;
+    const damage = this.hurt(Math.round((ink.power ?? 0) * scale), ink.pos, ink.weapon !== undefined);
     if (damage > 0) {
       foe.flinch(ink.weapon === undefined || damage >= 14);
       this.splashAt(ink.pos, ink.weapon ? 0xb88aff : 0xffc928);
       if (ink.weapon) {
-        this.comic.pop(`${damage}`, this.v.copy(ink.pos).setY(ink.pos.y + 0.08), '#ffffff', 0.8, 0.9);
+        const label = part === 'head' ? `HEAD −${damage}` : part === 'legs' ? `LEGS −${damage}` : `−${damage}`;
+        this.comic.pop(label, this.v.copy(ink.pos).setY(ink.pos.y + 0.08), part === 'head' ? '#ffd23a' : '#ffffff', part === 'head' ? 1 : 0.8, 0.9);
         playBoom(0.05 + damage * 0.003);
+        if (part === 'head') this.flash('Head hit! Double damage', 1);
       }
       this.tally.hits++;
       if (this.rivalHealth <= 0) this.end(true);

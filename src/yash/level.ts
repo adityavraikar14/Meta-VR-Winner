@@ -409,7 +409,7 @@ export class ArsenalLevelSystem extends createSystem({}) {
     this.handsLabel = new Label(0.07);
     this.handsLabel.set('✋ Show your hands', '#ffe9b0');
     this.armHint = new Label(0.045);
-    this.armHint.set('Make a sign in front of you: ✊ sword · 🫴 ball · ✋ shield · 👉 blaster · ✌️ sling', '#ffe9b0');
+    this.armHint.set('Make a sign in front of you: ✊ sword · 🫴 ball · ✋ shield · 🙌 two palms: wall · 👉 blaster · ✌️ sling', '#ffe9b0');
     this.armHint.sprite.visible = false;
     this.root.add(this.armHint.sprite);
     this.statusLabel = new Label(0.12);

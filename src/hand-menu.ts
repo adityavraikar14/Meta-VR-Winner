@@ -185,7 +185,8 @@ export class HandMenuSystem extends createSystem({}) {
       this.holdTime[i] = asking ? this.holdTime[i] + dt : 0;
     }
     const openHold = stage.arena ? ARENA_OPEN_HOLD : stage.playing ? PLAYING_OPEN_HOLD : OPEN_HOLD;
-    const tapOnly = stage.inLevel || stage.arena || stage.fight || stage.pets;
+    // Never by looking at a palm (shadow play turns palms every way): only a deliberate tap on the wrist.
+    const tapOnly = true;
     for (let i = 0; i < 2; i++) {
       const on = this.tapping(i);
       if (!on) this.tapReady[i] = true;

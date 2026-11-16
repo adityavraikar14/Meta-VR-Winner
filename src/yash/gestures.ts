@@ -12,9 +12,11 @@
  *   gun    a finger gun: index pointing, the other three fingers curled
  *   sling  a V sign: index and middle up, the other two curled; they are the fork
  *
- * One hand each, so two hands never make two things by accident. A hand that
- * is pinching (drawing in the air) makes no sign. The spear and the wall are
- * drawn in the air (see air-sketch.ts) rather than signed.
+ *   wall   BOTH open palms pushed forward, side by side (the defence wall)
+ *
+ * The wall is the only two-hand sign; otherwise one hand each, so two hands
+ * never make two things by accident. A hand that is pinching (drawing in the
+ * air) makes no sign. The spear is drawn in the air (see air-sketch.ts).
  */
 import { Vector3 } from '@iwsdk/core';
 import type { HandState, Side } from './hands.js';
@@ -197,7 +199,7 @@ export function classify(
   return out;
 }
 
-const TWO_HANDED: readonly Sign[] = [];
+const TWO_HANDED: readonly Sign[] = ['wall'];
 /** Stands in for a hand that is drawing or out of place. */
 const NOT_SIGNING = { tracked: false } as HandState;
 
@@ -209,52 +211,22 @@ function classifySign(
   keep: Sign,
 ): Reading {
   const slack = (sign: Sign) => (sign === keep ? STICKY : 0);
-  // One-handed signs only now (no charging sign, no two-handed spear or wall).
-  const both = false;
-
-  if (both) {
-    if (isOpen(left, STICKY) && isOpen(right, STICKY)) {
-      between.copy(right.palm).sub(left.palm);
-      const gap = between.length();
-      between.divideScalar(gap || 1);
-      // Left palm faces towards the right hand, right palm towards the left.
-      const arm = slack('arm');
-      if (
-        isOpen(left, arm) &&
-        isOpen(right, arm) &&
-        gap > ARM_MIN_GAP &&
-        gap < ARM_MAX_GAP + arm &&
-        left.normal.dot(between) > ARM_FACING - arm &&
-        right.normal.dot(between) < -(ARM_FACING - arm)
-      ) {
-        out.sign = 'arm';
-        return out;
-      }
-      const wall = slack('wall');
-      if (
-        isOpen(left, wall) &&
-        isOpen(right, wall) &&
-        left.normal.dot(forward) > PALM_FORWARD - wall &&
-        right.normal.dot(forward) > PALM_FORWARD - wall &&
-        Math.abs(right.palm.y - left.palm.y) < WALL_MAX_RISE + wall &&
-        gap > WALL_MIN_GAP &&
-        gap < WALL_MAX_GAP
-      ) {
-        out.sign = 'wall';
-        return out;
-      }
-    }
-    const spear = slack('spear');
-    if (isFist(left, spear) && isFist(right, spear)) {
-      const rise = Math.abs(right.palm.y - left.palm.y);
-      const sideways = Math.hypot(right.palm.x - left.palm.x, right.palm.z - left.palm.z);
-      const stacked = rise > SPEAR_MIN_RISE && sideways < SPEAR_MAX_SIDEWAYS + spear;
-      const gripped = rise <= SPEAR_MIN_RISE && sideways < SPEAR_GRIP_GAP + spear;
-      if (stacked || gripped) {
-        out.sign = 'spear';
-        out.hand = 'right';
-      }
-      // Two fists apart mean nothing: don't fall through to sword.
+  // Two open palms pushed forward, side by side: the defence wall (one palm alone is the shield).
+  // No charging, and no other two-handed signs.
+  if (left.tracked && right.tracked && isOpen(left, STICKY) && isOpen(right, STICKY)) {
+    between.copy(right.palm).sub(left.palm);
+    const gap = between.length();
+    const wall = slack('wall');
+    if (
+      isOpen(left, wall) &&
+      isOpen(right, wall) &&
+      left.normal.dot(forward) > PALM_FORWARD - wall &&
+      right.normal.dot(forward) > PALM_FORWARD - wall &&
+      Math.abs(right.palm.y - left.palm.y) < WALL_MAX_RISE + wall &&
+      gap > WALL_MIN_GAP &&
+      gap < WALL_MAX_GAP + wall
+    ) {
+      out.sign = 'wall';
       return out;
     }
   }

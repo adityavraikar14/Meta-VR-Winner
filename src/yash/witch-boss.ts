@@ -17,7 +17,7 @@ import { loadWitch, NamePlate, WitchModel, type WitchMove } from './witch-model.
 const HEIGHT = 1.6;
 const DISTANCE = 2.6;
 const FEET_DROP = 1.25;
-const MAX_HP = 80;
+const MAX_HP = 30;
 /** Seconds between moves, calm and enraged. */
 const REST = 2.0;
 const ENRAGED_REST = 1.3;

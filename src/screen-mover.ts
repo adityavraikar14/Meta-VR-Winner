@@ -1,10 +1,11 @@
-import { Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, Vector3 } from '@iwsdk/core';
+import { CanvasTexture, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, SRGBColorSpace, Vector3 } from '@iwsdk/core';
 
 import { PAPER_HEIGHT, PAPER_WIDTH, stage } from './stage-state.js';
+import { FONT } from './ui-theme.js';
 
 /**
- * Move the screen (and the whole world on it) to suit how you sit. Push Move
- * on the wrist menu (or in Settings), then pinch anywhere in the air and drag:
+ * Move the screen (and the whole world on it) to suit how you sit. Push Adjust
+ * (beside the screen, under Home), then pinch anywhere in the air and drag:
  * the screen follows your hand, twice as far as the hand goes, and keeps
  * turning to face you. Let go for a moment and it stays there. The distance
  * and height are remembered for next time, and Recenter keeps them.
@@ -26,8 +27,8 @@ const GAIN = 2;
 /** Pinch closes under this thumb-to-index gap and opens over the second. */
 const PINCH: [number, number] = [0.022, 0.045];
 /** Moving ends by itself this long after you let go (or if you never pinch). */
-const DONE_AFTER = 3.5;
-const IDLE_LIMIT = 15;
+const DONE_AFTER = 8;
+const IDLE_LIMIT = 40;
 
 const THUMB_TIP = 4;
 const INDEX_TIP = 9;
@@ -70,6 +71,8 @@ export class ScreenMover {
   private time = 0;
   private sinceDrag = 0;
   private dragged = false;
+  /** How to do it, in the middle of the screen while adjusting (faint while you drag). */
+  private readonly cardMaterial: MeshBasicMaterial;
 
   constructor(
     private readonly paper: Group,
@@ -91,6 +94,17 @@ export class ScreenMover {
       bar.renderOrder = 29;
       this.frame.add(bar);
     }
+    const canvas = document.createElement('canvas');
+    canvas.width = 1400;
+    canvas.height = 700;
+    drawCard(canvas);
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    this.cardMaterial = new MeshBasicMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+    const card = new Mesh(new PlaneGeometry(0.66, 0.33), this.cardMaterial);
+    card.position.set(0, 0.02, 0.12);
+    card.renderOrder = 31;
+    this.frame.add(card);
     this.frame.visible = false;
     this.frame.name = 'MoveFrame';
     paper.add(this.frame);
@@ -155,16 +169,18 @@ export class ScreenMover {
       this.dragged = true;
       this.sinceDrag = 0;
     } else this.sinceDrag += dt;
+    const faint = this.pinched[0] || this.pinched[1] ? 0.25 : 1;
+    this.cardMaterial.opacity += (faint - this.cardMaterial.opacity) * Math.min(1, dt * 8);
     stage.moveCaption = this.caption();
     if ((this.dragged && this.sinceDrag > DONE_AFTER) || (!this.dragged && this.time > IDLE_LIMIT)) this.finish(head);
   }
 
   /** What to say on the caption while moving. */
   caption(): string {
-    if (this.pinched[0] || this.pinched[1]) return '✋ Moving the screen… let go when it feels right';
+    if (this.pinched[0] || this.pinched[1]) return 'Moving the screen… let go when it feels right';
     return this.dragged
-      ? '✋ Pinch and drag again to adjust, or wait a moment to finish'
-      : '✋ Pinch anywhere in the air and drag: the screen and its world follow your hand';
+      ? 'Pinch and drag again to fine-tune, or push Done'
+      : 'Pinch your thumb and index finger anywhere in the air, then drag';
   }
 
   private drag(by: Vector3, head: Vector3): void {
@@ -197,4 +213,44 @@ export class ScreenMover {
     saveSeat(seat);
     return seat;
   }
+}
+
+/** The steps, big and plain: pinch, drag, Done. */
+function drawCard(canvas: HTMLCanvasElement): void {
+  const g = canvas.getContext('2d')!;
+  const w = canvas.width;
+  const h = canvas.height;
+  g.fillStyle = 'rgba(16, 26, 48, 0.92)';
+  g.beginPath();
+  g.roundRect(8, 8, w - 16, h - 16, 48);
+  g.fill();
+  g.strokeStyle = '#ffd84a';
+  g.lineWidth = 8;
+  g.stroke();
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#ffd84a';
+  g.font = `900 78px ${FONT}`;
+  g.fillText('Adjust the screen', w / 2, 100);
+  const steps = [
+    'Pinch thumb and index finger, anywhere in the air',
+    'Drag: closer, further, up or down. The screen follows',
+    'Let go, then push Done (beside the screen)',
+  ];
+  g.textAlign = 'left';
+  steps.forEach((text, i) => {
+    const y = 250 + i * 140;
+    g.fillStyle = '#ffd84a';
+    g.beginPath();
+    g.arc(110, y, 42, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#10203a';
+    g.font = `900 52px ${FONT}`;
+    g.textAlign = 'center';
+    g.fillText(String(i + 1), 110, y + 2);
+    g.textAlign = 'left';
+    g.fillStyle = '#ffffff';
+    g.font = `800 50px ${FONT}`;
+    g.fillText(text, 180, y, w - 220);
+  });
 }
