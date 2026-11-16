@@ -30,7 +30,7 @@ import type { HandState } from './hand-input.js';
  * The Pet Park (Shadow Pets): choose your animal, make its shadow, and it
  * comes alive on the table. Then look after it and teach it, like a real pet:
  *
- *   The board on the table: choose a pet, and push any of 28 tricks.
+ *   The board on the table (front right, clear of Home, Skip and Hint): choose a pet, and push any of 28 tricks.
  *   Hand signals, as dog trainers use: palm up (sit), palm down high above it
  *   (lie down), palm facing it (stay), finger gun (play dead), point at the
  *   table (go there), a quick lift of the open hand (jump).
@@ -127,12 +127,12 @@ const SIGNALS = [
 
 /** Stage-local spots (metres; +z towards you), on the table's surface. */
 const FRONT = new Vector3(0, 0, 0.13);
-const WATER_AT = new Vector3(0.38, 0, 0.06);
+const WATER_AT = new Vector3(-0.24, 0, 0.05);
 const LOG_AT = new Vector3(-0.05, 0, -0.12);
 const HOOP_AT = new Vector3(0.22, 0, -0.22);
 const HOUSE_AT = new Vector3(-0.4, 0, -0.28);
-const BALL_HOME = new Vector3(-0.16, 0, 0.16);
-const BOARD_AT = new Vector3(-0.47, 0.075, -0.1);
+const BALL_HOME = new Vector3(0.16, 0, 0.16);
+const BOARD_AT = new Vector3(0.47, 0.075, -0.1);
 const BOARD_W = 0.3;
 const BOARD_H = 0.21;
 /** The table's playable area, stage-local. */

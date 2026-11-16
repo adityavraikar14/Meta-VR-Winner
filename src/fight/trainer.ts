@@ -6,6 +6,7 @@ import { layout } from '../ui-theme.js';
 import { FONT } from '../ui-theme.js';
 import { DRAWN_WEAPON, drawHand, drawSketch, SHAPE_LABEL, SKETCH_ORDER } from './arms-art.js';
 import { ARMS, type ShadowShape, SHAPES } from './shadow-arms.js';
+import type { GhostLesson } from './coach-ghost.js';
 import type { Sketch } from './sketch.js';
 
 /**
@@ -21,10 +22,12 @@ export interface Lesson {
   /** A hand shape to make, or a drawing to draw. */
   shape?: ShadowShape;
   sketch?: Sketch;
+  /** Draw anything at all: it comes alive. */
+  free?: boolean;
   /** What to do with it once it forms. */
   use: string;
-  /** Pass by hitting them, or by blocking their ink (times). */
-  goal: 'hit' | 'block';
+  /** Pass by hitting them, by blocking their ink, or by bringing a drawing to life (times). */
+  goal: 'hit' | 'block' | 'alive';
   times: number;
 }
 
@@ -46,6 +49,7 @@ const LESSONS: Lesson[] = [
       times: 1,
     };
   }),
+  { title: 'Draw anything: it comes alive', free: true, use: 'Any shape or line (not a circle, triangle or box) comes alive and fights for you', goal: 'alive', times: 1 },
 ];
 
 export class Trainer {
@@ -70,8 +74,9 @@ export class Trainer {
   /** The lessons this session teaches (all of them, or the Quick Tour's few). */
   private readonly list: Lesson[];
 
-  constructor(parent: Group, only?: readonly number[]) {
-    this.list = only ? only.map((i) => LESSONS[i]) : LESSONS;
+  constructor(parent: Group) {
+    // Every lesson, in the Training Arena and on the Quick Tour alike (Skip moves on whenever you like).
+    this.list = LESSONS;
     // The lesson above, a strip along the bottom for Back and Next (inside the card, not hanging below it).
     this.canvas.width = 2048;
     this.canvas.height = 1624;
@@ -90,12 +95,31 @@ export class Trainer {
       button.root.position.set(x, -0.165, 0.01);
       button.show(true);
     }
-    this.root.scale.setScalar(0.78);
+    // Small and to your right, so your sparring partner and your hands stay in view.
+    this.root.scale.setScalar(0.58);
     parent.add(this.root);
   }
 
   get lesson(): Lesson {
     return this.list[this.index];
+  }
+
+  /** A lesson just passed: the well-done moment. */
+  get celebrating(): boolean {
+    return this.passed > 0;
+  }
+
+  /** What the ghost hands show for this lesson. */
+  get ghost(): GhostLesson {
+    const l = this.lesson;
+    if (l.shape === 'fist' || l.shape === 'point' || l.shape === 'palm') return l.shape;
+    if (l.sketch === 'circle' || l.sketch === 'triangle' || l.sketch === 'box') return l.sketch;
+    return 'free';
+  }
+
+  /** A sign lesson (drawing lessons switch the signs off, so a hand drawing never makes one). */
+  get signs(): boolean {
+    return !!this.lesson.shape;
   }
 
   /** Does this lesson want them to throw at you (to block)? */
@@ -107,7 +131,8 @@ export class Trainer {
   get caption(): string {
     if (this.passed > 0) return this.finished ? 'Training complete! Every weapon learned' : `Well done! Next: ${this.list[this.index + 1]?.title ?? 'free practice'}`;
     const l = this.lesson;
-    if (!this.formed) return l.shape ? `Make ${SHAPE_LABEL[l.shape].toLowerCase()} and hold it still` : `Pinch and draw ${l.sketch === 'sword' ? 'a long blade' : `a ${l.sketch}`} in the air, then let go`;
+    if (l.free) return 'Pinch and draw anything in the air (a squiggle, a line, a star), then let go: it comes alive';
+    if (!this.formed) return l.shape ? `Copy the ghost hand on your left: ${SHAPE_LABEL[l.shape].toLowerCase()}, up in the light` : `Copy the ghost hand: pinch and draw ${l.sketch === 'sword' ? 'a long blade' : `a ${l.sketch}`} in the air, then let go`;
     return l.use;
   }
 
@@ -124,6 +149,12 @@ export class Trainer {
   }
   blocked(): void {
     if (this.lesson.goal === 'block' && this.formed) this.score();
+  }
+  alive(): void {
+    if (this.lesson.goal === 'alive') {
+      this.formed = this.made = true;
+      this.score();
+    }
   }
 
   private score(): void {
@@ -191,7 +222,7 @@ export class Trainer {
     g.fillText(l.title, 28, 84, w - 56);
 
     // Left: the shape to make (or the drawing to draw). Right: what your hand is doing now.
-    const spec = ARMS[l.shape ?? DRAWN_WEAPON[l.sketch!]];
+    const spec = l.free ? { name: 'A living drawing', color: 0xffc928 } : ARMS[l.shape ?? DRAWN_WEAPON[l.sketch!]];
     const color = `#${spec.color.toString(16).padStart(6, '0')}`;
     g.fillStyle = 'rgba(255,255,255,0.07)';
     g.beginPath();
@@ -206,7 +237,22 @@ export class Trainer {
     g.fillText(l.shape ? 'MAKE THIS SHAPE' : 'DRAW THIS', 178, 140);
     g.fillText('YOUR HAND NOW', w - 178, 140);
     if (l.shape) drawHand(g, 178, 268, 80, l.shape, color);
-    else drawSketch(g, 178, 268, 170, l.sketch!, color);
+    else if (l.sketch) drawSketch(g, 178, 268, 170, l.sketch, color);
+    else {
+      // Any squiggle at all.
+      g.strokeStyle = color;
+      g.lineWidth = 12;
+      g.lineCap = 'round';
+      g.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40;
+        const x = 178 - 110 + 220 * t;
+        const y = 268 + 50 * Math.sin(t * Math.PI * 3);
+        if (i) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      }
+      g.stroke();
+    }
     g.fillStyle = '#ffffff';
     g.font = `800 27px ${FONT}`;
     g.fillText(l.shape ? SHAPE_LABEL[l.shape] : `then let go`, 178, 396);
@@ -239,12 +285,12 @@ export class Trainer {
     g.fillText(spec.name, w / 2, 280, 330);
     g.fillStyle = '#c2d0ec';
     g.font = `700 22px ${FONT}`;
-    g.fillText('forms in your hand', w / 2, 316, 330);
+    g.fillText(l.free ? 'comes alive and fights' : 'forms in your hand', w / 2, 316, 330);
 
     // The three steps, ticked as you go.
     const steps = [
-      l.shape ? `Make the shape: ${SHAPE_LABEL[l.shape].toLowerCase()}` : `Pinch and draw it in the air, then let go`,
-      l.shape ? 'Hold it still a moment: the weapon forms in your hand' : 'The drawing turns into the weapon, in that hand',
+      l.shape ? `Make the shape: ${SHAPE_LABEL[l.shape].toLowerCase()}, up in the light` : `Pinch and draw it in the air, then let go`,
+      l.shape ? 'Hold it still a moment: the weapon forms in your hand' : l.free ? 'It puffs up and comes alive' : 'The drawing turns into the weapon, in that hand',
       `${l.use}${l.times > 1 ? ` (${Math.min(this.count, l.times)}/${l.times})` : ''}`,
     ];
     const done = [this.made || this.formed, this.formed, this.count >= l.times];
@@ -272,7 +318,7 @@ export class Trainer {
       g.fillStyle = '#9fb3d9';
       g.font = `700 24px ${FONT}`;
       g.textAlign = 'center';
-      g.fillText('◀ Back · Next ▶  choose any lesson', w / 2, 740);
+      g.fillText('Watch the ghost hand on your left  ·  Done? Push Skip to move on', w / 2, 740);
     }
     this.texture.needsUpdate = true;
   }

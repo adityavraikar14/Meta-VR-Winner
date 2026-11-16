@@ -213,5 +213,5 @@ export function drawArmsChart(g: CanvasRenderingContext2D, w: number, h: number)
   g.textAlign = 'left';
   g.fillStyle = '#c9d4ec';
   g.font = `700 15px ${FONT}`;
-  g.fillText('Pinch and draw: a line is ink to grab and throw; any other closed shape comes alive.', 26, y + 96, w - 52);
+  g.fillText('Pinch and draw anything else (a line, a squiggle, a star): it comes alive and fights for you.', 26, y + 96, w - 52);
 }

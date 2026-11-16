@@ -8,7 +8,7 @@ const DUEL_STEPS = [
   'Three signs, held up in the light so their shadow is on the screen: ✊ fist = Shadow Ball · ☝ one finger = Shadow Spear · ✋ open palm towards them = Shield',
   'Hold the sign a moment and the weapon forms in your hand; punch towards them to throw it. One weapon at a time',
   'Or pinch and draw in the air: a circle = ball, a triangle = spear, a box = shield',
-  'Any other closed shape comes alive and fights beside you; a line is ink to grab and throw',
+  'Draw anything else (a line, a squiggle, a star): it comes alive and fights beside you',
   'Hold the shield up to stop their ink. Hurt? Touch a herb',
 ];
 
@@ -152,10 +152,10 @@ export const HOW_TO: Record<string, string[]> = {
   'fight-morwen': DUEL_STEPS,
   duel: DUEL_STEPS,
   training: [
-    'Read the lesson card: it shows the sign to make, and your hand as it is now',
+    'Copy the ghost hand on your left: it shows each sign, the punch to throw, and each drawing; the card on your right shows your own hand',
     'Hold the sign up in the light (its shadow on the screen): the ring fills and the weapon forms in your hand',
     'Use it on Vance as the card says: punch to throw, or hold the shield up',
-    'Each lesson passes by itself; Back and Next pick any lesson. Vance cannot hurt you here',
+    'Seven lessons, each passes by itself; Back and Next pick any. Done? Push Skip. Vance cannot hurt you here',
   ],
   pets: [
     'Choose a pet on the board in front of you, then copy its hand shape in the light: it comes alive',

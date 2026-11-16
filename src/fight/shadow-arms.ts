@@ -89,7 +89,7 @@ const FIST_INDEX = 0.3;
 /** The open palm's thumb only has to be away from the hand a little. */
 const THUMB_OPEN = 0.55;
 /** Thumb and index this close: a pinch (drawing), never a sign. */
-const PINCHING = 0.045;
+const PINCHING = 0.06;
 
 /** A fist: all four fingers curled in, the index right in (the thumb may wrap round or rest on top). */
 export function isFist(hand: HandState): boolean {
@@ -220,7 +220,7 @@ const COOLDOWN = 0.5;
 /** A formed weapon waits this long unused, then fades. */
 const IDLE_LIMIT = 8;
 /** After a pinch (drawing) ends, that hand makes no sign for this long, so letting go of a line can't form a weapon. */
-const QUIET_AFTER_PINCH = 0.45;
+const QUIET_AFTER_PINCH = 0.9;
 
 interface HandArm {
   shape: ShadowShape | null;
@@ -300,6 +300,9 @@ export class ShadowArms {
     return this.hands[h].onScreen;
   }
 
+  /** Signs on (off in Training's drawing lessons, so a drawing hand never makes a shield). */
+  signsOn = true;
+
   /** This hand is making (or holding) a shadow weapon: no drawing with it. */
   busy(h: number): boolean {
     const arm = this.hands[h];
@@ -350,7 +353,7 @@ export class ShadowArms {
       arm.quiet = drawing ? QUIET_AFTER_PINCH : Math.max(0, arm.quiet - dt);
       // Only a hand up in the light, its shadow on the screen, makes a sign.
       arm.onScreen = shadowOnScreen(hand.palm);
-      const raw = arm.quiet > 0 ? null : classifyShape(hand);
+      const raw = arm.quiet > 0 || !this.signsOn ? null : classifyShape(hand);
       // A sign made out of the light: noted, so the fight can say where to hold it.
       arm.offTime = raw && !arm.onScreen ? arm.offTime + dt : 0;
       let now = arm.onScreen ? raw : null;

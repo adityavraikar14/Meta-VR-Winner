@@ -42,8 +42,8 @@ import { ARMS, type ArmShot, planVolley, ShadowArms, type ShadowShape, shadowMat
 /** The thrown shadow weapons, in the order the dev key fires them. */
 const DEV_ARMS: ShadowShape[] = ['fist', 'vee', 'horns', 'blade', 'three', 'thumb', 'point', 'shaka', 'ell'];
 import { recognise, type Sketch, SKETCH_NAMES } from './sketch.js';
+import { CoachGhost } from './coach-ghost.js';
 import { Trainer } from './trainer.js';
-import { TOUR_LESSONS } from '../tour.js';
 
 /**
  * Ink Duel: a fight against a rival of your choice, six of them, who step
@@ -74,6 +74,8 @@ const INK_DENSITY = 0.5;
 const MAX_INK = 0.6;
 const STEP = 0.007;
 const HANG_TIME = 9;
+/** A stroke shorter than this (metres) is a dot: nothing comes of it. */
+const MIN_ALIVE = 0.05;
 const GRAVITY = 9.8;
 const GRAB_REACH = 0.035;
 /** Damage per joule of kinetic energy. */
@@ -219,6 +221,8 @@ export class InkDuel {
   /** The Training Arena: nothing hurts you, they do not fall, and the coach teaches each weapon. */
   readonly training = trainingNext;
   private trainer: Trainer | null = null;
+  /** Training: see-through hands that show each lesson. */
+  private ghost: CoachGhost | null = null;
   private trainingClock = 0;
   private mode: Mode = 'ready';
   private modeTime = 0;
@@ -323,8 +327,10 @@ export class InkDuel {
     this.arms = new ShadowArms(this.group);
     if (this.training) {
       this.god = true;
-      this.trainer = new Trainer(this.group, stage.tour ? TOUR_LESSONS : undefined);
+      this.trainer = new Trainer(this.group);
       this.trainer.root.visible = false;
+      this.ghost = new CoachGhost();
+      this.group.add(this.ghost.root);
     }
     this.rival = new FlatRival();
     this.rival.root.visible = false;
@@ -792,18 +798,30 @@ export class InkDuel {
       this.drawnWeapon(ink, h, sketch);
       return;
     }
-    // A closed shape comes alive.
-    if (closed) {
-      if (this.doodles.length < MAX_DOODLES) {
-        this.comeAlive(ink);
-        return;
-      }
-      this.flash('Three living drawings is a crowd: this one stays ink', 1.8);
+    // Everything else comes alive: a closed shape as it is, a line or a scribble as a thick ink
+    // creature. Only a dot (a tiny stroke) is nothing, and it is gone at once.
+    if (this.inkLength(ink) < MIN_ALIVE) {
+      this.puff(ink);
+      return;
     }
-    ink.mass = this.inkLength(ink) * INK_DENSITY;
-    ink.state = 'hanging';
-    ink.age = 0;
-    this.rebuild(ink);
+    if (!closed) ink.points = thicken(ink.points, this.v.copy(this.head).sub(ink.pos).setY(0));
+    // A crowd: the oldest makes room.
+    if (this.doodles.length >= MAX_DOODLES) this.popDoodle(this.doodles[0], true);
+    try {
+      this.comeAlive(ink);
+      this.trainer?.alive();
+    } catch {
+      this.puff(ink);
+    }
+  }
+
+  /** A stroke that is nothing: a puff, and it is gone. */
+  private puff(ink: Ink): void {
+    for (let i = 0; i < 6; i++) {
+      this.w.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.15);
+      this.sparks.emit(ink.pos, this.w, { life: 0.25, size: [0.006, 0.001], from: 0xc8c0b0 });
+    }
+    this.remove(ink);
   }
 
   private newInk(rival: boolean, at: Vector3): Ink {
@@ -1520,11 +1538,13 @@ export class InkDuel {
     const trainer = this.trainer;
     if (!trainer) return;
     trainer.root.visible = true;
-    // Low on the table in front of you, tilted up like a card on a desk: clear of the Home, Skip
-    // and Hint buttons, of your sparring partner and of the screen, and below your hands.
-    const toYou = this.w.copy(this.head).sub(this.rivalSpot).setY(0).normalize();
-    trainer.root.position.copy(this.rivalSpot).addScaledVector(toYou, 0.34);
-    trainer.root.position.y = Math.max(this.head.y - 0.42, this.rivalSpot.y + 0.17);
+    // Small, low and to your right: your sparring partner, your hands and the ghost hands stay in view.
+    const ahead = this.w.copy(this.rivalSpot).sub(this.head).setY(0).normalize();
+    const right = this.u.set(-ahead.z, 0, ahead.x);
+    trainer.root.position.copy(this.head).addScaledVector(ahead, 0.46).addScaledVector(right, 0.34);
+    trainer.root.position.y = this.head.y - 0.3;
+    this.arms.signsOn = trainer.signs;
+    this.ghost?.update(dt, this.time, trainer.celebrating ? null : trainer.ghost, this.head, ahead);
     const tips = hands.filter((h) => h.tracked).map((h) => h.indexTip);
     const seen = this.arms.seen.find((s) => s === trainer.lesson.shape) ?? this.arms.seen.find((s) => s !== null) ?? null;
     trainer.update(dt, tips, seen, this.arms.formingProgress(), this.headWorld);
@@ -2444,4 +2464,26 @@ function splatTexture(): CanvasTexture {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
+}
+
+/**
+ * An open stroke (a line, a scribble) as a closed outline: the stroke
+ * widened to each side, across the view, so it can come alive as a body.
+ */
+function thicken(points: readonly Vector3[], toViewer: Vector3): Vector3[] {
+  const view = toViewer.lengthSq() > 1e-6 ? toViewer.clone().normalize() : new Vector3(0, 0, 1);
+  const r = 0.012;
+  const left: Vector3[] = [];
+  const right: Vector3[] = [];
+  const tangent = new Vector3();
+  const side = new Vector3();
+  for (let i = 0; i < points.length; i++) {
+    tangent.subVectors(points[Math.min(points.length - 1, i + 1)], points[Math.max(0, i - 1)]);
+    side.crossVectors(tangent, view);
+    if (side.lengthSq() < 1e-10) side.set(0, 1, 0);
+    side.normalize().multiplyScalar(r);
+    left.push(points[i].clone().add(side));
+    right.push(points[i].clone().sub(side));
+  }
+  return [...left, ...right.reverse()];
 }

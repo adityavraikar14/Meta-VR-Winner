@@ -166,8 +166,6 @@ const STUCK_AFTER = 40;
 const HOME_AT = new Vector3(0.42, 0.17, 0.6);
 /** Seconds the Home button waits for its second push. */
 const HOME_CONFIRM = 3;
-/** Adjust (move the screen) sits under Home, on the same side. */
-const ADJUST_DROP = 0.17;
 /** Phases in which a level is under way and can be skipped. */
 const SKIPPABLE: ReadonlySet<Phase> = new Set(['story', 'matching', 'awakening', 'solving', 'oops']);
 const VIEWER = new Vector3(0, 0.12, 1.0);
@@ -1329,10 +1327,10 @@ export class ShadowGameSystem extends createSystem({
   private updateRoomButtons(dt: number): void {
     const paper = stage.paper;
     const title = this.phase === 'title' && !this.intro.active;
-    const place = (button: PushButton, y: number) => {
+    const place = (button: PushButton, y: number, across = false) => {
       if (!paper) return;
       this.roomSpot.copy(HOME_AT);
-      this.roomSpot.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
+      this.roomSpot.x = (this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x) * (across ? -1 : 1);
       this.roomSpot.y = y;
       paper.localToWorld(button.root.position.copy(this.roomSpot));
       button.root.parent?.worldToLocal(button.root.position);
@@ -1363,7 +1361,8 @@ export class ShadowGameSystem extends createSystem({
     // Adjust: move the screen and its world to suit how you sit.
     const adjustOn = !!paper && !stage.arena && !this.intro.active && (title || (!stage.menuOpen || stage.moving));
     this.adjustButton.show(adjustOn);
-    place(this.adjustButton, HOME_AT.y - ADJUST_DROP);
+    // On the other side of the screen from Home, Skip and Hint, level with Home: nothing to hide behind.
+    place(this.adjustButton, HOME_AT.y, true);
     const label = stage.moving ? 'Done' : 'Adjust';
     if (this.adjustButton.label !== label) this.adjustButton.setText(label);
     if (this.adjustButton.update(dt, this.liveTips, this.adjustClick) && adjustOn) {

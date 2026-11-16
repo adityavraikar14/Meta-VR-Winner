@@ -20,11 +20,12 @@ import type { HandState } from '../creatures/hand-input.js';
 import { devActions } from '../dev-tools.js';
 
 /**
- * Before the Shadow Dragon: choose how to fight it. Two stones float over
- * the stage, and you touch and hold one with a fingertip until its ring
- * fills. Shadow is the story's own magic (hand shadows and drawings become
- * weapons; an open palm mirrors fire back). The Arsenal is
- * Yash's: hold an invisible ball to arm, then sign for one of seven weapons.
+ * Before the Shadow Dragon: choose how to fight it. A card over the stage
+ * says what each choice means; two stones float under it, and you touch and
+ * hold one with a fingertip until its ring fills. Shadow is the story's own
+ * magic, the powers learned in Training (hand shadows and drawings become
+ * weapons). The Arsenal is the Arena's: one hand sign, one weapon.
+ * Nothing starts until you choose.
  */
 
 export type Power = 'light' | 'arsenal';
@@ -32,7 +33,7 @@ export type Power = 'light' | 'arsenal';
 /** A fingertip this close to a stone's centre is touching it (stage space, metres). */
 const TOUCH = 0.05;
 /** Seconds of touch to choose, so a hand passing by doesn't. */
-const HOLD = 0.6;
+const HOLD = 0.8;
 const STONE = 0.032;
 
 interface Stone {
@@ -46,13 +47,13 @@ interface Stone {
 }
 
 const STONES: { power: Power; x: number; color: number; glow: string; title: string; sub: string }[] = [
-  { power: 'light', x: -0.12, color: 0xbfe4ff, glow: 'rgba(170,220,255,0.9)', title: '🌑 Shadow', sub: 'Hand shadows and drawings become weapons' },
-  { power: 'arsenal', x: 0.12, color: 0xffb35a, glow: 'rgba(255,180,90,0.9)', title: '⚔️ The Arsenal', sub: 'Arm, then sign: seven weapons' },
+  { power: 'light', x: -0.14, color: 0xbfe4ff, glow: 'rgba(170,220,255,0.9)', title: '🌑 Shadow', sub: 'Your Training powers' },
+  { power: 'arsenal', x: 0.14, color: 0xffb35a, glow: 'rgba(255,180,90,0.9)', title: '⚔️ Arsenal', sub: 'The Arena’s hand signs' },
 ];
 
 export class PowerChoice {
   readonly group = new Group();
-  caption = 'Choose your powers: touch and hold a stone';
+  caption = 'How will you fight the dragon? Touch and hold a stone to choose';
   private stones: Stone[] = [];
   private time = 0;
   private picked: Power | null = null;
@@ -84,6 +85,10 @@ export class PowerChoice {
       this.group.add(root);
       this.stones.push({ power: spec.power, root, gem, ring, ringMaterial, held: 0, home });
     }
+    // What the two choices mean, big, over the stones.
+    const card = explainCard();
+    card.position.set(0, floor + 0.25, 0.17);
+    this.group.add(card);
     devActions['['] = () => this.choose('light');
     devActions[']'] = () => this.choose('arsenal');
   }
@@ -176,5 +181,49 @@ function labelSprite(title: string, sub: string): Sprite {
   texture.colorSpace = SRGBColorSpace;
   const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
   sprite.scale.set(0.17, 0.17 * (176 / 512), 1);
+  return sprite;
+}
+
+/** The card over the stones: the question, and what each answer gives you. */
+function explainCard(): Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1400;
+  canvas.height = 560;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = 'rgba(16, 26, 48, 0.94)';
+  g.strokeStyle = '#ffc928';
+  g.lineWidth = 8;
+  g.beginPath();
+  g.roundRect(8, 8, 1384, 544, 40);
+  g.fill();
+  g.stroke();
+  g.textAlign = 'center';
+  g.fillStyle = '#ffd84a';
+  g.font = `900 64px ${FONT}`;
+  g.fillText('How will you fight the dragon?', 700, 86);
+  const column = (x: number, color: string, title: string, lines: string[]) => {
+    g.fillStyle = color;
+    g.font = `900 54px ${FONT}, "Segoe UI Emoji"`;
+    g.fillText(title, x, 186);
+    g.fillStyle = '#ffffff';
+    g.font = `700 36px ${FONT}, "Segoe UI Emoji"`;
+    lines.forEach((line, i) => g.fillText(line, x, 254 + i * 52, 620));
+  };
+  column(360, '#bfe4ff', '🌑 SHADOW', ['What you learned in Training:', '✊ fist = Shadow Ball', '☝ finger = Spear  ·  ✋ palm = Shield', '✏️ draw a circle, triangle or box']);
+  column(1040, '#ffb35a', '⚔️ ARSENAL', ['The Arena’s weapons, one sign each:', '✊ sword  ·  🫴 ball  ·  ✋ shield', '🙌 two palms = wall', '👉 blaster  ·  ✌️ slingshot']);
+  g.strokeStyle = 'rgba(255,255,255,0.25)';
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(700, 140);
+  g.lineTo(700, 440);
+  g.stroke();
+  g.fillStyle = '#ffd84a';
+  g.font = `800 40px ${FONT}`;
+  g.fillText('Touch and hold a stone below to choose', 700, 510);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  const sprite = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
+  sprite.renderOrder = 12;
+  sprite.scale.set(0.5, 0.2, 1);
   return sprite;
 }

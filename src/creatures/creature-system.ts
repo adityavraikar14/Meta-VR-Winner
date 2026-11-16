@@ -163,7 +163,7 @@ export class CreatureSystem extends createSystem({}) {
     this.diorama = new Diorama(this.stageRoot, STAGE_HEIGHT, this.fx);
     // The berry bowl, front right of the stage, within easy reach (Shadow Pets only).
     this.care = new PetCare();
-    this.care.group.position.set(0.27, STAGE_HEIGHT, 0.2);
+    this.care.group.position.set(-0.1, STAGE_HEIGHT, 0.2);
     this.care.group.visible = false;
     this.stageRoot.add(this.care.group);
     this.park = new PetPark(this.stageRoot, STAGE_HEIGHT);

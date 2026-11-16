@@ -27,9 +27,6 @@ export const TOUR: TourStop[] = [
   { id: 'shadow-dragon', name: 'The Shadow Dragon' },
 ];
 
-/** The Training Arena's lessons on the tour: the fist's Shadow Ball, then a drawn ball (a circle). */
-export const TOUR_LESSONS = [0, 3];
-
 /** A small badge above the screen: which stop and its name (no clock: take your time). */
 export class TourBadge {
   private readonly canvas = document.createElement('canvas');

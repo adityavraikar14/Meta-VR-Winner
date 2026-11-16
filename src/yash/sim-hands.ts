@@ -258,6 +258,31 @@ export class SimHands {
     }
   }
 
+  /**
+   * One hand pinching (or just opened) at `target`: palm to the left, fingers
+   * forward. For a demo of drawing in the air: move `target` along the drawing.
+   */
+  pinchAt(hand: HandState, target: Vector3, forward: Vector3, pinching: boolean, time: number): void {
+    this.forward.copy(forward);
+    this.right.set(-forward.z, 0, forward.x);
+    this.normal.copy(this.right).negate();
+    this.fingers.copy(this.forward);
+    this.wrist.copy(target);
+    this.writeHand(hand, false, false, false, false, pinching);
+    const j = hand.joints;
+    const dx = target.x - (j[4 * 3] + j[9 * 3]) / 2;
+    const dy = target.y - (j[4 * 3 + 1] + j[9 * 3 + 1]) / 2;
+    const dz = target.z - (j[4 * 3 + 2] + j[9 * 3 + 2]) / 2;
+    for (let i = 0; i < j.length; i += 3) {
+      j[i] += dx;
+      j[i + 1] += dy;
+      j[i + 2] += dz;
+    }
+    hand.tracked = true;
+    hand.lostFor = 0;
+    hand.update(time);
+  }
+
   private toWorld(v: V3, out: Vector3, isPoint: boolean): Vector3 {
     out.set(0, 0, 0)
       .addScaledVector(this.right, v[0])

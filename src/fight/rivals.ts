@@ -95,7 +95,7 @@ export const RIVALS: RivalSpec[] = [
     url: 'gltf/rival-rook.glb',
     height: 0.46,
     girth: 0.075,
-    health: 90,
+    health: 75,
     ability: 'duck',
     style: 'Knife-quick slashes, then a fan of three. Ducks under anything thrown at his head.',
     tip: 'Throw low, at his chest: a duck can’t dodge that.',
@@ -119,7 +119,8 @@ export const RIVALS: RivalSpec[] = [
     ink: 0x2a1406,
     glow: 0xe07a1c,
     accent: '#f08a2a',
-    pace: [3.5, 2.5],
+    // The first captain: unhurried, so the fight feels like using what you learned.
+    pace: [5.2, 3.8],
   },
   {
     id: 'thorne',

@@ -638,7 +638,7 @@ const shadowDragon: Puzzle = {
   world: 4,
   title: 'The Shadow Dragon',
   story: 'At the summit the bewitched dragon guards Morwen’s tower. The Great Lantern is whole again: turn its light on the dragon and break the trance. Then the witch is next.',
-  ask: 'Choose your powers: Light or the Arsenal',
+  ask: 'Choose your powers: Shadow (your Training powers) or the Arsenal (the Arena’s hand signs)',
   handsOn: true,
   fight: true,
   solved: 'The trance breaks, and the dragon is itself again. High in her tower, Morwen screams.',
@@ -656,8 +656,8 @@ const shadowDragon: Puzzle = {
       attempt: () => ({ solved: false, steps: [], line: 'This one is yours to fight.' }),
       update: (dt, hands, head) => {
         if (!battle) {
-          // The Quick Tour goes straight to Shadow.
-          const power = stage.tour ? 'light' : choice.update(dt, hands, head);
+          // Nothing starts until you choose (on the Quick Tour too).
+          const power = choice.update(dt, hands, head);
           task.caption = choice.caption;
           if (!power) return;
           choice.dispose();
@@ -926,7 +926,7 @@ export const DUEL: Puzzle = {
   title: 'Ink Duel',
   get story(): string {
     const rival = currentRival();
-    return `${rival.name}, ${rival.title}, steps out of the screen and challenges you. Draw in the air: a line is ink to throw, and a closed shape comes alive and fights beside you.`;
+    return `${rival.name}, ${rival.title}, steps out of the screen and challenges you. Draw in the air: a circle, triangle or box becomes a weapon, and anything else comes alive and fights beside you.`;
   },
   ask: 'Pinch and draw in the air',
   handsOn: true,
