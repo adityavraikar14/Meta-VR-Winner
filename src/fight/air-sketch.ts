@@ -38,6 +38,8 @@ export class AirSketch {
   constructor(
     private readonly root: Object3D,
     private readonly onSketch: (sketch: Sketch, hand: number, at: Vector3) => void,
+    /** Any other drawing (not a dot): its points about its centre, the centre, and the hand. Without it, it just fades. */
+    private readonly onOther?: (points: Vector3[], at: Vector3, hand: number) => void,
   ) {}
 
   /** `busy(i)`: that hand is doing something else (holding a weapon, signing): no drawing. */
@@ -117,5 +119,12 @@ export class AirSketch {
     if (sketch) (stroke.mesh.material as MeshBasicMaterial).color.setHex(0xffd84a);
     this.fading.push(stroke);
     if (sketch) this.onSketch(sketch, side, centre);
+    else if (this.onOther && length(local) >= 0.05) this.onOther(local, centre, side);
   }
+}
+
+function length(points: readonly Vector3[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += points[i].distanceTo(points[i - 1]);
+  return total;
 }

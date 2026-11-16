@@ -157,7 +157,7 @@ export class DragonBattle {
   /** Swords of light, one per hand: its blade grows from a held fist. */
   private readonly blades: Blade[] = [];
   private twin = false;
-  private nextBreath = 3;
+  private nextBreath = 1.2;
   private readonly shields: Mesh[] = [];
 
   // Shadow weapons: hand shapes (or drawings) become weapons; punch to throw them.
@@ -228,7 +228,7 @@ export class DragonBattle {
       this.arms.give(h, shape);
       sfx.armed();
       this.flash(`You drew your ${ARMS[shape].name}! Punch towards the dragon to throw it`, 2.2);
-    });
+    }, (points, at) => this.livingInk(points, at));
 
     devInfo.battle = () => this.state;
     devActions['['] = () => {
@@ -272,6 +272,22 @@ export class DragonBattle {
       this.group.worldToLocal(slot.at.copy(hand.pinch));
     });
     this.sketch.update(dt, this.sketchSlots, (h) => this.arms.busy(h));
+  }
+
+  /** Any other drawing comes alive: it turns to shadow and flies at the dragon by itself. */
+  private livingInk(points: Vector3[], at: Vector3): void {
+    if (this.mode !== 'fight' || points.length < 2) return;
+    const target = this.weakPoints()[Math.random() < 0.5 ? 0 : 1];
+    const mesh = new Mesh(new TubeGeometry(new CatmullRomCurve3(points), Math.min(160, points.length * 2), 0.007, 6, false), shadowMaterial(0x6a4cff));
+    mesh.position.copy(at);
+    this.group.add(mesh);
+    const flight = 0.75;
+    const vel = target.clone().sub(at).divideScalar(flight);
+    vel.y += 0.5 * 9.8 * flight;
+    this.shots.push({ mesh, pos: at.clone(), vel, accel: null, spin: 4, power: 0.6, color: 0x6a4cff, age: 0 });
+    this.burstAt(at, 14, 0x9f8cff);
+    playThrow();
+    this.flash('Your drawing comes alive and flies at the dragon!', 1.6);
   }
 
   /** A shadow weapon leaves your hand for the dragon. */
@@ -436,7 +452,7 @@ export class DragonBattle {
       ? held === 'blade'
         ? 'Swing your Shadow Sword: slash the dragon, cut its fire'
         : `Punch towards the dragon: throw your ${ARMS[held].name}! Aim for the head or the glowing heart`
-      : 'Make a hand shadow for a weapon (fist, flat hand, one finger…) or draw one · Open palm: shield · Hint shows them all';
+      : '✊ Fist = Shadow Ball · ☝ Finger = Spear: punch to throw · ✋ Open palm: shield · Or pinch and draw anything';
     if (this.fireballs.some((f) => !f.reflected) && this.time > 0) text = 'Fire! Raise an open palm to shield. Angle it to bounce the fire back';
     if (this.noteTime > 0) text = this.note;
     this.caption = text;
@@ -464,7 +480,7 @@ export class DragonBattle {
     this.orbHand = -1;
     this.orb.visible = false;
     this.newSequence();
-    this.nextBreath = 3;
+    this.nextBreath = 1.2;
     this.diveTime = 0;
     this.biteDone = false;
     this.dragon3d?.root.position.copy(this.dragonHome);
@@ -736,14 +752,14 @@ export class DragonBattle {
     this.nextBreath -= dt;
     if (this.nextBreath <= 0 && this.dragon3d && Math.random() < 0.4) {
       this.diveTime = 0.001;
-      this.nextBreath = 3.5 + Math.random();
+      this.nextBreath = 2.6 + Math.random();
       sfx.roar();
-      this.flash('It dives at you! Make a fist for your sword, and slash', 2);
+      this.flash('It dives at you! Hit it with a Shadow Ball or Spear as it comes close', 2);
     } else if (this.nextBreath <= 0) {
       this.breathTime = 0.001;
       sfx.dragonSnarl();
       // Angrier as it weakens.
-      this.nextBreath = this.dragonHealth > DRAGON_HEALTH / 2 ? 4.2 + Math.random() : 2.8 + Math.random();
+      this.nextBreath = this.dragonHealth > DRAGON_HEALTH / 2 ? 2.4 + Math.random() * 0.9 : 1.8 + Math.random() * 0.7;
     }
   }
 
@@ -879,6 +895,8 @@ export class DragonBattle {
 
     for (let i = this.fireballs.length - 1; i >= 0; i--) {
       const f = this.fireballs[i];
+      // A hit can end the fight and clear every fireball mid-loop.
+      if (!f) continue;
       f.age += dt;
       f.pos.addScaledVector(f.vel, dt);
       f.sprite.position.copy(f.pos);
@@ -924,7 +942,8 @@ export class DragonBattle {
       }
       if (gone) {
         this.group.remove(f.sprite);
-        this.fireballs.splice(i, 1);
+        const at = this.fireballs.indexOf(f);
+        if (at >= 0) this.fireballs.splice(at, 1);
       }
     }
   }

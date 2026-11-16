@@ -37,6 +37,7 @@ export class CoachGhost {
   private readonly origin = new Vector3();
   private readonly at = new Vector3();
   private readonly centre = new Vector3();
+  private readonly point = new Vector3();
 
   constructor() {
     this.root.name = 'CoachGhost';
@@ -100,7 +101,7 @@ export class CoachGhost {
     const pinching = k >= 0.3 && k < 2.65;
     pathPoint(shape, trace, this.at);
     this.at.set(this.at.x * size, this.at.y * size, 0);
-    const point = this.toStage(this.at, forward, new Vector3());
+    const point = this.toStage(this.at, forward, this.point);
     this.sim.pinchAt(this.hands.right, point, forward, pinching, time);
     this.skeletons.left.root.visible = false;
     this.skeletons.right.root.visible = true;
@@ -111,7 +112,9 @@ export class CoachGhost {
       pathPoint(shape, i / (TRAIL - 1), this.at);
       this.at.set(this.at.x * size, this.at.y * size, 0);
       this.toStage(this.at, forward, point);
-      this.trailPositions.set([point.x, point.y, point.z], i * 3);
+      this.trailPositions[i * 3] = point.x;
+      this.trailPositions[i * 3 + 1] = point.y;
+      this.trailPositions[i * 3 + 2] = point.z;
     }
     this.trail.visible = k >= 0.4;
     this.trail.geometry.setDrawRange(0, n);

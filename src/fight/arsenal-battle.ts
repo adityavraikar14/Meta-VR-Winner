@@ -464,6 +464,8 @@ export class ArsenalDragonBattle {
   private flyFire(dt: number): void {
     for (let i = this.fireballs.length - 1; i >= 0; i--) {
       const f = this.fireballs[i];
+      // A hit can end the fight and clear every fireball mid-loop.
+      if (!f) continue;
       f.age += dt;
       f.pos.addScaledVector(f.vel, dt);
       f.sprite.position.copy(f.pos);
@@ -486,7 +488,8 @@ export class ArsenalDragonBattle {
       }
       if (gone) {
         this.group.remove(f.sprite);
-        this.fireballs.splice(i, 1);
+        const at = this.fireballs.indexOf(f);
+        if (at >= 0) this.fireballs.splice(at, 1);
       }
     }
   }
@@ -496,10 +499,13 @@ export class ArsenalDragonBattle {
     let cut = 0;
     for (let i = this.fireballs.length - 1; i >= 0; i--) {
       const f = this.fireballs[i];
+      // A hit can end the fight and clear every fireball mid-loop.
+      if (!f) continue;
       if (f.pos.distanceTo(point) > radius + FIRE_RADIUS) continue;
       this.burstAt(f.pos, 16, 0xffd890);
       this.group.remove(f.sprite);
-      this.fireballs.splice(i, 1);
+      const at = this.fireballs.indexOf(f);
+      if (at >= 0) this.fireballs.splice(at, 1);
       cut++;
     }
     if (cut > 0) {
