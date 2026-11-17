@@ -70,7 +70,6 @@ import {
 import { IntroShow, type Reel } from './intro.js';
 import { StudioIdent } from './studio-ident.js';
 import { howTo } from './howto.js';
-import { FpsMeter, TEST_MODE } from './test-mode.js';
 import { TOUR, TourBadge } from './tour.js';
 import { drawArmsChart } from './fight/arms-art.js';
 import { petNow } from './creatures/mood.js';
@@ -488,8 +487,6 @@ export class ShadowGameSystem extends createSystem({
     this.hintCard.renderOrder = 22;
     this.hintCard.visible = false;
     paper.add(this.hintCard);
-    // ?test on the link: a frame-rate meter on the screen (removed before submission).
-    if (TEST_MODE) this.fps = new FpsMeter(paper);
     this.tourBadge = new TourBadge(paper);
     // Home lives in the room, not on the screen, so it is still there when the Arena hides the screen.
     this.homeButton = new PushButton(this.scene, 'Home');
@@ -722,7 +719,6 @@ export class ShadowGameSystem extends createSystem({
     });
   }
 
-  private fps: FpsMeter | null = null;
   /** The Quick Tour: which stop (-1: not touring), seconds at it, and its badge. */
   private tourStep = -1;
   private tourTime = 0;
@@ -782,7 +778,6 @@ export class ShadowGameSystem extends createSystem({
   }
 
   update(delta: number): void {
-    this.fps?.tick(delta, this.puzzle?.title ?? this.phase);
     this.runTour(Math.min(delta, 0.1));
     if (this.visibilityState.peek() === VisibilityState.VisibleBlurred) return;
     const dt = Math.min(delta, 0.1);
