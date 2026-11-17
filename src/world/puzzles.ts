@@ -555,11 +555,11 @@ const oreTrain: Puzzle = {
 const shadowSlingshot: Puzzle = {
   id: 'shadow-slingshot',
   world: 1,
-  title: 'The Shadow Slingshot',
-  story: 'Captain Rook’s lookout guards the river: a lantern shard locked in a cage hanging from a rope, his flag, and his alarm bell. Knock all three down and the shard is yours. Your shadow can be more than ground: shape a slingshot, and it comes alive in your hand.',
-  ask: 'Make a V with two fingers: a slingshot appears in that hand. Pinch the pouch with your other hand, pull back until the ring turns green on a target, and let go',
+  title: 'Rook’s Ink Jars',
+  story: 'Captain Rook has lined his fence with five jars of Morwen’s ink, ready to pour into the river. Knock every jar off before he comes back. Your shadow can be more than ground: shape a slingshot, and it comes alive in your hand.',
+  ask: 'Make a V with two fingers: a slingshot appears in that hand. Pinch the pouch with your other hand, pull back until the sight turns green on a jar, and let go',
   handsOn: true,
-  solved: 'The shard is free, the flag is down, and the bell rings out. Your shadow became a real slingshot.',
+  solved: 'Five jars down, five splashes of ink in the dirt, and the river stays clean. Your shadow became a real slingshot.',
   build(root, kit) {
     const sling = new ShadowSlingshot(kit.floor);
     root.add(sling.group);
@@ -569,8 +569,8 @@ const shadowSlingshot: Puzzle = {
     return {
       start: new Vector3(0, kit.floor, 0.12),
       attempt: () => ({ solved: false, steps: [], line: 'This one is work for your own hands.' }),
-      update: (dt, hands) => {
-        sling.update(dt, hands);
+      update: (dt, hands, head) => {
+        sling.update(dt, hands, head);
         task.caption = sling.caption;
         task.done = sling.done;
         task.mistakes = sling.mistakes;
@@ -1132,7 +1132,7 @@ const GAINS: Record<string, string> = {
   'build-launch': 'Past Rook’s lookouts unseen, with one more shard.',
   'build-slide': 'Caught on glass and carried to the gate: another shard.',
   'build-pair': 'Two shards working together. Rook’s valley is nearly crossed.',
-  'shadow-slingshot': 'The caged shard is free and Rook’s alarm is silenced: he does not know you are coming.',
+  'shadow-slingshot': 'Rook’s ink never reaches the river, and a shard hidden behind his fence is yours.',
   'broken-bridge': 'The cart of Lantern shards crosses the river on your bridge.',
   'ore-train': 'The cart rolls on towards the mine. But Rook has seen it.',
   'fight-rook': 'Rook is beaten. His heart shard, the first of the Lantern’s three hearts, is yours.',

@@ -33,7 +33,7 @@ import {
 import { devActions, devInfo } from './dev-tools.js';
 import { webcam } from './webcam.js';
 import { HandSkeleton } from './yash/sim-hands.js';
-import { loadSeat, ScreenMover, type Seat } from './screen-mover.js';
+import { DEFAULT_SEAT, loadSeat, ScreenMover, type Seat } from './screen-mover.js';
 
 /** WebXR hand joint order: wrist, thumb (4), then index/middle/ring/pinky (5 each). */
 const JOINT_COUNT = 25;
@@ -63,6 +63,8 @@ const FOREARM_RADIUS = 0.028;
 const MASK_LAYER = 1;
 /** Read the mask back every N frames. */
 const MASK_INTERVAL = 3;
+/** A hand the headset loses for less than this keeps its last pose (seconds). */
+const HAND_GRACE = 0.2;
 
 // How far the paper sits in front of the eyes and below them is the player's
 // seat (screen-mover.ts): 1 m and 12 cm until they move it to suit themselves.
@@ -114,6 +116,10 @@ export class ShadowStageSystem extends createSystem({}) {
   private mover!: ScreenMover;
   private frameCount = 0;
   private readPending = false;
+  /** Both hands' shadow casters (the mask pass renders just this, not the whole scene). */
+  private readonly handGroup = new Group();
+  /** How long each hand has been out of sight. */
+  private readonly lostFor = [0, 0];
   /** The mask still shows hands that have since left; clear it once they go. */
   private maskStale = false;
   /** Draw calls and triangles of the last full view render (for dev info). */
@@ -141,9 +147,9 @@ export class ShadowStageSystem extends createSystem({}) {
     // A bright sky around you where passthrough is black and white (Quest 2) or absent (desktop).
     this.sky = buildSky(this.scene);
     this.mood = new MoodLight(this.scene);
-    // A sharper picture in the headset: render a fifth more pixels each way than the default.
-    // (Must be set before the session starts; it costs frame time, so not more than this.)
-    this.renderer.xr.setFramebufferScaleFactor(1.2);
+    // The headset's own resolution: 1.2x cost the Quest 2 its frame rate (lag and blinking while
+    // hands cast shadows). Text stays sharp through lighter foveation (index.ts) instead.
+    this.renderer.xr.setFramebufferScaleFactor(1.0);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
@@ -175,9 +181,13 @@ export class ShadowStageSystem extends createSystem({}) {
     this.maskCamera = new PerspectiveCamera();
     this.maskCamera.layers.set(MASK_LAYER);
     this.paper.add(this.maskCamera);
+    // The two hands' shadow casters live in one group, so the mask pass draws only them.
+    this.player.add(this.handGroup);
     this.layoutLantern();
+    stage.buttonPull = buttonPull(this.seat);
     this.mover = new ScreenMover(this.paper, this.player, (seat) => {
       this.seat = seat;
+      stage.buttonPull = buttonPull(this.seat);
       this.layoutLantern();
     });
     devInfo.seat = () => ({ ...this.seat, moving: stage.moving, paper: this.paper.position.toArray().map((n) => Number(n.toFixed(3))) });
@@ -235,7 +245,7 @@ export class ShadowStageSystem extends createSystem({}) {
     // In the fights, webcam hands (dev only) stand in for the headset's.
     const camera = webcam.poll(Math.min(delta, 0.1)) && stage.fight;
     if (camera) this.updateWebcamHands();
-    else this.updateHands();
+    else this.updateHands(Math.min(delta, 0.1));
     if (stage.moving) {
       this.player.head.getWorldPosition(this.headPos);
       this.mover.update(Math.min(delta, 0.1), this.headPos);
@@ -337,7 +347,8 @@ export class ShadowStageSystem extends createSystem({}) {
     this.lantern.castShadow = true;
     this.lantern.penumbra = 0.4;
     // A fine shadow map, so the edge of your hand's shadow is crisp on the screen.
-    this.lantern.shadow.mapSize.set(2048, 2048);
+    // 1024 is still under a millimetre per texel on the screen, at a quarter of 2048's cost.
+    this.lantern.shadow.mapSize.set(1024, 1024);
     this.lantern.shadow.bias = -0.0005;
     this.lantern.shadow.camera.near = 0.05;
     this.paper.add(this.lantern);
@@ -375,7 +386,7 @@ export class ShadowStageSystem extends createSystem({}) {
     bones.layers.enable(MASK_LAYER);
     forearm.layers.enable(MASK_LAYER);
 
-    this.player.add(root);
+    this.handGroup.add(root);
     return {
       root,
       joints,
@@ -445,7 +456,7 @@ export class ShadowStageSystem extends createSystem({}) {
       .invert();
   }
 
-  private updateHands(): void {
+  private updateHands(dt: number): void {
     stage.handCount = 0;
     const frame = this.xrFrame;
     const refSpace = this.renderer.xr.getReferenceSpace();
@@ -459,10 +470,13 @@ export class ShadowStageSystem extends createSystem({}) {
         if (hand.jointSpaces === null || hand.jointSpaces.length !== JOINT_COUNT) {
           hand.jointSpaces = Array.from(source.hand.values());
         }
-        hand.root.visible = this.poseHand(hand, frame, refSpace);
-        if (hand.root.visible) {
-          stage.handCount++;
-          const out = stage.joints[source.handedness === 'left' ? 0 : 1];
+        const side = source.handedness === 'left' ? 0 : 1;
+        const posed = this.poseHand(hand, frame, refSpace);
+        if (posed) this.lostFor[side] = 0;
+        hand.root.visible = posed || this.holdPose(side, dt);
+        if (hand.root.visible) stage.handCount++;
+        if (posed) {
+          const out = stage.joints[side];
           for (let i = 0; i < JOINT_COUNT; i++) {
             out[i * 3] = this.poses[i * 16 + 12];
             out[i * 3 + 1] = this.poses[i * 16 + 13];
@@ -474,11 +488,23 @@ export class ShadowStageSystem extends createSystem({}) {
     for (let i = 0; i < this.hands.length; i++) {
       const hand = this.hands[i];
       if (hand.source === null) {
-        hand.root.visible = false;
-        hand.jointSpaces = null;
+        hand.root.visible = this.holdPose(i, dt);
+        if (hand.root.visible) stage.handCount++;
+        else hand.jointSpaces = null;
       }
       stage.tracked[i] = hand.root.visible;
     }
+  }
+
+  /**
+   * The headset drops a hand for a frame or two now and then: the shadow (and
+   * the game's reading of the hand) holds its last pose meanwhile instead of
+   * blinking out. True while still held.
+   */
+  private holdPose(side: number, dt: number): boolean {
+    const was = this.hands[side].root.visible;
+    this.lostFor[side] += dt;
+    return was && this.lostFor[side] < HAND_GRACE;
   }
 
   /** Webcam hands, placed in front of the eyes in the player's space, in place of tracked ones. */
@@ -616,7 +642,9 @@ export class ShadowStageSystem extends createSystem({}) {
     renderer.setRenderTarget(this.maskTarget);
     renderer.setClearColor(0x000000, 1);
     renderer.clear(true, false, false);
-    renderer.render(scene, this.maskCamera);
+    // Only the hands: walking the whole scene (plants, creatures, props) every few frames
+    // cost the Quest's CPU dearly while hands were up.
+    renderer.render(this.handGroup, this.maskCamera);
 
     for (const hand of this.hands) {
       hand.joints.material = this.casterMaterial;
@@ -650,4 +678,9 @@ export class ShadowStageSystem extends createSystem({}) {
         this.readPending = false;
       });
   }
+}
+
+/** How much further forward than usual the buttons sit for this seat (see stage.buttonPull). */
+function buttonPull(seat: Seat): number {
+  return Math.max(-0.35, Math.min(0.6, seat.distance - DEFAULT_SEAT.distance));
 }

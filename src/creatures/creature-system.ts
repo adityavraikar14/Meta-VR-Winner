@@ -12,6 +12,7 @@ import {
   SRGBColorSpace,
   Vector3,
   VisibilityState,
+  Matrix4,
 } from '@iwsdk/core';
 import { touchables } from '../world/touchables.js';
 import { playTransform, setPurr } from '../audio.js';
@@ -246,6 +247,7 @@ export class CreatureSystem extends createSystem({}) {
       this.diorama.load();
     }
     this.followTable();
+    this.rideAlong();
     this.diorama.setHidden(stage.sceneryHidden);
     if (stage.grow) {
       this.diorama.grow(stage.grow.from);
@@ -316,6 +318,24 @@ export class CreatureSystem extends createSystem({}) {
    * Keep the earth's surface on the player's real table: the screen stays at
    * eye height, the earth (and the screen's poles) move down or up to the table.
    */
+  /** When the stage moves (the screen adjusted), every creature on it moves with it. */
+  private rideAlong(): void {
+    this.stageRoot.updateWorldMatrix(true, false);
+    const now = this.stageRoot.matrixWorld;
+    if (this.stageSeen && !now.equals(this.lastStage)) {
+      this.stageDelta.copy(now).multiply(this.stageInverse.copy(this.lastStage).invert());
+      const e = this.stageDelta.elements;
+      const turn = Math.atan2(e[8], e[0]);
+      for (const living of this.creatures) living.creature.shift(this.stageDelta, turn);
+    }
+    this.lastStage.copy(now);
+    this.stageSeen = true;
+  }
+  private readonly lastStage = new Matrix4();
+  private readonly stageDelta = new Matrix4();
+  private readonly stageInverse = new Matrix4();
+  private stageSeen = false;
+
   private followTable(): void {
     let y = STAGE_OFFSET.y;
     if (stage.tableHeight !== null) {

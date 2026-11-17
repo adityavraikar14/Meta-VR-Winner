@@ -24,7 +24,7 @@ export const TOUR: TourStop[] = [
   { id: 'run-ramp', name: 'Tilt your shadow into a ramp' },
   { id: 'run-kick', name: 'Kick with your shadow' },
   { id: 'run-long', name: 'Stretch your shadow' },
-  { id: 'shadow-slingshot', name: 'The Shadow Slingshot' },
+  { id: 'shadow-slingshot', name: 'Slingshot: Rook’s Ink Jars' },
   { id: 'training', name: 'Shadow weapons', open: true },
   { id: 'fight-rook', name: 'Captain Rook' },
   { id: 'shadow-dragon', name: 'The Shadow Dragon' },

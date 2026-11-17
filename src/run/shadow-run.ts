@@ -732,6 +732,13 @@ export class ShadowRun {
     if (this.level.workshop) this.followMarkers();
     this.tips.length = 0;
     for (const hand of hands) if (hand.tracked) this.tips.push(hand.indexTip);
+    // The buttons keep their distance from your eyes wherever the screen has been moved.
+    const pull = stage.buttonPull;
+    if (this.drop) this.drop.root.position.z = DROP_AT.z + pull;
+    if (this.reset) this.reset.root.position.z = RESET_AT.z + pull;
+    if (this.slot) this.slot.root.position.z = SLOT_AT.z + pull;
+    if (this.add) this.add.root.position.z = ADD_AT.z + pull;
+    if (this.undo) this.undo.root.position.z = UNDO_AT.z + pull;
     if (this.drop) {
       this.drop.root.lookAt(this.paper.localToWorld(this.v.copy(VIEWER)));
       this.drop.show(this.sim.state === 'ready' && stage.playing);

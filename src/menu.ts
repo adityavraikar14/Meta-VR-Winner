@@ -98,6 +98,19 @@ export class MainMenu {
    */
   update(dt: number, tips: readonly Vector3[], clicked: number, enter: boolean): MenuAction | null {
     let action: MenuAction | null = null;
+    // While the screen is being adjusted the row steps aside (only Done shows); after, it comes back where the screen now is.
+    if (stage.moving) {
+      if (!this.stepped) for (const button of this.buttons) button.show(false);
+      this.stepped = true;
+      // Keep them updating, so they shrink away (and cannot be pushed).
+      for (const button of this.buttons) button.update(dt, [], false);
+      return null;
+    }
+    if (this.stepped || this.pull !== stage.buttonPull) {
+      this.stepped = false;
+      this.pull = stage.buttonPull;
+      if (this.page !== null) this.layout();
+    }
     if (this.confirmNew > 0) {
       this.confirmNew -= dt;
       if (this.confirmNew <= 0 && (this.page === 'home' || this.page === 'settings')) this.layout();
@@ -144,7 +157,7 @@ export class MainMenu {
         return;
       }
       button.setText(slot.label);
-      button.root.position.set(xs[i], ROW_Y, ROW_Z);
+      button.root.position.set(xs[i], ROW_Y, ROW_Z + stage.buttonPull);
       // Seven to a row is tight: a little smaller.
       button.size = this.slots.length > 7 ? BUTTON_SCALE * 0.8 : this.slots.length > 6 ? BUTTON_SCALE * 0.88 : BUTTON_SCALE;
       button.root.lookAt(eye);
@@ -214,6 +227,10 @@ export class MainMenu {
       { label: 'Next', run: step(1) },
     ];
   }
+
+  /** Stepped aside while the screen moves; the button pull the row was laid out for. */
+  private stepped = false;
+  private pull = 0;
 
   /** The level shown on the Chapters page (an index into the story). */
   private pick = 0;

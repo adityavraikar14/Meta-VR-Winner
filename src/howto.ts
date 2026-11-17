@@ -87,10 +87,10 @@ export const HOW_TO: Record<string, string[]> = {
     'Keep both shadows level and above the thorny brambles in the gaps, then push Drop',
   ],
   'shadow-slingshot': [
-    'Goal: knock down Rook’s 3 targets: the rope holding the caged shard (left), his flag (middle), his bell (right)',
+    'Goal: knock all 5 of Rook’s ink jars off his fence',
     'Make a V with your index and middle fingers, others folded: the slingshot appears in that hand',
     'With your OTHER hand, pinch the pouch between the fork and pull it back towards you',
-    'Dots show the stone’s path; the ring shows where it lands: GREEN means it will hit a target',
+    'Dots show the stone’s path; the round sight shows where it lands: GREEN means it will hit a jar',
     'Let go to shoot. Missed? Pull again: you have as many stones as you like'
   ],
   'broken-bridge': [

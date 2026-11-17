@@ -69,6 +69,12 @@ export const stage = {
   arenaBoss: null as string | null,
   /** The level is being played right now (not the menu, the table or the story card). */
   playing: false,
+  /**
+   * Buttons are placed this much further from the screen (metres) than at the
+   * default seat, so they stay the same comfortable distance from your eyes
+   * wherever you have moved the screen.
+   */
+  buttonPull: 0,
   /** Anything is being played (a level, a side game, a fight, the Arena): the wrist menu waits for a tap on the wrist. */
   inLevel: false,
   /** A hands-on level's progress: what to do next, and whether it is finished. */

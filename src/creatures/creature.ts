@@ -1,4 +1,4 @@
-import { Color, type Group, Quaternion, Vector3 } from '@iwsdk/core';
+import { Color, type Group, Quaternion, Vector3, Matrix4 } from '@iwsdk/core';
 import {
   playBark,
   playBleat,
@@ -288,6 +288,12 @@ export class Creature {
   }
 
   /** Drop any scripted task (the puzzle it was for has gone) and go back to free life. */
+  /** The stage moved (the screen was adjusted): come along with it, as if standing on it. */
+  shift(by: Matrix4, turn: number): void {
+    this.position.applyMatrix4(by);
+    this.yaw += turn;
+  }
+
   cancelTask(): void {
     this.task = [];
     this.taskDone = null;

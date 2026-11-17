@@ -18,12 +18,13 @@ export interface Seat {
 }
 
 export const DEFAULT_SEAT: Seat = { distance: 1.0, drop: 0.12 };
-const DISTANCE: [number, number] = [0.45, 1.7];
+/** Never so close that the buttons (in front of the screen) reach your face. */
+const DISTANCE: [number, number] = [0.65, 1.6];
 const DROP: [number, number] = [-0.3, 0.6];
 const KEY = 'shadowplay.seat';
 
 /** The screen moves this many times as far as the pinching hand. */
-const GAIN = 2;
+const GAIN = 1.5;
 /** Pinch closes under this thumb-to-index gap and opens over the second. */
 const PINCH: [number, number] = [0.022, 0.045];
 /** Moving ends by itself this long after you let go (or if you never pinch). */

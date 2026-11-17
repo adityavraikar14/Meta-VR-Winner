@@ -15,6 +15,7 @@ import {
   Group,
   Quaternion,
   Vector3,
+  Matrix4,
 } from '@iwsdk/core';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { playAnimalCall, playContent, playHoof, playHorseCall, playNicker, playSnort, playWhoosh } from '../audio.js';
@@ -368,6 +369,12 @@ export class Beast {
     this.taskDone = null;
     if (this.state === 'task') this.setState('idle');
     if (this.afterLeap === 'task') this.afterLeap = 'idle';
+  }
+
+  /** The stage moved (the screen was adjusted): come along with it, as if standing on it. */
+  shift(by: Matrix4, turn: number): void {
+    for (const p of [this.position, this.leapFrom, this.leapTo, this.goal, this.hoverPoint]) p.applyMatrix4(by);
+    this.yaw += turn;
   }
 
   /** Shadow Pets care (see pet-care.ts): where its mouth and back are, and how wide it is. */

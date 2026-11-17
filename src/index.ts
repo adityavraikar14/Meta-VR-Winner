@@ -26,7 +26,7 @@ void checkBlobStore().then(() =>
   ).then((world) => {
     // three.js defaults to the strongest fixed foveation, which blurs every caption and button
     // away from the centre of view. A lighter setting keeps text sharp across the view.
-    world.renderer.xr.setFoveation(0.35);
+    world.renderer.xr.setFoveation(0.4);
     // The stage builds the paper the game draws on, so it must come first.
     world.registerSystem(ShadowStageSystem);
     world.registerSystem(ShadowGameSystem);

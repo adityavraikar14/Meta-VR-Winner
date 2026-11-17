@@ -1,7 +1,5 @@
 import {
-  AdditiveBlending,
   BoxGeometry,
-  CanvasTexture,
   CylinderGeometry,
   DodecahedronGeometry,
   DoubleSide,
@@ -10,31 +8,29 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  PlaneGeometry,
   RingGeometry,
   SphereGeometry,
-  SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
-import { playAwaken, playClang, playClunk, playTink, playTinkle, playWhoosh } from '../audio.js';
+import { playAwaken, playClunk, playSplat, playTink, playTinkle, playWhoosh } from '../audio.js';
 import type { HandState } from '../creatures/hand-input.js';
 import { devActions, devInfo } from '../dev-tools.js';
 import { stage } from '../stage-state.js';
 import { makeSlingshot, SLING_TIP_SPREAD, SLING_TIP_UP, type SlingRig } from '../yash/visuals.js';
-import { hardwood, hemp, iron, RopeSpan } from './parts.js';
+import { hardwood } from './parts.js';
 import { ParticlePool } from './particles.js';
 
 /**
- * The Shadow Slingshot: a shadow that comes alive, as a real slingshot in
- * your hand (the same slingshot as the Arena's).
+ * Rook's Ink Jars: a shadow that comes alive as a slingshot in your hand
+ * (the Arena's slingshot), and five jars of Morwen's ink on Captain Rook's
+ * fence to knock off before the ink reaches the river.
  *
  *   1. Make a V with index and middle fingers: its shadow on the screen is a
  *      slingshot's fork. Hold it, and the slingshot is in that hand.
  *   2. With your other hand, pinch the pouch and pull it back towards you.
- *      A bold line of dots shows the stone's path, and a ring marks where it
- *      will land: green on a target, red when it would miss.
- *   3. Let go. Knock down Captain Rook's three targets: the rope holding a
- *      caged lantern shard, his flag, and his alarm bell.
+ *      Dots show the stone's path, and a round sight (always facing you)
+ *      shows where it will land: green on a jar, red when it would miss.
+ *   3. Let go. A jar that is hit tumbles off the fence and bursts.
  *
  * The stone flies on a real arc: the band's launch speed grows with the
  * pull (v = ω·x), then gravity.
@@ -55,24 +51,37 @@ const LOST_DROP = 1.2;
 const RELOAD = 0.4;
 const PATH_DOTS = 18;
 const PATH_STEP = 0.03;
+/** A jar's size, and how close a stone must pass to knock it. */
+const JAR_R = 0.024;
+const JAR_H = 0.06;
+const HIT_R = 0.036;
 
-type TargetKind = 'rope' | 'flag' | 'bell';
+/**
+ * The jars, stage-local: on the fence's top rail and on two crates, near and far. The fence
+ * stands mid-table, low, so the screen's card never hides it from your seat.
+ */
+const FENCE_X = [-0.34, -0.17, 0, 0.17, 0.34];
+const fenceZ = (x: number) => -0.17 - (0.34 - Math.abs(x)) * 0.35;
+const RAIL = 0.095;
+const JARS: Array<[number, number, number]> = [
+  [-0.26, RAIL + 0.006, fenceZ(-0.26)],
+  [-0.1, RAIL + 0.006, fenceZ(-0.1)],
+  [0.02, 0.15, -0.36],
+  [0.13, RAIL + 0.006, fenceZ(0.13)],
+  [0.3, 0.12, -0.2],
+];
 
-interface Target {
-  kind: TargetKind;
-  /** Where a stone must pass to hit it, and how close. */
+interface Jar {
+  root: Group;
+  /** Centre (where a stone must pass), stage-local. */
   at: Vector3;
-  radius: number;
   hit: boolean;
   time: number;
-  group: Group;
+  /** Knocked off: its flight and spin. */
+  vel: Vector3;
+  spin: Vector3;
+  halo: Mesh;
 }
-
-const ORDER: Record<TargetKind, string> = {
-  rope: 'the rope holding the caged shard (left)',
-  flag: "Rook's flag (middle)",
-  bell: 'the alarm bell (right)',
-};
 
 export class ShadowSlingshot {
   readonly group = new Group();
@@ -83,10 +92,8 @@ export class ShadowSlingshot {
   private phase: 'shape' | 'aim' | 'won' = 'shape';
   private phaseTime = 0;
   private shapeTime = 0;
-  /** The hand holding the slingshot (the V hand), and how long it has been out of sight. */
   private holdHand = -1;
   private lostFor = 0;
-  /** The other hand, pinching the pouch (-1: nobody). */
   private puller = -1;
   private reload = 0;
   private readonly rig: SlingRig;
@@ -98,23 +105,19 @@ export class ShadowSlingshot {
   private readonly flight = new Vector3();
   private flying = false;
   private flightTime = 0;
-  /** The aim: bold dots along the path, and a ring where it lands. */
   private readonly path: Mesh[] = [];
   private readonly pathMaterial: MeshBasicMaterial;
-  private readonly landing: Mesh;
-  private readonly landingMaterial: MeshBasicMaterial;
-  private readonly targets: Target[] = [];
-  private readonly sparks = new ParticlePool({ count: 80, additive: true, soft: false });
-  private cage!: Group;
-  private cageFall = 0;
-  private cageVelocity = 0;
-  private rope!: RopeSpan;
-  private ropeTop = new Vector3();
+  /** The sight: a ring and a dot, always turned to face you. */
+  private readonly sight = new Group();
+  private readonly sightMaterial: MeshBasicMaterial;
+  private readonly jars: Jar[] = [];
+  private readonly sparks = new ParticlePool({ count: 120, additive: false, soft: false });
   private shots = 0;
   private hits = 0;
   private note = '';
   private noteTime = 0;
   private finishIn = -1;
+  private readonly eye = new Vector3();
   private readonly v = new Vector3();
   private readonly w = new Vector3();
   private readonly up = new Vector3();
@@ -140,7 +143,7 @@ export class ShadowSlingshot {
     this.stoneMesh.userData.keep = true;
     this.group.add(this.stoneMesh, this.sparks.points);
 
-    // The aim: dark, solid dots drawn over everything, so the path reads against any background.
+    // The path: dark, solid dots over everything, so it reads against any background.
     this.pathMaterial = new MeshBasicMaterial({ color: 0xd2380c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false });
     const dot = new SphereGeometry(0.0055, 10, 8);
     for (let i = 0; i < PATH_DOTS; i++) {
@@ -151,17 +154,20 @@ export class ShadowSlingshot {
       this.path.push(mesh);
       this.group.add(mesh);
     }
-    this.landingMaterial = new MeshBasicMaterial({ color: 0xd2380c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: DoubleSide });
-    this.landing = new Mesh(new RingGeometry(0.016, 0.026, 28), this.landingMaterial);
-    this.landing.renderOrder = 41;
-    this.landing.visible = false;
-    this.landing.userData.keep = true;
-    this.group.add(this.landing);
+    // The sight: a ring with a dot in the middle, like a scope's.
+    this.sightMaterial = new MeshBasicMaterial({ color: 0xd2380c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: DoubleSide });
+    const ring = new Mesh(new RingGeometry(0.02, 0.027, 32), this.sightMaterial);
+    const centre = new Mesh(new RingGeometry(0, 0.005, 16), this.sightMaterial);
+    for (const m of [ring, centre]) m.renderOrder = 41;
+    this.sight.add(ring, centre);
+    this.sight.visible = false;
+    this.sight.userData.keep = true;
+    this.group.add(this.sight);
 
-    this.buildTargets(f);
+    this.buildFence(f);
 
     devInfo.slingshot = () => this.state;
-    // Dev: [ puts the slingshot in your right hand; ] fires a perfect shot at the next target.
+    // Dev: [ puts the slingshot in your right hand; ] fires a perfect shot at the next jar.
     devActions['['] = () => {
       if (this.phase === 'shape') this.comeAlive(1);
     };
@@ -169,13 +175,13 @@ export class ShadowSlingshot {
   }
 
   get state(): string {
-    return `${this.phase} hand=${this.holdHand} shots=${this.shots} hits=${this.hits} targets=${this.targets.map((t) => `${t.kind}:${t.hit ? 'hit' : '-'}`).join(',')} flying=${this.flying}`;
+    return `${this.phase} hand=${this.holdHand} shots=${this.shots} hits=${this.hits} jars=${this.jars.map((j) => (j.hit ? 'x' : 'o')).join('')} flying=${this.flying}`;
   }
 
   /** For the Inventor's Journal. */
   journal(): string[] {
     return [
-      `${this.shots} stone${this.shots === 1 ? '' : 's'} fired, ${this.hits} on target`,
+      `${this.shots} stone${this.shots === 1 ? '' : 's'} fired, ${this.hits} ink jar${this.hits === 1 ? '' : 's'} knocked off`,
       `Launch speed grows with the pull: v = ω·x, with ω ≈ ${OMEGA} per second`,
       'A shadow made real: the fork your fingers cast became the slingshot in your hand',
     ];
@@ -183,99 +189,69 @@ export class ShadowSlingshot {
 
   // ================================================================ Build
 
-  private buildTargets(f: number): void {
+  private buildFence(f: number): void {
     const wood = hardwood();
-    // The rope and the cage: a gallows post, a rope, a cage of iron bars with a glowing shard.
-    {
-      const g = new Group();
-      const x = -0.24;
-      const z = -0.38;
-      const post = new Mesh(new BoxGeometry(0.014, 0.3, 0.014), wood);
-      post.position.set(x - 0.07, f + 0.15, z);
-      const arm = new Mesh(new BoxGeometry(0.1, 0.012, 0.012), wood);
-      arm.position.set(x - 0.025, f + 0.296, z);
-      g.add(post, arm);
-      this.ropeTop.set(x, f + 0.29, z);
-      this.rope = new RopeSpan(0.0016);
-      this.rope.mesh.material = hemp();
-      g.add(this.rope.mesh);
-      this.cage = new Group();
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        const bar = new Mesh(new CylinderGeometry(0.0013, 0.0013, 0.06, 4), iron());
-        bar.position.set(Math.cos(a) * 0.024, 0, Math.sin(a) * 0.024);
-        this.cage.add(bar);
-      }
-      for (const y of [-0.03, 0.03]) {
-        const ring = new Mesh(new CylinderGeometry(0.026, 0.026, 0.003, 16), iron());
-        ring.position.y = y;
-        this.cage.add(ring);
-      }
-      const shard = new Mesh(new DodecahedronGeometry(0.01, 0), new MeshStandardMaterial({ color: 0xffd27a, emissive: 0xffa030, emissiveIntensity: 2 }));
-      this.cage.add(shard);
-      this.cage.position.set(x, f + 0.17, z);
-      this.cage.userData.keep = true;
-      g.add(this.cage);
-      this.group.add(g);
-      this.targets.push({ kind: 'rope', at: new Vector3(x, f + 0.235, z), radius: 0.034, hit: false, time: 0, group: g });
+    // A rough fence across the back of the table: posts and a top rail; two crates for the higher jars.
+    const fence = new Group();
+    for (const x of FENCE_X) {
+      const post = new Mesh(new BoxGeometry(0.016, RAIL + 0.012, 0.016), wood);
+      post.position.set(x, f + (RAIL + 0.012) / 2, fenceZ(x));
+      fence.add(post);
     }
-    // Rook's flag: a pole and a black flag with crossed white cutlasses.
-    {
-      const g = new Group();
-      const pole = new Mesh(new CylinderGeometry(0.004, 0.005, 0.32, 8), wood);
-      pole.position.y = 0.16;
-      const flag = new Mesh(new PlaneGeometry(0.13, 0.085), new MeshBasicMaterial({ map: flagTexture(), side: DoubleSide }));
-      flag.position.set(0.067, 0.27, 0);
-      g.add(pole, flag);
-      g.position.set(0.04, f, -0.5);
-      g.userData.keep = true;
-      this.group.add(g);
-      this.targets.push({ kind: 'flag', at: new Vector3(0.107, f + 0.27, -0.5), radius: 0.056, hit: false, time: 0, group: g });
+    const rail = (a: [number, number], b: [number, number], y: number) => {
+      const dx = b[0] - a[0];
+      const dz = b[1] - a[1];
+      const length = Math.hypot(dx, dz);
+      const bar = new Mesh(new BoxGeometry(length, 0.012, 0.022), wood);
+      bar.position.set((a[0] + b[0]) / 2, f + y, (a[1] + b[1]) / 2);
+      bar.rotation.y = -Math.atan2(dz, dx);
+      fence.add(bar);
+    };
+    const pts: Array<[number, number]> = FENCE_X.map((x) => [x, fenceZ(x)]);
+    for (let i = 0; i < pts.length - 1; i++) {
+      rail(pts[i], pts[i + 1], RAIL);
+      rail(pts[i], pts[i + 1], RAIL / 2);
     }
-    // The alarm bell: a frame and a bronze bell.
-    {
-      const g = new Group();
-      for (const side of [-1, 1]) {
-        const leg = new Mesh(new BoxGeometry(0.01, 0.24, 0.01), wood);
-        leg.position.set(side * 0.04, 0.12, 0);
-        g.add(leg);
-      }
-      const top = new Mesh(new BoxGeometry(0.1, 0.012, 0.012), wood);
-      top.position.y = 0.24;
-      g.add(top);
-      const bell = new Group();
-      const body = new Mesh(new CylinderGeometry(0.012, 0.03, 0.04, 16, 1, true), new MeshStandardMaterial({ color: 0xb8862a, metalness: 0.85, roughness: 0.3, side: DoubleSide }));
-      body.position.y = -0.03;
-      bell.add(body);
-      bell.position.y = 0.232;
-      bell.name = 'Bell';
-      g.add(bell);
-      g.position.set(0.27, f, -0.36);
-      g.userData.keep = true;
-      this.group.add(g);
-      this.targets.push({ kind: 'bell', at: new Vector3(0.27, f + 0.2, -0.36), radius: 0.042, hit: false, time: 0, group: g });
+    // Crates for the middle (behind the fence) and right jars.
+    for (const [x, z, h] of [[0.02, -0.36, 0.15], [0.3, -0.2, 0.12]] as Array<[number, number, number]>) {
+      const crate = new Mesh(new BoxGeometry(0.07, h, 0.07), wood);
+      crate.position.set(x, f + h / 2, z);
+      fence.add(crate);
     }
-    // A halo on each target so it reads from the seat.
-    for (const t of this.targets) {
-      const ring = new Mesh(new SphereGeometry(t.radius, 16, 10), new MeshBasicMaterial({ color: 0xff9a3a, transparent: true, opacity: 0.42, blending: AdditiveBlending, depthWrite: false }));
-      ring.position.copy(t.at).sub(t.group.position);
-      ring.name = 'Halo';
-      t.group.add(ring);
+    fence.userData.keep = true;
+    this.group.add(fence);
+
+    // The jars: dark glass full of ink, a cork, a faint purple glow so they read from the seat.
+    const glass = new MeshStandardMaterial({ color: 0x2a1640, roughness: 0.25, metalness: 0.1, emissive: 0x3a1a6a, emissiveIntensity: 0.6 });
+    const cork = new MeshStandardMaterial({ color: 0xb08050, roughness: 0.9 });
+    for (const [x, y, z] of JARS) {
+      const root = new Group();
+      const body = new Mesh(new CylinderGeometry(JAR_R, JAR_R * 0.9, JAR_H, 16), glass);
+      const neck = new Mesh(new CylinderGeometry(JAR_R * 0.5, JAR_R * 0.6, 0.012, 12), glass);
+      neck.position.y = JAR_H / 2 + 0.006;
+      const top = new Mesh(new CylinderGeometry(JAR_R * 0.45, JAR_R * 0.45, 0.01, 10), cork);
+      top.position.y = JAR_H / 2 + 0.016;
+      const halo = new Mesh(new SphereGeometry(HIT_R, 16, 10), new MeshBasicMaterial({ color: 0xb47aff, transparent: true, opacity: 0.18, depthWrite: false }));
+      root.add(body, neck, top, halo);
+      root.position.set(x, f + y + JAR_H / 2, z);
+      root.userData.keep = true;
+      this.group.add(root);
+      this.jars.push({ root, at: root.position.clone(), hit: false, time: 0, vel: new Vector3(), spin: new Vector3(), halo });
     }
   }
 
   // ================================================================ Update
 
-  update(dt: number, hands: readonly HandState[]): void {
+  update(dt: number, hands: readonly HandState[], head?: Vector3): void {
     if (!stage.playing) hands = [];
+    if (head) this.group.worldToLocal(this.eye.copy(head));
     this.phaseTime += dt;
     this.noteTime -= dt;
     this.reload = Math.max(0, this.reload - dt);
     if (this.phase === 'shape') this.watchShape(dt, hands);
     else if (this.phase === 'aim') this.aim(dt, hands);
     if (this.flying) this.fly(dt);
-    this.animateTargets(dt);
-    this.layoutRope();
+    this.animateJars(dt);
     this.sparks.update(dt);
     if (this.finishIn > 0) {
       this.finishIn -= dt;
@@ -309,7 +285,6 @@ export class ShadowSlingshot {
     if (!holder || !holder.tracked) {
       this.lostFor += dt;
       if (this.lostFor > LOST_DROP) {
-        // Out of sight too long: it fades back into shadow; make the V again.
         this.phase = 'shape';
         this.shapeTime = 0;
         this.rig.root.visible = false;
@@ -362,7 +337,6 @@ export class ShadowSlingshot {
       }
     }
     if (!pulling) this.pouch.lerp(this.fork, Math.min(1, dt * 14));
-    // Bands from the tips to the pouch, the stone in it.
     this.stretch(this.rig.bands[0], this.tipA, this.pouch);
     this.stretch(this.rig.bands[1], this.tipB, this.pouch);
     this.rig.pouch.position.copy(this.pouch);
@@ -382,7 +356,7 @@ export class ShadowSlingshot {
     beam.scale.set(1, Math.max(0.001, length), 1);
   }
 
-  /** Where the stone would go from here: dots along the arc, and a ring where it lands. */
+  /** Where the stone would go from here: dots along the arc, and the sight where it lands. */
   private showAim(): void {
     const pull = this.v.subVectors(this.pouch, this.fork);
     if (pull.length() < MIN_PULL) {
@@ -391,16 +365,16 @@ export class ShadowSlingshot {
     }
     this.sim.copy(this.pouch);
     this.simV.copy(pull).multiplyScalar(-OMEGA);
-    let landed: Target | null = null;
+    let landed: Jar | null = null;
     let ended = false;
     let shown = 0;
     const h = 0.01;
     for (let step = 0, t = 0; step < 200 && !ended; step++, t += h) {
       this.simV.y -= GRAVITY * h;
       this.sim.addScaledVector(this.simV, h);
-      for (const target of this.targets) {
-        if (!target.hit && this.sim.distanceTo(target.at) < target.radius + STONE_R) {
-          landed = target;
+      for (const jar of this.jars) {
+        if (!jar.hit && this.sim.distanceTo(jar.at) < HIT_R + STONE_R) {
+          landed = jar;
           ended = true;
         }
       }
@@ -412,25 +386,22 @@ export class ShadowSlingshot {
       }
     }
     for (let i = shown; i < PATH_DOTS; i++) this.path[i].visible = false;
-    // The ring: on the target it would hit (green), or on the ground where it would fall (red).
     const color = landed ? 0x1fae3a : 0xd2380c;
     this.pathMaterial.color.setHex(color);
-    this.landingMaterial.color.setHex(color);
-    this.landing.visible = true;
-    if (landed) {
-      this.landing.position.copy(landed.at);
-      this.landing.lookAt(this.fork);
-      this.landing.scale.setScalar(1.6);
-    } else {
-      this.landing.position.copy(this.sim).setY(Math.max(this.floor + 0.002, this.sim.y));
-      this.landing.rotation.set(-Math.PI / 2, 0, 0);
-      this.landing.scale.setScalar(1);
-    }
+    this.sightMaterial.color.setHex(color);
+    // The sight on the jar it would hit, or where it would land; always turned to face you.
+    this.sight.position.copy(landed ? landed.at : this.sim);
+    if (!landed) this.sight.position.y = Math.max(this.floor + 0.012, this.sight.position.y);
+    this.sight.lookAt(this.group.localToWorld(this.w.copy(this.eye)));
+    this.sight.scale.setScalar(landed ? 1.5 : 1);
+    this.sight.visible = true;
+    for (const jar of this.jars) (jar.halo.material as MeshBasicMaterial).opacity = jar === landed ? 0.45 : 0.18;
   }
 
   private hideAim(): void {
     for (const dot of this.path) dot.visible = false;
-    this.landing.visible = false;
+    this.sight.visible = false;
+    for (const jar of this.jars) (jar.halo.material as MeshBasicMaterial).opacity = 0.18;
   }
 
   /** Let go: launch at ω·(pull), opposite the pull. */
@@ -456,16 +427,16 @@ export class ShadowSlingshot {
 
   private fly(dt: number): void {
     const s = this.stoneMesh.position;
-    // A few sub-steps so a fast stone cannot skip through a target.
+    // A few sub-steps so a fast stone cannot skip through a jar.
     const steps = 4;
     for (let i = 0; i < steps; i++) {
       const h = dt / steps;
       this.flight.y -= GRAVITY * h;
       s.addScaledVector(this.flight, h);
-      for (const t of this.targets) {
-        if (t.hit) continue;
-        if (s.distanceTo(t.at) < t.radius + STONE_R) {
-          this.hitTarget(t);
+      for (const jar of this.jars) {
+        if (jar.hit) continue;
+        if (s.distanceTo(jar.at) < HIT_R + STONE_R) {
+          this.knock(jar, this.flight);
           this.endFlight(true);
           return;
         }
@@ -485,31 +456,22 @@ export class ShadowSlingshot {
     this.stoneMesh.visible = false;
     if (!hit) {
       this.mistakes++;
-      this.say('Missed! Pull again and move your hands until the ring turns GREEN on a target', 2.2);
+      this.say('Missed! Pull again and move your hands until the sight turns GREEN on a jar', 2.2);
     }
   }
 
-  private hitTarget(t: Target): void {
-    t.hit = true;
-    t.time = 0;
+  /** Hit: the jar flies back off the fence, tumbling, and bursts when it lands. */
+  private knock(jar: Jar, by: Vector3): void {
+    jar.hit = true;
+    jar.time = 0;
     this.hits++;
-    this.burst(t.at, 24, 0xffd27a);
-    const halo = t.group.getObjectByName('Halo');
-    if (halo) halo.visible = false;
-    if (t.kind === 'rope') {
-      playWhoosh(0.5);
-      this.cageVelocity = 0;
-      this.say('The rope snapped! The cage falls, and the lantern shard is free', 2.5);
-    } else if (t.kind === 'flag') {
-      playClunk(0.08);
-      this.say('Rook’s flag is down!', 2);
-    } else {
-      playClang(1, 0.08);
-      window.setTimeout(() => playClang(0.8, 0.05), 380);
-      window.setTimeout(() => playClang(0.6, 0.03), 760);
-      this.say('The alarm bell rings out across the river!', 2);
-    }
-    if (this.targets.every((x) => x.hit)) {
+    jar.vel.copy(by).setY(0).normalize().multiplyScalar(0.8).setY(1.1);
+    jar.spin.set(4 + Math.random() * 4, 0, (Math.random() - 0.5) * 8);
+    jar.halo.visible = false;
+    playTink(0.06);
+    const left = this.jars.filter((j) => !j.hit).length;
+    this.say(left ? `Knocked off! ${left} jar${left === 1 ? '' : 's'} to go` : 'The last jar! Rook’s ink will never reach the river', 2.2);
+    if (left === 0) {
       this.phase = 'won';
       this.rig.root.visible = false;
       this.hideAim();
@@ -518,52 +480,37 @@ export class ShadowSlingshot {
     }
   }
 
-  private animateTargets(dt: number): void {
-    for (const t of this.targets) {
-      if (!t.hit) {
-        const halo = t.group.getObjectByName('Halo');
-        if (halo) halo.scale.setScalar(1 + 0.12 * Math.sin(this.phaseTime * 4 + t.at.x * 10));
+  private animateJars(dt: number): void {
+    for (const jar of this.jars) {
+      if (!jar.hit) {
+        jar.halo.scale.setScalar(1 + 0.08 * Math.sin(this.phaseTime * 3 + jar.at.x * 10));
         continue;
       }
-      t.time += dt;
-      if (t.kind === 'flag') t.group.rotation.z = -Math.min(1.45, t.time * t.time * 6);
-      if (t.kind === 'bell') {
-        const bell = t.group.getObjectByName('Bell');
-        if (bell) bell.rotation.z = Math.sin(t.time * 14) * 0.5 * Math.exp(-t.time * 1.2);
-      }
-      if (t.kind === 'rope' && this.cageFall < 1) {
-        // The cage drops, lands, and its glowing shard floats free.
-        this.cageVelocity += GRAVITY * dt;
-        const ground = this.floor + 0.03;
-        this.cage.position.y = Math.max(ground, this.cage.position.y - this.cageVelocity * dt);
-        if (this.cage.position.y <= ground) {
-          this.cageFall = 1;
-          playClunk(0.08);
-          playTinkle();
-          this.burst(this.cage.position, 30, 0xffd27a);
-        }
+      if (!jar.root.visible) continue;
+      jar.time += dt;
+      jar.vel.y -= GRAVITY * dt;
+      jar.root.position.addScaledVector(jar.vel, dt);
+      jar.root.rotation.x += jar.spin.x * dt;
+      jar.root.rotation.z += jar.spin.z * dt;
+      if (jar.root.position.y <= this.floor + JAR_R) {
+        // Smash: a splash of ink, and it is gone.
+        jar.root.visible = false;
+        playSplat(0.06);
+        this.splash(jar.root.position.setY(this.floor + 0.01));
       }
     }
   }
 
-  /** The rope: until it snaps, from the arm down to the cage. */
-  private layoutRope(): void {
-    const rope = this.targets[0];
-    this.rope.mesh.visible = !rope.hit;
-    if (!rope.hit) this.rope.set(this.ropeTop, this.w.copy(this.cage.position).setY(this.cage.position.y + 0.032));
-  }
-
   private prompt(): string {
-    if (this.phase === 'won') return 'All three targets down! Rook’s lookout is in chaos.';
+    if (this.phase === 'won') return 'Every ink jar is off the fence! The river stays clean.';
     if (this.phase === 'shape') {
       return this.shapeTime > 0.1
         ? 'Hold that V still… your shadow is coming alive'
         : 'Step 1: make a V with your index and middle fingers (others folded) up in the light';
     }
-    const next = this.targets.find((t) => !t.hit);
-    const left = this.targets.filter((t) => !t.hit).length;
-    if (this.puller >= 0) return 'Move until the ring turns GREEN on a target, then let go';
-    return `Step 2: pinch the pouch with your other hand and pull back · ${left} left · next: ${next ? ORDER[next.kind] : ''}`;
+    const left = this.jars.filter((j) => !j.hit).length;
+    if (this.puller >= 0) return 'Move until the sight turns GREEN on a jar, then let go';
+    return `Step 2: pinch the pouch with your other hand and pull back · ${left} ink jar${left === 1 ? '' : 's'} left`;
   }
 
   private say(text: string, seconds: number): void {
@@ -571,60 +518,24 @@ export class ShadowSlingshot {
     this.noteTime = seconds;
   }
 
-  private burst(at: Vector3, count: number, color: number): void {
-    for (let i = 0; i < count; i++) {
+  private splash(at: Vector3): void {
+    for (let i = 0; i < 26; i++) {
       const a = Math.random() * Math.PI * 2;
-      const u = Math.random() * 2 - 1;
-      const r = Math.sqrt(1 - u * u);
-      this.sparks.emit(at, new Vector3(Math.cos(a) * r, Math.abs(u) + 0.3, Math.sin(a) * r).multiplyScalar(0.25 + Math.random() * 0.3), { life: 0.5 + Math.random() * 0.4, gravity: 1.2, size: [0.006, 0.002], from: color, to: 0x402010 });
+      this.sparks.emit(at, this.v.set(Math.cos(a) * (0.2 + Math.random() * 0.3), 0.3 + Math.random() * 0.4, Math.sin(a) * (0.2 + Math.random() * 0.3)), { life: 0.5 + Math.random() * 0.3, gravity: 2, size: [0.008, 0.003], from: 0x3a1a6a, to: 0x140820 });
     }
   }
 
-  /** Dev: a perfect shot at the next target (the flight time fixed, the launch solved for it). */
+  /** Dev: a perfect shot at the next jar (the flight time fixed, the launch solved for it). */
   private devShot(): void {
     if (this.phase === 'shape') this.comeAlive(1);
     if (this.phase !== 'aim' || this.flying) return;
-    const target = this.targets.find((t) => !t.hit);
-    if (!target) return;
+    const jar = this.jars.find((j) => !j.hit);
+    if (!jar) return;
     const time = 0.45;
-    // From where a seated player's hands are: above the table, in front of you.
     const from = this.v.set(0, this.floor + 0.28, 0.22);
     this.stoneMesh.position.copy(from);
-    this.flight.subVectors(target.at, from).divideScalar(time);
+    this.flight.subVectors(jar.at, from).divideScalar(time);
     this.flight.y += 0.5 * GRAVITY * time;
     this.launch();
   }
-}
-
-/** Rook's flag: black, with two crossed white cutlasses (no skull, no face). */
-function flagTexture(): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 192;
-  canvas.height = 128;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = '#c8261e';
-  g.fillRect(0, 0, 192, 128);
-  g.fillStyle = '#14121a';
-  g.fillRect(10, 10, 172, 108);
-  g.strokeStyle = '#f2ece0';
-  g.lineCap = 'round';
-  for (const side of [-1, 1]) {
-    g.save();
-    g.translate(96, 64);
-    g.rotate(side * 0.75);
-    g.lineWidth = 9;
-    g.beginPath();
-    g.moveTo(0, 46);
-    g.quadraticCurveTo(side * 10, 0, 0, -46);
-    g.stroke();
-    g.lineWidth = 7;
-    g.beginPath();
-    g.moveTo(-14, 34);
-    g.lineTo(14, 34);
-    g.stroke();
-    g.restore();
-  }
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
 }

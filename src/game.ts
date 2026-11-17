@@ -157,7 +157,8 @@ const PLAY_BUTTON = new Vector3(0, -0.05, 0.64);
 /** The Skip button, off to the right of the paper and clear of the hands-on machines. */
 const SKIP_BUTTON = new Vector3(0.42, 0.02, 0.6);
 /** During the opening film, Skip sits low and to the right, below the film screen. */
-const INTRO_SKIP = new Vector3(0.3, -0.11, 0.66);
+/** During a film: beside it, clear of its frame (the film is wider than the screen). */
+const INTRO_SKIP = new Vector3(-0.52, -0.04, 0.6);
 const SKIP_SIZE = 0.75;
 /** Hint sits below Skip, on the same side. */
 const HINT_BUTTON = new Vector3(0.42, -0.13, 0.6);
@@ -168,6 +169,8 @@ const STUCK_AFTER = 40;
 const HOME_AT = new Vector3(0.42, 0.17, 0.6);
 /** Seconds the Home button waits for its second push. */
 const HOME_CONFIRM = 3;
+/** Adjust: across from Home, above the Workshop's Slot / Drop / Reset column on that side. */
+const ADJUST_Y = 0.29;
 /** Phases in which a level is under way and can be skipped. */
 const SKIPPABLE: ReadonlySet<Phase> = new Set(['story', 'matching', 'awakening', 'solving', 'oops']);
 const VIEWER = new Vector3(0, 0.12, 1.0);
@@ -318,6 +321,10 @@ export class ShadowGameSystem extends createSystem({
   private adjustEntity!: Entity;
   private adjustClick = false;
   private readonly roomSpot = new Vector3();
+  /** Where the Play/Skip button stands (paper space, before the seat's pull). */
+  private readonly playAt = PLAY_BUTTON.clone();
+  /** Adjust: a moment's rest after each push (so one push is one toggle), and Done held still while the screen moves. */
+  private adjustRest = 0;
   private readonly homeEye = new Vector3();
   private buttonEntity!: Entity;
   private intro!: IntroShow;
@@ -808,6 +815,8 @@ export class ShadowGameSystem extends createSystem({
       this.skipSaysNewPet = newPet;
       this.skipButton.setText(newPet ? 'New pet' : 'Skip');
     }
+    this.skipButton.root.position.z = SKIP_BUTTON.z + stage.buttonPull;
+    this.playButton.root.position.z = this.playAt.z + stage.buttonPull;
     const skipX = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
     if (this.skipButton.root.position.x !== skipX) {
       // Moved to the other side: turn its face to the player again.
@@ -837,6 +846,8 @@ export class ShadowGameSystem extends createSystem({
     this.paintTitle();
     if (this.phase !== 'title') this.menu.update(dt, this.liveTips, -1, false);
     this.introLine = this.intro.update(dt);
+    // A film is taller than the screen: the tour's badge moves up above it meanwhile.
+    this.tourBadge.mesh.position.y = this.intro.active ? 0.56 : 0.395;
     // The film carries its own subtitles; the caption bar steps aside while it plays.
     this.captionMesh.visible = !this.intro.active;
     if (this.phase === 'matching' && !stage.menuOpen && this.shadowWorld.canDraw) this.feedInk(dt);
@@ -1082,7 +1093,9 @@ export class ShadowGameSystem extends createSystem({
   private placePlayButton(at: Vector3): void {
     const paper = this.playButton.root.parent;
     if (!paper) return;
+    this.playAt.copy(at);
     this.playButton.root.position.copy(at);
+    this.playButton.root.position.z += stage.buttonPull;
     paper.updateMatrixWorld(true);
     this.playButton.root.lookAt(paper.localToWorld(VIEWER.clone()));
   }
@@ -1370,7 +1383,9 @@ export class ShadowGameSystem extends createSystem({
     if (paper) {
       HOME_AT.x = this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x;
       const root = this.homeButton.root;
-      paper.localToWorld(root.position.copy(HOME_AT));
+      root.position.copy(HOME_AT);
+      root.position.z += stage.buttonPull;
+      paper.localToWorld(root.position);
       root.parent?.worldToLocal(root.position);
       this.homeButton.root.lookAt(paper.localToWorld(this.homeEye.copy(VIEWER)));
     }
@@ -1407,6 +1422,7 @@ export class ShadowGameSystem extends createSystem({
       this.roomSpot.copy(HOME_AT);
       this.roomSpot.x = (this.leftHanded ? SKIP_BUTTON.x : -SKIP_BUTTON.x) * (across ? -1 : 1);
       this.roomSpot.y = y;
+      this.roomSpot.z += stage.buttonPull;
       paper.localToWorld(button.root.position.copy(this.roomSpot));
       button.root.parent?.worldToLocal(button.root.position);
       button.root.lookAt(paper.localToWorld(this.homeEye.copy(VIEWER)));
@@ -1437,12 +1453,15 @@ export class ShadowGameSystem extends createSystem({
     const adjustOn = !!paper && !stage.arena && !this.intro.active && (title || (!stage.menuOpen || stage.moving));
     this.adjustButton.show(adjustOn);
     // On the other side of the screen from Home, Skip and Hint, level with Home: nothing to hide behind.
-    place(this.adjustButton, HOME_AT.y, true);
+    // While the screen moves, Done stays where it was pushed (it never rides into your hand).
+    if (!stage.moving) place(this.adjustButton, ADJUST_Y, true);
     const label = stage.moving ? 'Done' : 'Adjust';
     if (this.adjustButton.label !== label) this.adjustButton.setText(label);
-    if (this.adjustButton.update(dt, this.liveTips, this.adjustClick) && adjustOn) {
+    this.adjustRest = Math.max(0, this.adjustRest - dt);
+    if (this.adjustButton.update(dt, this.liveTips, this.adjustClick) && adjustOn && this.adjustRest === 0) {
       playClick();
       stage.command = 'move';
+      this.adjustRest = 0.8;
     }
     this.adjustClick = false;
   }
@@ -1459,6 +1478,7 @@ export class ShadowGameSystem extends createSystem({
     const playing = steps !== null && (this.phase === 'matching' || this.phase === 'oops') && !stage.menuOpen && !stage.arena;
     this.hintButton.show(playing);
     const x = this.leftHanded ? HINT_BUTTON.x : -HINT_BUTTON.x;
+    this.hintButton.root.position.z = HINT_BUTTON.z + stage.buttonPull;
     if (this.hintButton.root.position.x !== x && stage.paper) {
       this.hintButton.root.position.x = x;
       this.hintButton.root.lookAt(stage.paper.localToWorld(VIEWER.clone()));
@@ -2155,9 +2175,10 @@ export class ShadowGameSystem extends createSystem({
   /** A storybook card on the paper: small heading, big title, a line of text. */
   private drawBanner(kicker: string, title: string, body: string, footer = '', extra?: { lead?: string; meter?: number }): void {
     this.banner.scale.setScalar(1);
-    // In front of the 3D course (its ground blocks stand 5 cm out of the screen), never cut off by it.
+    // In front of the 3D course (its ground blocks stand 5 cm out of the screen), never cut off by it;
+    // but things standing further out on the table (a fence, jars, a pet) stay in front of the card.
     this.banner.position.set(0, 0.03, 0.065);
-    this.bannerMaterial.depthTest = false;
+    this.bannerMaterial.depthTest = true;
     this.banner.renderOrder = 14;
     const { g: ctx, w, h } = layout(this.bannerCanvas);
     ctx.clearRect(0, 0, w, h);
