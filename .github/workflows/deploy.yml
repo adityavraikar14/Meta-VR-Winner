@@ -1,11 +1,11 @@
-# Builds Shadowplay and publishes it to GitHub Pages on every push to `shadowplay`.
+# Builds Shadowplay and publishes it to GitHub Pages. Since the submission (Nov 17, 2026) it runs
+# only when started by hand (Actions → Deploy to GitHub Pages → Run workflow), so pushes no
+# longer change the submitted game.
 # One-time setup: repository Settings → Pages → Build and deployment → Source: "GitHub Actions".
 # The game is then at https://<owner>.github.io/<repo>/ (HTTPS, which WebXR needs).
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [shadowplay]
   workflow_dispatch:
 
 permissions:
